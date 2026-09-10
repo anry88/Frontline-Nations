@@ -11,8 +11,8 @@ The repository contains a command-only MVP bot backed by Kotlin, Spring Boot, an
 Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
 
 - `/start` — register and choose an alliance with inline buttons
-- `/battle` — resolve one deterministic operation and receive rewards
-- `/profile` — inspect alliance, progression, resources, and daily orders
+- `/battle` — choose one of three operations, inspect intelligence, and select a tactic
+- `/profile` — inspect alliance, level progress, battle record, resources, and daily orders
 - `/front` — inspect the current weekly contribution table
 - `/contribute 100` — transfer Credits to the alliance front
 - `/help` — show command help
@@ -92,9 +92,9 @@ Mini App and replay-renderer directories will be added only when those milestone
 
 ## Development Status
 
-Current phase: command-only MVP.
+Current phase: command-only MVP with an interactive battle loop.
 
-The current implementation proves registration, alliance selection, daily orders, deterministic operations, transactional rewards, resource contribution, and weekly alliance standings. Advanced army composition, campaign resolution, replay, Mini App, and video rendering remain planned.
+The current implementation proves registration, alliance selection, daily orders, three deterministic operation offers, risk/reward and intelligence trade-offs, five tactical orders, multi-round battle logs, transactional rewards, commander levels and battle statistics, resource contribution, and weekly alliance standings. Combat-group composition, research spending, campaign resolution, full replay UI, Mini App, and video rendering remain planned.
 
 Run tests with `GRADLE_USER_HOME="$PWD/.gradle-home" ./gradlew test`. For a local Docker run, copy `.env.example` to an ignored `.env`, replace every secret, create the PostgreSQL data directory, and run `docker compose up --build`.
 

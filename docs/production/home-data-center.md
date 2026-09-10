@@ -34,4 +34,4 @@ curl --fail https://frontline-nations.tg-games.com/health
 curl --fail https://frontline-nations.tg-games.com/
 ```
 
-Confirm `getWebhookInfo` reports the expected URL and no recent delivery error. Then send `/start`, select an alliance, run `/battle`, inspect `/profile`, contribute with `/contribute 100`, and inspect `/front`.
+Confirm `getWebhookInfo` reports the expected URL and no recent delivery error. Then send `/start`, select an alliance, run `/battle`, choose an operation and tactic, inspect the round highlights and `/profile`, contribute with `/contribute 100`, and inspect `/front`.

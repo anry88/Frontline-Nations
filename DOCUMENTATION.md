@@ -11,18 +11,18 @@ The deployed MVP has two runtime surfaces:
 - Telegram Bot commands, callback queries, and inline alliance-selection buttons
 - Spring Boot backend as the authority for gameplay and economy
 
-PostgreSQL stores players, processed Telegram updates, battles, contributions, and wallet ledger entries. A scheduled job restores daily Combat Orders. Mini App, replay visualization, and weekly campaign resolution remain future milestones.
+PostgreSQL stores players, processed Telegram updates, battles, ordered round-event JSON, contributions, and wallet ledger entries. A scheduled job restores daily Combat Orders. Mini App, full replay visualization, combat-group composition, and weekly campaign resolution remain future milestones.
 
 ## Core Data Flow
 
 ### Personal operation
 
-1. The server generates two to four operation offers from catalog and matchmaking data.
-2. The player selects an operation, combat-group preset, and tactic.
-3. The backend freezes the relevant player, opponent, battlefield, balance, and engine inputs.
-4. The battle engine derives a protected seed and simulates 8–15 logical rounds.
-5. One transaction records the result, wallet/inventory effects, and ordered `BattleEvent` entries.
-6. The bot presents a concise result; the Mini App optionally visualizes the stored event stream.
+1. The server deterministically generates three operation offers for the player's current daily-order state.
+2. The bot shows a named battlefield, biome, risk/reward tier, and tier-dependent intelligence for each offer.
+3. The player selects an operation and one of five tactical orders with inline buttons.
+4. The backend rejects stale callbacks, derives a protected seed, and simulates 8–12 logical rounds.
+5. One transaction consumes the Combat Order and records the result, rewards, statistics, operation metadata, and ordered `BattleEvent` JSON.
+6. The bot explains the tactic and terrain modifiers and presents three battle highlights. A full replay UI remains planned.
 
 ### Weekly campaign
 
@@ -61,6 +61,8 @@ Every completed battle should retain:
 - relevant balance and battlefield configuration version
 - result summary
 - ordered events with logical ticks and typed payloads
+
+The current engine contract is version 2. After resolution it stores the battle seed and hash, commander-level snapshot, selected location, biome, difficulty, enemy archetype, tactic, 8–12 round events, and rewards. Operation offers are bound to the player, game date, and current order count; an old inline button cannot consume a newer order.
 
 The same engine version, seed, input snapshot, and configuration must reproduce the same outcome and event order. Replay clients may interpolate animations, but they may not invent gameplay outcomes.
 
