@@ -4,9 +4,10 @@ Repository-level guidance for coding agents and automated review tools.
 
 ## Current State
 
-- This repository is currently a specification-first bootstrap; application code has not been created.
+- This repository contains a minimal command-only Telegram bot implemented with Kotlin, Spring Boot, JDBC/Flyway, and PostgreSQL.
 - [Documents/Frontline_TZ_v0.1_RU.docx](Documents/Frontline_TZ_v0.1_RU.docx) is the primary product and technical source.
 - [README.md](README.md) is the public overview, [docs/product-overview.md](docs/product-overview.md) summarizes product intent, and [DOCUMENTATION.md](DOCUMENTATION.md) defines the target engineering boundaries.
+- The implemented surface is `/start`, alliance-selection callbacks, `/battle`, `/profile`, `/front`, `/contribute`, and `/help`. Mini App, replay UI, full combat groups, and weekly resolution remain planned.
 - Do not describe planned behavior as implemented. Label plans, examples, and target architecture explicitly until code and tests support the claims.
 
 ## First Pass For Any Agent
@@ -30,9 +31,16 @@ Use this precedence when documents disagree:
 
 If executable behavior intentionally departs from the specification, record the decision and update the affected documentation in the same change.
 
-## Target Repository Map
+## Repository Map
 
-- `backend/`: Kotlin/Spring Boot modular monolith.
+- `src/main/kotlin/com/tggames/frontline/`: Kotlin/Spring Boot modular monolith.
+- `src/main/resources/db/migration/`: PostgreSQL migrations managed by Flyway.
+- `src/test/`: deterministic-engine and application tests.
+- `compose.yml`: production-shaped application and PostgreSQL services.
+- `assets/brand/`: repository emblem and Telegram avatar.
+- `scripts/`: operational helpers, including Telegram webhook/profile configuration.
+- `docs/production/`: Home Data Center runbook.
+- The module paths below remain the target as the MVP grows:
 - `backend/src/main/kotlin/.../telegram/`: Telegram webhook, commands, callbacks, and Mini App authentication.
 - `backend/src/main/kotlin/.../player/`: account, profile, alliance, progression, and rating.
 - `backend/src/main/kotlin/.../catalog/`: alliances, battlefields, units, modules, doctrines, and balance configuration.
@@ -48,7 +56,7 @@ If executable behavior intentionally departs from the specification, record the 
 - `infra/`: Docker Compose, proxy, environment, and deployment assets.
 - `docs/`: human- and agent-facing product and engineering documentation.
 
-Treat this map as a target until directories exist. Update it when actual package names become stable.
+Update this map when package names or runtime components change.
 
 ## Non-Negotiable Domain Contracts
 

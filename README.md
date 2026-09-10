@@ -1,8 +1,21 @@
 # Frontline Nations
 
-Frontline Nations is a Telegram-first asynchronous military strategy game in which players build combat groups, complete short daily operations, and contribute campaign assets to weekly alliance battles.
+Frontline Nations is a Telegram-first asynchronous military strategy game in which players complete short daily operations and contribute resources to weekly alliance fronts.
 
-The repository is at the specification stage. The target product and architecture are described in [Documents/Frontline_TZ_v0.1_RU.docx](Documents/Frontline_TZ_v0.1_RU.docx); implementation has not started yet. Product and engineering documentation in this repository summarizes that source without claiming unfinished features as shipped.
+The repository contains a command-only MVP bot backed by Kotlin, Spring Boot, and PostgreSQL. The broader target product and architecture are described in [Documents/Frontline_TZ_v0.1_RU.docx](Documents/Frontline_TZ_v0.1_RU.docx). Mini App functionality is intentionally deferred.
+
+![Frontline Nations emblem](assets/brand/frontline-nations-bot-avatar.png)
+
+## Play
+
+Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
+
+- `/start` — register and choose an alliance with inline buttons
+- `/battle` — resolve one deterministic operation and receive rewards
+- `/profile` — inspect alliance, progression, resources, and daily orders
+- `/front` — inspect the current weekly contribution table
+- `/contribute 100` — transfer Credits to the alliance front
+- `/help` — show command help
 
 ## Product Principles
 
@@ -43,29 +56,29 @@ flowchart LR
     I --> J["Video renderer"]
 ```
 
-The initial implementation is planned as a modular monolith:
+The MVP currently uses:
 
 - Kotlin and Spring Boot backend
 - PostgreSQL 16+ persistence
 - Telegram Bot commands and inline flows
-- TypeScript Telegram Mini App with Phaser-based replay visualization
 - Docker Compose for local and production-like environments
-- optional Node/Chromium/FFmpeg renderer for weekly battle highlights
+
+The diagram also shows the planned Mini App, admin interface, replay stream, and optional renderer; those components are not part of the command-only MVP.
 
 See [DOCUMENTATION.md](DOCUMENTATION.md) for module boundaries and data flow.
 
 ## Planned Repository Layout
 
 ```text
-backend/       Spring Boot application and domain modules
-miniapp/       Telegram Mini App and replay client
-renderer/      Optional weekly video renderer
-infra/         Docker and deployment configuration
+src/           Spring Boot application, migration, and tests
+compose.yml    Application and PostgreSQL containers
+scripts/       Telegram and deployment helpers
+assets/        Brand assets, including the Telegram avatar
 docs/          Product, architecture, and repository guidance
 Documents/     Source specifications and retained project materials
 ```
 
-The directories above are the intended structure and will be created as implementation begins.
+Mini App and replay-renderer directories will be added only when those milestones begin.
 
 ## Documentation
 
@@ -79,11 +92,13 @@ The directories above are the intended structure and will be created as implemen
 
 ## Development Status
 
-Current phase: product and technical specification, repository bootstrap.
+Current phase: command-only MVP.
 
-The first implementation milestone should prove the core loop end to end: register a player, build or select a combat group, resolve a deterministic operation, award resources, contribute campaign assets, and resolve a weekly battle from aggregated contributions.
+The current implementation proves registration, alliance selection, daily orders, deterministic operations, transactional rewards, resource contribution, and weekly alliance standings. Advanced army composition, campaign resolution, replay, Mini App, and video rendering remain planned.
 
-Build and run commands will be added when the application skeleton exists.
+Run tests with `GRADLE_USER_HOME="$PWD/.gradle-home" ./gradlew test`. For a local Docker run, copy `.env.example` to an ignored `.env`, replace every secret, create the PostgreSQL data directory, and run `docker compose up --build`.
+
+Production is published at [frontline-nations.tg-games.com](https://frontline-nations.tg-games.com). See [the Home Data Center runbook](docs/production/home-data-center.md).
 
 ## License
 

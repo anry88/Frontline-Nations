@@ -1,0 +1,13 @@
+.git
+.gitignore
+.gradle
+.gradle-home
+.idea
+.env
+.env.*
+!.env.example
+build
+Documents
+assets
+docs
+*.md

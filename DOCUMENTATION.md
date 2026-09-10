@@ -1,19 +1,17 @@
 # Frontline Nations Architecture
 
-This document defines the target architecture for the first working version of Frontline Nations. It is a baseline derived from the product specification, not a description of implemented code.
+This document describes the command-only MVP architecture and separates it from the broader target defined by the product specification.
 
 ## Architecture Goal
 
 The first version should be a modular monolith that proves the core product loop before the team invests in microservices, a global geopolitical map, complex diplomacy, or large catalogs of licensed equipment.
 
-The system has four runtime surfaces:
+The deployed MVP has two runtime surfaces:
 
-- Telegram Bot for registration, fast actions, notifications, and compact status views
-- Telegram Mini App for the map, hangar, research tree, statistics, and replay playback
-- Spring Boot backend as the only authority for gameplay and economy
-- optional renderer that converts completed replay events into weekly video highlights
+- Telegram Bot commands, callback queries, and inline alliance-selection buttons
+- Spring Boot backend as the authority for gameplay and economy
 
-PostgreSQL stores durable state. Scheduled jobs advance daily and weekly state machines.
+PostgreSQL stores players, processed Telegram updates, battles, contributions, and wallet ledger entries. A scheduled job restores daily Combat Orders. Mini App, replay visualization, and weekly campaign resolution remain future milestones.
 
 ## Core Data Flow
 

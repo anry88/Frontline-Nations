@@ -1,0 +1,59 @@
+name: ${COMPOSE_PROJECT_NAME:-frontline-nations}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-frontline}
+      POSTGRES_USER: ${POSTGRES_USER:-frontline}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - type: bind
+        source: ${POSTGRES_DATA_DIR:?POSTGRES_DATA_DIR is required}
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  app:
+    image: ${FRONTLINE_IMAGE:-frontline-nations:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-frontline}
+      DATABASE_USER: ${POSTGRES_USER:-frontline}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:?TELEGRAM_WEBHOOK_SECRET is required}
+      BATTLE_SERVER_SALT: ${BATTLE_SERVER_SALT:?BATTLE_SERVER_SALT is required}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://frontline-nations.tg-games.com}
+      GAME_TIMEZONE: ${GAME_TIMEZONE:-Europe/Belgrade}
+      PORT: 8080
+    expose:
+      - "8080"
+    networks:
+      default:
+      tunnel:
+        aliases:
+          - ${TUNNEL_APP_ALIAS:-frontline-nations-prod-app}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+networks:
+  tunnel:
+    external: true
+    name: ${HDC_TUNNEL_NETWORK:-hdc-tunnel}

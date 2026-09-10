@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: frontline-nations
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/frontline}
+    username: ${DATABASE_USER:frontline}
+    password: ${DATABASE_PASSWORD:frontline}
+  flyway:
+    enabled: true
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+frontline:
+  public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
+  game-timezone: ${GAME_TIMEZONE:Europe/Belgrade}
+  battle-server-salt: ${BATTLE_SERVER_SALT:local-development-only}
+  telegram:
+    bot-token: ${TELEGRAM_BOT_TOKEN:}
+    webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
