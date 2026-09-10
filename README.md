@@ -13,8 +13,8 @@ Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
 - `/start` — register and choose an alliance with inline buttons
 - `/battle` — choose one of three operations, inspect intelligence, and select a tactic
 - `/profile` — inspect alliance, level progress, battle record, resources, and daily orders
-- `/front` — inspect the current weekly contribution table
-- `/contribute 100` — transfer Credits to the alliance front
+- `/front` — inspect the current matchup, intelligence, countdown, or published result
+- `/contribute 100` — transfer Credits before the Sunday contribution lock
 - `/help` — show command help
 
 ## Product Principles
@@ -34,7 +34,7 @@ Players receive a limited number of Combat Orders, choose one of several operati
 
 ### Weekly campaigns
 
-From Monday through Saturday, players manufacture and contribute expendable campaign assets to their alliance. Contributions lock before the weekly battle. On Sunday, the server resolves an aggregated battle, publishes results, distributes rewards, and exposes a replay and optional video highlights.
+The command-only MVP opens four alliance matchups each week. Contributions remain open until Sunday at 15:00 in the `Europe/Belgrade` timezone. At that time the server locks the campaign, applies capped contribution and bounded NPC compensation, resolves four deterministic phases, persists the results, grants idempotent rewards to contributors, and queues Telegram notifications. Campaign assets, richer formation composition, and visual replay remain planned.
 
 ### Progression
 
@@ -92,9 +92,9 @@ Mini App and replay-renderer directories will be added only when those milestone
 
 ## Development Status
 
-Current phase: command-only MVP with an interactive battle loop.
+Current phase: command-only MVP with interactive personal operations and scheduled weekly battles.
 
-The current implementation proves registration, alliance selection, daily orders, three deterministic operation offers, risk/reward and intelligence trade-offs, five tactical orders, multi-round battle logs, transactional rewards, commander levels and battle statistics, resource contribution, and weekly alliance standings. Combat-group composition, research spending, campaign resolution, full replay UI, Mini App, and video rendering remain planned.
+The current implementation proves registration, alliance selection, daily orders, three deterministic operation offers, risk/reward and intelligence trade-offs, five tactical orders, multi-round battle logs, transactional rewards, commander levels and battle statistics, weekly pairings, scheduled aggregate resolution, NPC compensation, idempotent campaign rewards, and durable Telegram notifications. Combat-group composition, typed campaign assets, research spending, full replay UI, Mini App, and video rendering remain planned.
 
 Run tests with `GRADLE_USER_HOME="$PWD/.gradle-home" ./gradlew test`. For a local Docker run, copy `.env.example` to an ignored `.env`, replace every secret, create the PostgreSQL data directory, and run `docker compose up --build`.
 

@@ -35,3 +35,5 @@ curl --fail https://frontline-nations.tg-games.com/
 ```
 
 Confirm `getWebhookInfo` reports the expected URL and no recent delivery error. Then send `/start`, select an alliance, run `/battle`, choose an operation and tactic, inspect the round highlights and `/profile`, contribute with `/contribute 100`, and inspect `/front`.
+
+The weekly resolver runs at Sunday 15:00 in `Europe/Belgrade`. A ten-minute recovery job resolves any overdue open campaign after downtime, and notification delivery retries from the PostgreSQL outbox. Production health checks should confirm the application clock uses the configured timezone and Flyway has applied migration V3.

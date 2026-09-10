@@ -31,3 +31,20 @@ frontline:
   telegram:
     bot-token: ${TELEGRAM_BOT_TOKEN:}
     webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
+  campaign:
+    resolve-cron: ${CAMPAIGN_RESOLVE_CRON:0 0 15 * * SUN}
+    retry-cron: ${CAMPAIGN_RETRY_CRON:0 5/10 * * * *}
+    open-cron: ${CAMPAIGN_OPEN_CRON:0 5 0 * * MON}
+    npc-base-power: ${CAMPAIGN_NPC_BASE_POWER:500}
+    npc-per-missing-contributor: ${CAMPAIGN_NPC_PER_MISSING_CONTRIBUTOR:150}
+    max-npc-compensation: ${CAMPAIGN_MAX_NPC_COMPENSATION:900}
+    contribution-soft-cap: ${CAMPAIGN_CONTRIBUTION_SOFT_CAP:5000}
+    overflow-divisor: ${CAMPAIGN_OVERFLOW_DIVISOR:4}
+    winner-xp: ${CAMPAIGN_WINNER_XP:300}
+    loser-xp: ${CAMPAIGN_LOSER_XP:180}
+    winner-credits: ${CAMPAIGN_WINNER_CREDITS:250}
+    loser-credits: ${CAMPAIGN_LOSER_CREDITS:140}
+    winner-research: ${CAMPAIGN_WINNER_RESEARCH:20}
+    loser-research: ${CAMPAIGN_LOSER_RESEARCH:10}
+    winner-materials: ${CAMPAIGN_WINNER_MATERIALS:30}
+    loser-materials: ${CAMPAIGN_LOSER_MATERIALS:16}

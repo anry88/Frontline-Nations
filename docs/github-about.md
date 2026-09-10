@@ -2,23 +2,20 @@
 
 Suggested repository description:
 
-`Telegram-first asynchronous strategy game with deterministic battles, modular army progression, and weekly alliance campaigns, built with Kotlin, Spring Boot, PostgreSQL, TypeScript, Phaser, and Docker.`
+`Command-first Telegram strategy game with deterministic battles, commander progression, and scheduled weekly alliance campaigns, built with Kotlin, Spring Boot, PostgreSQL, and Docker.`
 
 Suggested topics:
 
 - `telegram-game`
 - `telegram-bot`
-- `telegram-mini-app`
 - `strategy-game`
 - `kotlin`
 - `spring-boot`
 - `postgresql`
-- `typescript`
-- `phaser`
 - `docker`
 - `deterministic-simulation`
 - `game-backend`
 
 Website:
 
-- Not published yet.
+- `https://frontline-nations.tg-games.com`

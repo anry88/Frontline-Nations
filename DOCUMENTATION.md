@@ -11,7 +11,7 @@ The deployed MVP has two runtime surfaces:
 - Telegram Bot commands, callback queries, and inline alliance-selection buttons
 - Spring Boot backend as the authority for gameplay and economy
 
-PostgreSQL stores players, processed Telegram updates, battles, ordered round-event JSON, contributions, and wallet ledger entries. A scheduled job restores daily Combat Orders. Mini App, full replay visualization, combat-group composition, and weekly campaign resolution remain future milestones.
+PostgreSQL stores players, processed Telegram updates, personal battles, ordered event JSON, campaign weeks and matchups, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs restore daily Combat Orders and drive the weekly campaign. Mini App, full replay visualization, combat-group composition, and typed campaign assets remain future milestones.
 
 ## Core Data Flow
 
@@ -26,12 +26,12 @@ PostgreSQL stores players, processed Telegram updates, battles, ordered round-ev
 
 ### Weekly campaign
 
-1. A Monday job creates balanced alliance matchups and selects battlefields.
-2. Players manufacture and contribute separate campaign assets during the week.
-3. Periodic calculations publish coarse strength and deficit signals without exposing exact enemy composition.
-4. Contributions lock before resolution.
-5. The battle engine aggregates contributions into formations or cohorts and resolves the campaign.
-6. The system persists results, contribution metrics, rewards, and replay events before notifications or rendering begin.
+1. A Monday 00:05 Belgrade job creates four deterministic alliance matchups and selects named battlefields. Pairing uses the prior week's contribution power, with a weekly deterministic tie-break.
+2. Players contribute Credits during the week. `/front` shows their matchup, own confirmed power, and a coarse comparison signal.
+3. Contributions lock at Sunday 15:00 in `Europe/Belgrade`.
+4. The aggregate engine applies a configurable contribution soft cap, diminishing overflow, baseline garrisons, and bounded NPC compensation for contributor-count imbalance.
+5. Four deterministic phases resolve each matchup and persist cumulative scores, seed, engine version, and event JSON.
+6. One transaction records every result and issues one ledger-backed reward per contributing player. A durable notification outbox is delivered after commit and retried independently.
 
 ## Module Boundaries
 
@@ -97,9 +97,9 @@ Final endpoint shapes should be captured in an OpenAPI document alongside implem
 
 ## Scheduling
 
-Daily and weekly work should be implemented as explicit, persisted state transitions rather than assumptions based only on wall-clock time. Jobs include daily order reset, operation generation, opponent snapshot refresh, campaign open, strength update, contribution lock, campaign resolution, reward delivery, video rendering, and retention cleanup.
+Daily and weekly work is implemented as explicit, persisted state transitions rather than assumptions based only on wall-clock time. The current campaign jobs open Monday matchups, resolve at Sunday 15:00 Belgrade time, recover an overdue unresolved week after restart, and retry notification delivery. Operation generation, richer strength updates, video rendering, and retention cleanup remain planned.
 
-All jobs need a stable idempotency key and must be safe after retries or restarts. Store timestamps in UTC; configure the product timezone explicitly.
+Campaign rows, matchup rows, and player reward rows have stable uniqueness boundaries, so retries cannot resolve a week or grant a reward twice. Timestamps are stored in UTC while the schedule is calculated in the configured IANA game timezone, preserving 15:00 through daylight-saving changes.
 
 ## Deployment Baseline
 

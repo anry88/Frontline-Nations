@@ -17,7 +17,7 @@ curl --fail --silent --show-error \
 
 curl --fail --silent --show-error \
   --request POST \
-  --data-urlencode 'commands=[{"command":"start","description":"Начать игру и выбрать альянс"},{"command":"battle","description":"Выбрать операцию и тактику"},{"command":"profile","description":"Прогресс, статистика и ресурсы"},{"command":"front","description":"Состояние недельного фронта"},{"command":"contribute","description":"Передать Credits на фронт"},{"command":"help","description":"Справка по командам"}]' \
+  --data-urlencode 'commands=[{"command":"start","description":"Начать игру и выбрать альянс"},{"command":"battle","description":"Выбрать операцию и тактику"},{"command":"profile","description":"Прогресс, статистика и ресурсы"},{"command":"front","description":"Матч недели, таймер и результат"},{"command":"contribute","description":"Передать Credits до воскресенья"},{"command":"help","description":"Справка по командам"}]' \
   "$api_url/setMyCommands" >/dev/null
 
 curl --fail --silent --show-error \

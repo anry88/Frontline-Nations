@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.tggames.frontline.battle.BattleEngine
 import com.tggames.frontline.battle.OperationOffer
 import com.tggames.frontline.battle.Tactic
+import com.tggames.frontline.campaign.CampaignService
 import com.tggames.frontline.config.FrontlineProperties
 import com.tggames.frontline.telegram.InlineKeyboardButton
 import com.tggames.frontline.telegram.InlineKeyboardMarkup
@@ -17,7 +18,6 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.temporal.WeekFields
 import java.util.UUID
 
 @Service
@@ -27,17 +27,9 @@ class GameService(
     private val battleEngine: BattleEngine,
     private val properties: FrontlineProperties,
     private val objectMapper: ObjectMapper,
+    private val campaigns: CampaignService,
 ) {
-    private val alliances = linkedMapOf(
-        "RS" to "🇷🇸 Сербия",
-        "BR" to "🇧🇷 Бразилия",
-        "IN" to "🇮🇳 Индия",
-        "JP" to "🇯🇵 Япония",
-        "EG" to "🇪🇬 Египет",
-        "CA" to "🇨🇦 Канада",
-        "XK" to "🇽🇰 Косово",
-        "PS" to "🇵🇸 Палестина",
-    )
+    private val alliances = AllianceCatalog.all
 
     @Transactional
     fun handle(update: TelegramUpdate) {
@@ -58,7 +50,7 @@ class GameService(
             "/start" -> start(user.id, user.firstName, message.chat.id)
             "/battle" -> battleMenu(user.id, user.firstName, message.chat.id)
             "/profile" -> telegram.sendMessage(message.chat.id, profileText(user.id, user.firstName), actionKeyboard())
-            "/front" -> telegram.sendMessage(message.chat.id, frontText(), actionKeyboard())
+            "/front" -> front(user.id, user.firstName, message.chat.id)
             "/contribute" -> contribute(user.id, user.firstName, message.chat.id, argument)
             "/help", "" -> telegram.sendMessage(message.chat.id, helpText(), actionKeyboard())
             else -> telegram.sendMessage(message.chat.id, "Неизвестная команда.\n\n${helpText()}", actionKeyboard())
@@ -75,7 +67,7 @@ class GameService(
             }
             data == "nav:battle" -> battleMenu(callback.from.id, callback.from.firstName, chatId)
             data == "nav:profile" -> telegram.sendMessage(chatId, profileText(callback.from.id, callback.from.firstName), actionKeyboard())
-            data == "nav:front" -> telegram.sendMessage(chatId, frontText(), actionKeyboard())
+            data == "nav:front" -> front(callback.from.id, callback.from.firstName, chatId)
             data.startsWith("op:") -> showTactics(callback.from.id, callback.from.firstName, chatId, data)
             data.startsWith("fight:") -> resolveBattle(callback.from.id, callback.from.firstName, chatId, data)
             else -> telegram.sendMessage(chatId, "Эта кнопка устарела. Откройте свежий список операций.", actionKeyboard())
@@ -323,26 +315,9 @@ class GameService(
             telegram.sendMessage(chatId, "Укажите вклад от 10 до 10000 Credits: /contribute 100")
             return
         }
-        val debited = jdbc.sql(
-            "UPDATE players SET credits = credits - :amount, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = :id AND credits >= :amount",
-        ).param("amount", amount).param("id", telegramId).update()
-        if (debited == 0) {
-            telegram.sendMessage(chatId, "Недостаточно Credits. Текущий баланс: ${player.credits}.")
-            return
-        }
-        jdbc.sql(
-            """
-            INSERT INTO campaign_contributions(week_key, player_telegram_id, alliance_code, credits, power)
-            VALUES (:week, :playerId, :alliance, :amount, :power)
-            """.trimIndent(),
-        ).param("week", weekKey())
-            .param("playerId", telegramId)
-            .param("alliance", player.allianceCode)
-            .param("amount", amount)
-            .param("power", amount)
-            .update()
-        recordWalletChange(telegramId, "CREDITS", -amount.toLong(), "CAMPAIGN_CONTRIBUTION", null)
-        telegram.sendMessage(chatId, "Вклад принят: $amount Credits → $amount силы фронта.\n\n${frontText()}", actionKeyboard())
+        val outcome = campaigns.contribute(telegramId, player.allianceCode, amount)
+        val front = campaigns.frontText(player.allianceCode)
+        telegram.sendMessage(chatId, "${outcome.message}\n\n$front", actionKeyboard())
     }
 
     private fun profileText(telegramId: Long, firstName: String? = null): String {
@@ -367,20 +342,10 @@ class GameService(
         """.trimIndent()
     }
 
-    private fun frontText(): String {
-        val rows = jdbc.sql(
-            """
-            SELECT alliance_code, COALESCE(SUM(power), 0) AS total_power
-              FROM campaign_contributions
-             WHERE week_key = :week
-             GROUP BY alliance_code
-             ORDER BY total_power DESC, alliance_code
-            """.trimIndent(),
-        ).param("week", weekKey())
-            .query { rs, _ -> (alliances[rs.getString("alliance_code")] ?: rs.getString("alliance_code")) to rs.getLong("total_power") }
-            .list()
-        val standings = if (rows.isEmpty()) "Вкладов пока нет." else rows.joinToString("\n") { "${it.first}: ${it.second}" }
-        return "🌍 ФРОНТ ${weekKey()}\n\n$standings\n\nВнести ресурсы: /contribute 100"
+    private fun front(telegramId: Long, firstName: String, chatId: Long) {
+        ensurePlayer(telegramId, firstName)
+        val player = player(telegramId)
+        telegram.sendMessage(chatId, campaigns.frontText(player.allianceCode), actionKeyboard())
     }
 
     private fun ensurePlayer(telegramId: Long, firstName: String) {
@@ -441,12 +406,6 @@ class GameService(
 
     private fun todayKey(): String = LocalDate.now(ZoneId.of(properties.gameTimezone)).toString()
 
-    private fun weekKey(): String {
-        val date = LocalDate.now(ZoneId.of(properties.gameTimezone))
-        val fields = WeekFields.ISO
-        return "%04d-W%02d".format(date.get(fields.weekBasedYear()), date.get(fields.weekOfWeekBasedYear()))
-    }
-
     private fun signed(value: Int): String = if (value >= 0) "+$value" else value.toString()
 
     private fun helpText() = """
@@ -454,8 +413,8 @@ class GameService(
         /start — регистрация и выбор альянса
         /battle — выбрать операцию и тактику
         /profile — прогресс, статистика и ресурсы
-        /front — состояние недельного фронта
-        /contribute 100 — передать Credits на фронт
+        /front — матч недели, таймер и результат
+        /contribute 100 — передать Credits до воскресенья 15:00
         /help — эта справка
     """.trimIndent()
 
