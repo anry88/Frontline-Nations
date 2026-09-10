@@ -1,0 +1,122 @@
+# Frontline Nations Agent Guide
+
+Repository-level guidance for coding agents and automated review tools.
+
+## Current State
+
+- This repository is currently a specification-first bootstrap; application code has not been created.
+- [Documents/Frontline_TZ_v0.1_RU.docx](Documents/Frontline_TZ_v0.1_RU.docx) is the primary product and technical source.
+- [README.md](README.md) is the public overview, [docs/product-overview.md](docs/product-overview.md) summarizes product intent, and [DOCUMENTATION.md](DOCUMENTATION.md) defines the target engineering boundaries.
+- Do not describe planned behavior as implemented. Label plans, examples, and target architecture explicitly until code and tests support the claims.
+
+## First Pass For Any Agent
+
+1. Inspect the current branch, worktree, recent commits, and remotes before editing.
+2. Read this file, [README.md](README.md), and [DOCUMENTATION.md](DOCUMENTATION.md).
+3. Read the relevant sections of the source specification before changing gameplay or architecture.
+4. Inspect the closest package README once implementation directories exist.
+5. Preserve unrelated user changes and source documents.
+6. Prefer the smallest coherent change and verify it with the relevant build or test command.
+
+## Source Of Truth
+
+Use this precedence when documents disagree:
+
+1. Explicit requirements in the current task.
+2. Accepted architecture decision records under `docs/decisions/`.
+3. The source specification in `Documents/`.
+4. Current executable behavior and tests for already implemented features.
+5. Summaries in `README.md`, `DOCUMENTATION.md`, and `docs/`.
+
+If executable behavior intentionally departs from the specification, record the decision and update the affected documentation in the same change.
+
+## Target Repository Map
+
+- `backend/`: Kotlin/Spring Boot modular monolith.
+- `backend/src/main/kotlin/.../telegram/`: Telegram webhook, commands, callbacks, and Mini App authentication.
+- `backend/src/main/kotlin/.../player/`: account, profile, alliance, progression, and rating.
+- `backend/src/main/kotlin/.../catalog/`: alliances, battlefields, units, modules, doctrines, and balance configuration.
+- `backend/src/main/kotlin/.../inventory/`: owned units, equipped modules, repairs, and combat-group presets.
+- `backend/src/main/kotlin/.../matchmaking/`: operation offers and opponent snapshots.
+- `backend/src/main/kotlin/.../battle/`: deterministic personal and aggregate simulations.
+- `backend/src/main/kotlin/.../campaign/`: weekly matching, contributions, deficits, resolution, and rewards.
+- `backend/src/main/kotlin/.../replay/`: immutable battle events and replay delivery.
+- `backend/src/main/kotlin/.../jobs/`: resets, snapshots, campaign transitions, rendering, and cleanup.
+- `backend/src/main/kotlin/.../admin/`: protected content and operations endpoints.
+- `miniapp/`: Telegram Mini App UI, map, hangar, research, statistics, and replay playback.
+- `renderer/`: optional replay-to-video pipeline.
+- `infra/`: Docker Compose, proxy, environment, and deployment assets.
+- `docs/`: human- and agent-facing product and engineering documentation.
+
+Treat this map as a target until directories exist. Update it when actual package names become stable.
+
+## Non-Negotiable Domain Contracts
+
+- The server is authoritative for battle outcomes, rewards, inventory, and campaign state.
+- A battle result must be reproducible from the engine version, seed, inputs, and configuration snapshot.
+- Replay and video layers consume `BattleEvent` output; they must not recalculate or alter results.
+- Use integer or fixed-point arithmetic where cross-version determinism matters.
+- Include a secret server value when deriving unrevealed battle seeds. Do not expose future random rolls.
+- Wallet and inventory mutations must be transactional, auditable, and idempotent where retries are possible.
+- Validate Telegram `initData` server-side. Never trust player identity, reward amounts, combat stats, or timestamps supplied by the client.
+- Do not hardcode balance data that the specification identifies as configurable.
+- Primary player units and expendable weekly `CampaignAsset` units are separate concepts and must not share destructive lifecycle logic.
+- Real country and territory names are neutral game identifiers. Avoid political claims or inferred sovereignty in copy, data, maps, and coordinates.
+
+## Engineering Boundaries
+
+- Begin with a modular monolith. Do not introduce distributed services before measured scaling or isolation needs justify them.
+- Keep controllers/adapters thin; domain services own rules and transactions.
+- Keep persistence models from leaking directly into public API contracts.
+- Version battle-engine behavior and retain enough input/configuration data to reproduce historical results.
+- Prefer additive API evolution. When changing an API contract, update the bot, Mini App, admin surface, tests, and documentation together.
+- Store timestamps in UTC and make the game timezone explicit for daily and weekly schedules.
+- Background jobs must tolerate retries, duplicate delivery, and process restarts.
+- Use PostgreSQL migrations for schema changes; never rely on implicit schema creation in production.
+
+## Testing Priorities
+
+At minimum, add tests for:
+
+- deterministic replay of a known battle seed and input snapshot
+- combat formula boundaries, clamps, and fixed-point rounding
+- authorization and Telegram authentication failure paths
+- idempotent rewards, wallet transactions, contributions, and scheduled jobs
+- campaign lock and resolve state transitions
+- alliance balancing, NPC compensation, and capped-contribution rules
+- persistence migrations and API serialization contracts
+
+Every bug fix should include a regression test when practical. Do not weaken or delete a failing test merely to make a build green.
+
+## Security And Privacy
+
+- Never commit bot tokens, database credentials, server salts, session secrets, production URLs with embedded credentials, or personal data.
+- Use environment variables or ignored local configuration with committed example files.
+- Apply rate limits to battle starts, callbacks, replay access, and other abuse-prone endpoints.
+- Log security-relevant events without logging Telegram auth payloads, secrets, or unnecessary personal data.
+- Protect admin endpoints separately from player authentication and record administrative actions.
+
+## Documentation Rules
+
+- Update `README.md` when public scope, stack, status, or setup changes.
+- Update `DOCUMENTATION.md` and the nearest package README when module boundaries or runtime data flow changes.
+- Add or amend an ADR when a durable architecture decision changes.
+- Keep [docs/github-about.md](docs/github-about.md) aligned with the public repository position.
+- Preserve the original specification unless the task explicitly requests editing it; record implementation decisions in Markdown documentation instead.
+
+## Git Workflow
+
+- The initial repository branch is `main`. Introduce a separate development-branch policy only through an explicit project decision.
+- Before committing, inspect `git diff`, `git status`, and the current branch.
+- Keep commits focused and use imperative commit subjects.
+- Do not rewrite shared history, force-push, or push to a different remote without explicit authorization.
+- Do not commit generated build output, IDE state, runtime databases, logs, secrets, or rendered video artifacts.
+
+## Completion Checklist
+
+- Relevant tests and build checks pass.
+- Determinism and idempotency constraints remain intact.
+- API consumers are compatible with any contract changes.
+- No secrets or generated artifacts are staged.
+- Documentation reflects the implemented state rather than intended future behavior.
+- `git diff --check` reports no whitespace errors.

@@ -1,0 +1,74 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# IDEs and editors
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# Local agent and tool state
+.codex/
+.agents/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+application-local.yml
+application-local.yaml
+application-local.properties
+**/application-local.yml
+**/application-local.yaml
+**/application-local.properties
+local.properties
+*.jks
+*.keystore
+*.p12
+*.pem
+
+# Gradle and JVM
+.gradle/
+.kotlin/
+build/
+**/build/
+out/
+*.class
+hs_err_pid*
+replay_pid*
+
+# Node and frontend
+node_modules/
+dist/
+coverage/
+.parcel-cache/
+.vite/
+*.tsbuildinfo
+
+# Runtime data
+logs/
+*.log
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+uploads/
+replays/
+renders/
+*.mp4
+
+# Test and analysis output
+.coverage
+.pytest_cache/
+.test-results/
+test-results/
+playwright-report/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
