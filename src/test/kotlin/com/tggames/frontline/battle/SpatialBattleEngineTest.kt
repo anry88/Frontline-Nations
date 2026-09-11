@@ -2,6 +2,7 @@ package com.tggames.frontline.battle
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.tggames.frontline.catalog.EquipmentCatalog
+import com.tggames.frontline.progression.ForceTierCatalog
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.nio.charset.StandardCharsets
@@ -11,7 +12,8 @@ class SpatialBattleEngineTest {
     private val objectMapper = jacksonObjectMapper()
     private val equipment = EquipmentCatalog(objectMapper)
     private val maps = BattleMapCatalog(objectMapper)
-    private val spatial = SpatialBattleEngine(equipment)
+    private val forceTiers = ForceTierCatalog(objectMapper)
+    private val spatial = SpatialBattleEngine(equipment, forceTiers)
     private var snapshotSequence = 0
 
     @Test
@@ -131,6 +133,22 @@ class SpatialBattleEngineTest {
                 assertThat(defeated).allMatch { it.hitPoints == 0 || it.routed }
             }
         }
+    }
+
+    @Test
+    fun `corps battle aggregates a thousand command points into bounded formations`() {
+        val map = maps.forBiome("равнина")
+        val operation = OperationOffer(0, Battlefield("Великие равнины", "равнина"), EnemyArchetype.ARMOR, Difficulty.STANDARD)
+        val formation = snapshot("RECON_VEHICLE").copy(cpCost = 1_000, quantity = 1_000)
+        val group = CombatGroupSnapshot(stableUuid("corps"), 1, 1_000, listOf(formation))
+
+        val result = spatial.simulate(991L, 50, operation, Tactic.MANEUVER, group, DeploymentPlan("S", "crossing"), map)
+
+        assertThat(result.steps).isBetween(1, SpatialBattleEngine.MAX_STEPS)
+        assertThat(result.playerUnits).hasSize(1)
+        assertThat(result.playerUnits.single().quantity).isEqualTo(1_000)
+        assertThat(result.enemyGroup.usedCp).isBetween(501, 1_000)
+        assertThat(result.enemyGroup.units).hasSizeLessThanOrEqualTo(equipment.units.size)
     }
 
     private fun snapshot(code: String): UnitBattleSnapshot {

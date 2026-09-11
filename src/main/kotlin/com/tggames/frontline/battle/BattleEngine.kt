@@ -2,6 +2,7 @@ package com.tggames.frontline.battle
 
 import com.tggames.frontline.catalog.FireMode
 import com.tggames.frontline.catalog.MovementProfile
+import com.tggames.frontline.progression.ForceTierCatalog
 import org.springframework.stereotype.Component
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -63,6 +64,7 @@ data class UnitBattleSnapshot(
     val minimumRange: Int = 1,
     val sightRange: Int = 3,
     val fireMode: FireMode = FireMode.DIRECT,
+    val quantity: Int = 1,
 )
 
 data class CombatGroupSnapshot(val id: UUID, val version: Int, val cpLimit: Int, val units: List<UnitBattleSnapshot>) {
@@ -90,12 +92,16 @@ data class BattleResult(
     val seedHash: String,
     val events: List<BattleEvent>,
     val spatial: SpatialBattleResult? = null,
+    val forceTierId: String? = null,
+    val playerDeployedCp: Int? = null,
+    val enemyDeployedCp: Int? = null,
 )
 
 @Component
 class BattleEngine(
     private val spatialEngine: SpatialBattleEngine,
     private val mapCatalog: BattleMapCatalog,
+    private val forceTiers: ForceTierCatalog,
 ) {
     val battlefields = listOf(
         Battlefield("Карпатский перевал", "горы"), Battlefield("Дунайская долина", "речная долина"),
@@ -150,7 +156,8 @@ class BattleEngine(
         val playerPower = compositionPower(group)
         val enemyPower = compositionPower(spatial.enemyGroup)
         val victory = spatial.winner == BattleSide.PLAYER
-        val multiplier = operation.difficulty.rewardPercent
+        val forceTier = forceTiers.forDeployedCp(group.usedCp)
+        val multiplier = operation.difficulty.rewardPercent * forceTier.rewardPercent / 100
         return BattleResult(
             victory = victory,
             playerPower = playerPower,
@@ -168,6 +175,9 @@ class BattleEngine(
             seedHash = MessageDigest.getInstance("SHA-256").digest(ByteBuffer.allocate(Long.SIZE_BYTES).putLong(seed).array()).toHex(),
             events = summarizeSpatialEvents(spatial),
             spatial = spatial,
+            forceTierId = forceTier.id,
+            playerDeployedCp = group.usedCp,
+            enemyDeployedCp = spatial.enemyGroup.usedCp,
         )
     }
 
@@ -205,12 +215,13 @@ class BattleEngine(
     }
 
     fun compositionPower(group: CombatGroupSnapshot): Int {
-        val attack = group.units.sumOf { it.attack }
-        val armor = group.units.sumOf { it.armor }
-        val mobility = group.units.sumOf { it.mobility }
-        val recon = group.units.sumOf { it.recon }
-        val support = group.units.sumOf { it.support }
-        return ((attack * 3 + armor * 2 + mobility + recon + support) / 10 + group.units.size * 2).coerceAtLeast(1)
+        val attack = group.units.sumOf { it.attack * it.quantity }
+        val armor = group.units.sumOf { it.armor * it.quantity }
+        val mobility = group.units.sumOf { it.mobility * it.quantity }
+        val recon = group.units.sumOf { it.recon * it.quantity }
+        val support = group.units.sumOf { it.support * it.quantity }
+        val quantity = group.units.sumOf { it.quantity }
+        return ((attack * 3 + armor * 2 + mobility + recon + support) / 10 + quantity * 2).coerceAtLeast(1)
     }
 
     /** Legacy engine-v3 assessment retained only to reproduce historical battles. */
@@ -314,8 +325,8 @@ class BattleEngine(
     }
 
     private fun summarizeSpatialEvents(result: SpatialBattleResult): List<BattleEvent> {
-        var playerCondition = result.playerUnits.size * 100
-        var enemyCondition = result.enemyUnits.size * 100
+        var playerCondition = result.playerUnits.sumOf { it.quantity } * 100
+        var enemyCondition = result.enemyUnits.sumOf { it.quantity } * 100
         return (1..result.steps).map { step ->
             val stepEvents = result.events.filter { it.step == step }
             stepEvents.filter { it.type == SpatialEventType.UNIT_HIT }.forEach {

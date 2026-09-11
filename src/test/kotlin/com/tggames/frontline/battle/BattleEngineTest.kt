@@ -2,6 +2,7 @@ package com.tggames.frontline.battle
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.tggames.frontline.catalog.EquipmentCatalog
+import com.tggames.frontline.progression.ForceTierCatalog
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.util.UUID
@@ -10,8 +11,9 @@ class BattleEngineTest {
     private val objectMapper = jacksonObjectMapper()
     private val equipment = EquipmentCatalog(objectMapper)
     private val maps = BattleMapCatalog(objectMapper)
-    private val spatial = SpatialBattleEngine(equipment)
-    private val engine = BattleEngine(spatial, maps)
+    private val forceTiers = ForceTierCatalog(objectMapper)
+    private val spatial = SpatialBattleEngine(equipment, forceTiers)
+    private val engine = BattleEngine(spatial, maps, forceTiers)
     private val operation = OperationOffer(0, Battlefield("Дунайская долина", "речная долина"), EnemyArchetype.ARTILLERY, Difficulty.STANDARD)
     private val balancedGroup = group(
         unit("MBT", 3, 30, 32, 12, 5, 4, "ARMOR", "FIREPOWER"),
@@ -85,6 +87,9 @@ class BattleEngineTest {
         assertThat(result.tacticBonus).isZero()
         assertThat(result.terrainBonus).isZero()
         assertThat(result.counterBonus).isZero()
+        assertThat(result.forceTierId).isEqualTo("detachment")
+        assertThat(result.playerDeployedCp).isEqualTo(10)
+        assertThat(result.enemyDeployedCp).isBetween(10, 25)
     }
 
     private fun group(vararg units: UnitBattleSnapshot) = CombatGroupSnapshot(UUID.randomUUID(), 1, 10, units.toList())

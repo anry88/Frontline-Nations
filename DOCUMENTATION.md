@@ -11,7 +11,7 @@ The deployed MVP has two runtime surfaces:
 - Telegram Bot commands, callback queries, and inline alliance-selection buttons
 - Spring Boot backend as the authority for gameplay and economy
 
-PostgreSQL stores players and their explicit locale/nickname settings, processed Telegram updates, owned personal units, three combat-group presets, equipment audit records, personal battles and their immutable group/map/opponent snapshots, ordered spatial event JSON, campaign weeks and matchups, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs restore daily Combat Orders and drive the weekly campaign. Mini App, graphical replay visualization, spatial mass battles, equipment modules, research spending, and typed campaign assets remain future milestones.
+PostgreSQL stores players and their explicit locale/nickname settings, command capacity and its upgrade audit, processed Telegram updates, owned personal units, three combat-group presets, equipment audit records, personal battles and their immutable group/map/opponent/tier snapshots, ordered spatial event JSON, campaign weeks and matchups, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs restore daily Combat Orders and drive the weekly campaign. Mini App, graphical replay visualization, alliance-scale spatial battles, equipment modules, branching technologies, and typed campaign assets remain future milestones.
 
 ### Identity, locale, and alliance selection
 
@@ -27,13 +27,13 @@ PostgreSQL stores players and their explicit locale/nickname settings, processed
 
 1. The server deterministically generates five operation offers from a catalog of 24 battlefields for the player's current daily-order state.
 2. The bot shows a named battlefield, biome, risk/reward tier, and tier-dependent intelligence for each offer.
-3. The player maintains one of three reusable presets through `/army`. The 10–14 CP budget makes heavy armor, artillery, aircraft, air defense, and reconnaissance compete for space.
+3. The player maintains one of three reusable presets through `/army`. The persisted command-capacity budget grows from 10 to 1,000 CP through level-gated Research Point purchases, making heavy armor, artillery, aircraft, air defense, and reconnaissance compete for space at every echelon.
 4. The selected operation resolves to a versioned 7×7 axial sector map. The bot displays its terrain, three player entry points, and three important objectives.
 5. The player binds the active group to an entry and a first objective, then chooses a behavior doctrine. Doctrines change route preference, holding behavior, movement order, and target selection; engine v4 applies no hidden tactic, counter, or terrain power percentage.
 6. The backend binds callbacks to the current order count and group version, rejects stale changes, derives a protected seed, and moves units through logical steps. Movement costs, line of sight, spotting, weapon range, minimum artillery range, cover, damage, and objective control are resolved using integer arithmetic.
 7. Ground units capture an uncontested objective after its configured number of consecutive steps. Existing control remains until an opponent completes the same process, so defenders may contest or retake it. Aircraft do not capture objectives.
 8. The battle ends when one side holds all important objectives, one army has no combat-capable units, or the 24-step safety boundary routes the weaker remaining army by objective control and hit points.
-9. One transaction consumes the Combat Order and records the result, rewards, statistics, operation metadata, engine/map version, route orders, full player/opponent/map snapshots, final objective state, and typed spatial events.
+9. One transaction consumes the Combat Order and records the result, rewards, statistics, force tier and both deployed CP totals, operation metadata, engine/map version, route orders, full player/opponent/map snapshots, final objective state, and typed spatial events.
 10. The bot presents objective control and selected highlights. A graphical replay UI remains planned; it will consume the stored spatial events rather than recalculate combat.
 
 ### Personal equipment
@@ -43,6 +43,9 @@ PostgreSQL stores players and their explicit locale/nickname settings, processed
 3. `/upgrade` spends both resources and scales all base stats by a deterministic integer 12% per level through level 5.
 4. Player balances, wallet ledger rows, owned-unit state, and equipment audit rows change in one transaction.
 5. Generated fictional class icons are served by the backend and sent as Telegram equipment cards. Personal units are persistent and never consumed by the weekly campaign.
+6. `/development` spends ledger-backed Research Points on six level-gated command-capacity ceilings: 25, 50, 100, 250, 500, and 1,000 CP. `/shop` supports batches of 1, 5, or 25 units, `/upgrade` groups identical equipment and upgrades 1, 5, or 25 at once, and `/army` adds or removes one available unit of a selected class per callback.
+7. Battle category follows deployed CP rather than account level. Rewards scale by the category's configured multiplier, and the generated opponent remains inside the same category.
+8. To keep map complexity bounded, identical units are snapshotted into formations keyed by class and upgrade level. Formation quantity scales hit points and outgoing damage; movement, range, terrain access, spotting, targeting, and capture eligibility still follow the equipment definition.
 
 ### Weekly campaign
 
@@ -61,7 +64,7 @@ PostgreSQL stores players and their explicit locale/nickname settings, processed
 | `player` | Account, profile, alliance membership, commander level, rating |
 | `catalog` | Alliances, locations, units, modules, doctrines, balance configuration |
 | `inventory` | Owned units, equipment, presets, repair and production state |
-| `progression` | XP, research nodes, unlocks, doctrine points, prestige |
+| `progression` | XP level gates, Research Point capacity upgrades, force tiers, future research nodes and prestige |
 | `matchmaking` | Operation offers, opponent snapshots, difficulty bands |
 | `battle-engine` | Versioned deterministic personal and aggregate simulations |
 | `campaign` | Weekly matchups, campaign assets, deficits, contributions, rewards |
@@ -95,7 +98,8 @@ Implementation should refine this model through versioned migrations. Important 
 - one Telegram identity maps to one player account unless an explicit account-linking flow is introduced
 - resource balances change only through ledger-backed transactions
 - one-time starter grants and equipment transactions are idempotent and auditable
-- a preset cannot exceed its commander-derived CP limit through normal application writes
+- a preset cannot exceed its persisted command-capacity limit through normal application writes
+- each command-capacity upgrade is level-gated, ledger-backed, auditable, and applied at most once
 - personal equipment and expendable weekly campaign assets have separate storage and lifecycle
 - campaign contributions are immutable after the lock boundary
 - reward issuance is idempotent and traceable to its source

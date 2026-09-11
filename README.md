@@ -15,6 +15,7 @@ Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
 - `/army` or `/hangar` — switch between three presets and select equipment within the CP limit
 - `/shop` — inspect illustrated equipment cards and buy or craft a unit
 - `/upgrade` — improve an owned unit from level 1 to 5
+- `/development` or `/research` — spend Research Points to expand command capacity
 - `/profile` — inspect alliance, level progress, battle record, resources, and daily orders
 - `/front` — inspect the current matchup, intelligence, countdown, or published result
 - `/contribute 100` — transfer Credits before the Sunday contribution lock
@@ -47,9 +48,9 @@ The command-only MVP pairs player-selected alliances each week. Contributions re
 
 ### Progression
 
-The command MVP now includes seven configurable equipment classes, individual owned units, three reusable combat-group presets, commander-level unlocks, purchase and lower-credit crafting recipes, and five unit levels. Every class has map movement, sight, minimum/maximum weapon range, and a fire mode in addition to its five combat statistics. Aircraft movement remains finite; attack aircraft and fighters cannot strike across the whole map. Every level adds 12% to the unit's five base statistics. The CP limit grows slowly from 10 to 14 with commander level.
+The command MVP now includes seven configurable equipment classes, individual owned units, three reusable combat-group presets, commander-level unlocks, purchase and lower-credit crafting recipes, and five unit levels. Every class has map movement, sight, minimum/maximum weapon range, and a fire mode in addition to its five combat statistics. Aircraft movement remains finite; attack aircraft and fighters cannot strike across the whole map. Every level adds 12% to the unit's five base statistics.
 
-New commanders receive the specification's 10 CP starter group: two main battle tanks, one artillery unit, and one reconnaissance vehicle. The active preset becomes an immutable input snapshot for battle resolution. Modules, branching research spending, doctrine perks, repairs, and seasonal prestige remain planned.
+New commanders receive the specification's 10 CP starter group: two main battle tanks, one artillery unit, and one reconnaissance vehicle. Commander levels unlock six force echelons while Research Points buy command-capacity expansions from 10 to 1,000 CP. Battles are classified by actually deployed power: 10–25, 26–50, 51–100, 101–250, 251–500, and 501–1,000 CP. Large groups are simulated as homogeneous formations by equipment class and level, preserving tactical differences without creating hundreds of independent map actors. The active preset becomes an immutable input snapshot for battle resolution. Modules, branching technology choices, doctrine perks, repairs, and seasonal prestige remain planned.
 
 ## Target Architecture
 
@@ -100,6 +101,7 @@ Mini App and replay-renderer directories will be added only when those milestone
 - [Localized identity and alliance catalog decision](docs/decisions/0004-localized-identity-and-alliance-catalog.md)
 - [Personal equipment and tactical composition decision](docs/decisions/0005-personal-equipment-and-tactical-composition.md)
 - [Spatial personal battles decision](docs/decisions/0006-spatial-personal-battles.md)
+- [Command capacity and force tiers decision](docs/decisions/0007-command-capacity-and-force-tiers.md)
 - [Contributor guide](CONTRIBUTING.md)
 - [Agent guide](AGENTS.md)
 - [GitHub About metadata](docs/github-about.md)
@@ -109,7 +111,7 @@ Mini App and replay-renderer directories will be added only when those milestone
 
 Current phase: command-only MVP with persistent equipment progression, spatial personal operations, and scheduled weekly battles.
 
-The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog, moderated nicknames, a seven-class equipment catalog, transactional purchase/crafting/upgrades, three CP-limited presets, five operation offers drawn from 24 battlefields, three data-driven tactical maps, deterministic spatial battles with objective control, weekly pairings, scheduled aggregate resolution, NPC compensation, idempotent campaign rewards, and durable Telegram notifications. Graphical maps/replays, spatial mass battles, seasonal alliance switching, modules, typed campaign assets, research spending, Mini App, and video rendering remain planned.
+The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog, moderated nicknames, a seven-class equipment catalog, transactional bulk purchase/crafting/upgrades, three CP-limited presets, level-gated command capacity expanded with Research Points, six battle categories up to 1,000 CP, five operation offers drawn from 24 battlefields, three data-driven tactical maps, deterministic formation-based spatial battles with objective control, weekly pairings, scheduled aggregate resolution, NPC compensation, idempotent campaign rewards, and durable Telegram notifications. Graphical maps/replays, alliance-scale spatial battles above the personal 1,000 CP boundary, seasonal alliance switching, modules, typed campaign assets, branching technologies, Mini App, and video rendering remain planned.
 
 Run tests with `GRADLE_USER_HOME="$PWD/.gradle-home" ./gradlew test`. For a local Docker run, copy `.env.example` to an ignored `.env`, replace every secret, create the PostgreSQL data directory, and run `docker compose up --build`.
 

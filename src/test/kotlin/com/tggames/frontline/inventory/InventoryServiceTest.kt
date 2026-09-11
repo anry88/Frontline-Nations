@@ -5,11 +5,8 @@ import org.junit.jupiter.api.Test
 
 class InventoryServiceTest {
     @Test
-    fun `command point growth is slow and bounded`() {
-        assertThat(InventoryService.cpLimit(1)).isEqualTo(10)
-        assertThat(InventoryService.cpLimit(10)).isEqualTo(10)
-        assertThat(InventoryService.cpLimit(11)).isEqualTo(11)
-        assertThat(InventoryService.cpLimit(50)).isEqualTo(14)
-        assertThat(InventoryService.cpLimit(999)).isEqualTo(14)
+    fun `group storage supports the maximum personal force category`() {
+        assertThat(InventoryService.MAX_GROUP_SLOTS).isEqualTo(1_000)
+        assertThat(InventoryService.MAX_PURCHASE_QUANTITY).isEqualTo(25)
     }
 }

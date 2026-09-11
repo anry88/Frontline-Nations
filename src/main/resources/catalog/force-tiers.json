@@ -1,0 +1,56 @@
+[
+  {
+    "id": "detachment",
+    "nameKey": "force_tier_detachment",
+    "minCp": 10,
+    "maxCp": 25,
+    "unlockLevel": 1,
+    "researchCost": 50,
+    "rewardPercent": 100
+  },
+  {
+    "id": "company",
+    "nameKey": "force_tier_company",
+    "minCp": 26,
+    "maxCp": 50,
+    "unlockLevel": 10,
+    "researchCost": 150,
+    "rewardPercent": 140
+  },
+  {
+    "id": "battalion",
+    "nameKey": "force_tier_battalion",
+    "minCp": 51,
+    "maxCp": 100,
+    "unlockLevel": 20,
+    "researchCost": 350,
+    "rewardPercent": 200
+  },
+  {
+    "id": "brigade",
+    "nameKey": "force_tier_brigade",
+    "minCp": 101,
+    "maxCp": 250,
+    "unlockLevel": 30,
+    "researchCost": 800,
+    "rewardPercent": 300
+  },
+  {
+    "id": "division",
+    "nameKey": "force_tier_division",
+    "minCp": 251,
+    "maxCp": 500,
+    "unlockLevel": 40,
+    "researchCost": 1600,
+    "rewardPercent": 450
+  },
+  {
+    "id": "corps",
+    "nameKey": "force_tier_corps",
+    "minCp": 501,
+    "maxCp": 1000,
+    "unlockLevel": 50,
+    "researchCost": 3000,
+    "rewardPercent": 650
+  }
+]

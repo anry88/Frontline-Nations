@@ -3,6 +3,8 @@ package com.tggames.frontline.battle
 import com.tggames.frontline.catalog.EquipmentCatalog
 import com.tggames.frontline.catalog.FireMode
 import com.tggames.frontline.catalog.MovementProfile
+import com.tggames.frontline.progression.ForceTier
+import com.tggames.frontline.progression.ForceTierCatalog
 import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets
 import java.util.PriorityQueue
@@ -50,6 +52,8 @@ data class SpatialUnitResult(
     val position: HexCoord,
     val hitPoints: Int,
     val routed: Boolean,
+    val quantity: Int,
+    val remainingQuantity: Int,
 )
 
 data class ObjectiveResult(
@@ -121,6 +125,7 @@ data class SpatialBattleResult(
 @Component
 class SpatialBattleEngine(
     private val equipment: EquipmentCatalog,
+    private val forceTiers: ForceTierCatalog,
 ) {
     internal fun canAttack(
         shooter: UnitBattleSnapshot,
@@ -154,7 +159,8 @@ class SpatialBattleEngine(
         val enemyEntry = map.enemyEntries[random.nextInt(map.enemyEntries.size)]
         val enemyObjective = map.objectives[random.nextInt(map.objectives.size)]
         val enemyTactic = enemyTactic(operation.enemy)
-        val enemyGroup = enemyGroup(seed, commanderLevel, operation)
+        val forceTier = forceTiers.forDeployedCp(group.usedCp)
+        val enemyGroup = enemyGroup(seed, commanderLevel, operation, group.usedCp, forceTier)
         val units = mutableListOf<UnitState>()
         units += deploy(group.units, BattleSide.PLAYER, playerEntry.position)
         units += deploy(enemyGroup.units, BattleSide.ENEMY, enemyEntry.position)
@@ -212,10 +218,16 @@ class SpatialBattleEngine(
     }
 
     private fun deploy(snapshots: List<UnitBattleSnapshot>, side: BattleSide, position: HexCoord): List<UnitState> =
-        snapshots.map { UnitState(it, side, position, 100, routed = false) }
+        snapshots.map { UnitState(it, side, position, 100 * it.quantity, routed = false) }
 
-    private fun enemyGroup(seed: Long, commanderLevel: Int, operation: OperationOffer): CombatGroupSnapshot {
-        val codes = when (operation.enemy) {
+    private fun enemyGroup(
+        seed: Long,
+        commanderLevel: Int,
+        operation: OperationOffer,
+        playerCp: Int,
+        forceTier: ForceTier,
+    ): CombatGroupSnapshot {
+        val pattern = when (operation.enemy) {
             EnemyArchetype.ARMOR -> listOf("MBT", "MBT", "LIGHT_ARMOR", "RECON_VEHICLE")
             EnemyArchetype.ARTILLERY -> listOf("MBT", "ARTILLERY", "ARTILLERY", "RECON_VEHICLE")
             EnemyArchetype.FORTIFIED -> listOf("MBT", "ARTILLERY", "AIR_DEFENSE", "RECON_VEHICLE")
@@ -224,20 +236,37 @@ class SpatialBattleEngine(
             EnemyArchetype.AIR -> listOf("ATTACK_AIRCRAFT", "FIGHTER", "MBT", "RECON_VEHICLE")
             EnemyArchetype.AIR_DEFENSE -> listOf("AIR_DEFENSE", "AIR_DEFENSE", "MBT", "ARTILLERY")
         }
+        val strengthPercent = when (operation.difficulty) {
+            Difficulty.SCOUTED -> 90
+            Difficulty.STANDARD -> 100
+            Difficulty.RISKY -> 112
+        }
+        val targetCp = (playerCp * strengthPercent / 100).coerceIn(forceTier.minCp, forceTier.maxCp)
+        val codes = buildList {
+            var remaining = targetCp
+            var index = 0
+            while (remaining > 0) {
+                val preferred = pattern[index % pattern.size]
+                val code = if (equipment.require(preferred).cpCost <= remaining) preferred else "RECON_VEHICLE"
+                add(code)
+                remaining -= equipment.require(code).cpCost
+                index++
+            }
+        }
         val difficultyLevel = when (operation.difficulty) {
             Difficulty.SCOUTED -> 0
             Difficulty.STANDARD -> 1
             Difficulty.RISKY -> 2
         }
         val level = (1 + commanderLevel / 10 + difficultyLevel).coerceIn(1, 5)
-        val units = codes.mapIndexed { index, code ->
+        val units = codes.groupingBy { it }.eachCount().entries.sortedBy { it.key }.mapIndexed { index, (code, quantity) ->
             val definition = equipment.require(code)
             val stats = definition.stats.scaled(level)
             UnitBattleSnapshot(
                 id = stableUuid("enemy:$seed:$index:$code"),
                 code = code,
                 level = level,
-                cpCost = definition.cpCost,
+                cpCost = definition.cpCost * quantity,
                 attack = stats.attack,
                 armor = stats.armor,
                 mobility = stats.mobility,
@@ -250,6 +279,7 @@ class SpatialBattleEngine(
                 minimumRange = definition.spatial.minimumRange,
                 sightRange = definition.spatial.sightRange,
                 fireMode = definition.spatial.fireMode,
+                quantity = quantity,
             )
         }
         return CombatGroupSnapshot(stableUuid("enemy-group:$seed"), 1, units.sumOf { it.cpCost }, units)
@@ -456,7 +486,7 @@ class SpatialBattleEngine(
                 )
                 return@forEach
             }
-            val damage = damage(shooter, target, map)
+            val damage = damage(shooter, target, map).coerceAtMost(target.hitPoints)
             target.hitPoints = (target.hitPoints - damage).coerceAtLeast(0)
             events += SpatialBattleEvent(
                 step, SpatialEventType.UNIT_HIT, shooter.side, shooter.snapshot.id, shooter.snapshot.code,
@@ -538,7 +568,8 @@ class SpatialBattleEngine(
             attack = attack * 35 / 100
         }
         val raw = (attack * 8 / 5 - target.snapshot.armor * 3 / 5).coerceIn(6, 58)
-        return (raw * (100 - map.terrainAt(target.position).cover * 10) / 100).coerceAtLeast(4)
+        val singleUnitDamage = (raw * (100 - map.terrainAt(target.position).cover * 10) / 100).coerceAtLeast(4)
+        return singleUnitDamage * shooter.remainingQuantity
     }
 
     private fun updateObjectives(
@@ -609,7 +640,16 @@ class SpatialBattleEngine(
     private fun tacticFor(side: BattleSide, player: Tactic, enemy: Tactic): Tactic = if (side == BattleSide.PLAYER) player else enemy
 
     private fun unitResults(units: List<UnitState>, side: BattleSide): List<SpatialUnitResult> = units.filter { it.side == side }.map {
-        SpatialUnitResult(it.snapshot.id, it.snapshot.code, it.side, it.position, it.hitPoints, it.routed)
+        SpatialUnitResult(
+            it.snapshot.id,
+            it.snapshot.code,
+            it.side,
+            it.position,
+            it.hitPoints,
+            it.routed,
+            it.snapshot.quantity,
+            if (it.routed || it.hitPoints <= 0) 0 else (it.hitPoints + 99) / 100,
+        )
     }
 
     private fun stableUuid(value: String): UUID = UUID.nameUUIDFromBytes(value.toByteArray(StandardCharsets.UTF_8))
@@ -624,6 +664,7 @@ class SpatialBattleEngine(
         var routed: Boolean,
     ) {
         val operational: Boolean get() = hitPoints > 0 && !routed
+        val remainingQuantity: Int get() = if (operational) (hitPoints + 99) / 100 else 0
     }
 
     companion object {
