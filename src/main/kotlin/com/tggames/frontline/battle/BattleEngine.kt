@@ -1,5 +1,7 @@
 package com.tggames.frontline.battle
 
+import com.tggames.frontline.catalog.FireMode
+import com.tggames.frontline.catalog.MovementProfile
 import org.springframework.stereotype.Component
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -10,11 +12,11 @@ import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
 
 enum class Tactic(val code: String, val title: String, val icon: String, val hint: String) {
-    ASSAULT("assault", "Штурм", "⚔️", "нужны огневая мощь и броня"),
-    DEFENSE("defense", "Оборона", "🛡️", "нужны броня и поддержка"),
-    AMBUSH("ambush", "Засада", "🌲", "нужны разведка и огневая мощь"),
-    MANEUVER("maneuver", "Манёвр", "↗️", "нужны мобильность и броня"),
-    RECON("recon", "Разведка боем", "🔭", "нужна разведывательная техника"),
+    ASSAULT("assault", "Штурм", "⚔️", "прямое продвижение и добивание повреждённых целей"),
+    DEFENSE("defense", "Оборона", "🛡️", "удержание объектов и огонь по ближайшей угрозе"),
+    AMBUSH("ambush", "Засада", "🌲", "укрытые маршруты и приоритет опасных целей"),
+    MANEUVER("maneuver", "Манёвр", "↗️", "быстрые маршруты и охота за артиллерией и ПВО"),
+    RECON("recon", "Разведка боем", "🔭", "разведка идёт первой и подавляет вражеских разведчиков"),
     ;
 
     companion object {
@@ -55,6 +57,12 @@ data class UnitBattleSnapshot(
     val recon: Int,
     val support: Int,
     val roles: Set<String>,
+    val movementProfile: MovementProfile = MovementProfile.TRACKED,
+    val movementPoints: Int = 4,
+    val weaponRange: Int = 2,
+    val minimumRange: Int = 1,
+    val sightRange: Int = 3,
+    val fireMode: FireMode = FireMode.DIRECT,
 )
 
 data class CombatGroupSnapshot(val id: UUID, val version: Int, val cpLimit: Int, val units: List<UnitBattleSnapshot>) {
@@ -81,10 +89,14 @@ data class BattleResult(
     val seed: Long,
     val seedHash: String,
     val events: List<BattleEvent>,
+    val spatial: SpatialBattleResult? = null,
 )
 
 @Component
-class BattleEngine {
+class BattleEngine(
+    private val spatialEngine: SpatialBattleEngine,
+    private val mapCatalog: BattleMapCatalog,
+) {
     val battlefields = listOf(
         Battlefield("Карпатский перевал", "горы"), Battlefield("Дунайская долина", "речная долина"),
         Battlefield("Побережье Адриатики", "побережье"), Battlefield("Патагонийское плато", "холмистая местность"),
@@ -108,10 +120,63 @@ class BattleEngine {
         return (0 until OFFER_COUNT).map { OperationOffer(it, locations[it], enemies[it], difficulties[it]) }
     }
 
-    fun resolve(serverSalt: String, battleKey: String, commanderLevel: Int, operation: OperationOffer, tactic: Tactic, group: CombatGroupSnapshot): BattleResult =
-        replay(seededRandom(serverSalt, "battle:$battleKey").seed, commanderLevel, operation, tactic, group)
+    fun mapFor(operation: OperationOffer): BattleMapDefinition = mapCatalog.forBiome(operation.battlefield.biome)
+
+    fun resolve(
+        serverSalt: String,
+        battleKey: String,
+        commanderLevel: Int,
+        operation: OperationOffer,
+        tactic: Tactic,
+        group: CombatGroupSnapshot,
+        plan: DeploymentPlan,
+    ): BattleResult = replay(seededRandom(serverSalt, "battle:$battleKey").seed, commanderLevel, operation, tactic, group, plan)
+
+    fun resolve(serverSalt: String, battleKey: String, commanderLevel: Int, operation: OperationOffer, tactic: Tactic, group: CombatGroupSnapshot): BattleResult {
+        val map = mapFor(operation)
+        return resolve(serverSalt, battleKey, commanderLevel, operation, tactic, group, DeploymentPlan(map.playerEntries.first().id, map.objectives.first().id))
+    }
+
+    fun replay(
+        seed: Long,
+        commanderLevel: Int,
+        operation: OperationOffer,
+        tactic: Tactic,
+        group: CombatGroupSnapshot,
+        plan: DeploymentPlan,
+    ): BattleResult {
+        val spatial = spatialEngine.simulate(seed, commanderLevel, operation, tactic, group, plan, mapFor(operation))
+        val random = Random(seed xor 0x31A77E41L)
+        val playerPower = compositionPower(group)
+        val enemyPower = compositionPower(spatial.enemyGroup)
+        val victory = spatial.winner == BattleSide.PLAYER
+        val multiplier = operation.difficulty.rewardPercent
+        return BattleResult(
+            victory = victory,
+            playerPower = playerPower,
+            enemyPower = enemyPower,
+            compositionPower = playerPower,
+            tacticFit = 0,
+            tacticBonus = 0,
+            counterBonus = 0,
+            terrainBonus = 0,
+            xp = reward(if (victory) 150 + random.nextInt(0, 51) else 70 + random.nextInt(0, 31), multiplier),
+            credits = reward(if (victory) 165 + random.nextInt(0, 61) else 75 + random.nextInt(0, 31), multiplier),
+            researchPoints = reward(if (victory) 10 + random.nextInt(0, 6) else 4 + random.nextInt(0, 4), multiplier),
+            materials = reward(if (victory) 9 + random.nextInt(0, 7) else 3 + random.nextInt(0, 4), multiplier),
+            seed = seed,
+            seedHash = MessageDigest.getInstance("SHA-256").digest(ByteBuffer.allocate(Long.SIZE_BYTES).putLong(seed).array()).toHex(),
+            events = summarizeSpatialEvents(spatial),
+            spatial = spatial,
+        )
+    }
 
     fun replay(seed: Long, commanderLevel: Int, operation: OperationOffer, tactic: Tactic, group: CombatGroupSnapshot): BattleResult {
+        val map = mapFor(operation)
+        return replay(seed, commanderLevel, operation, tactic, group, DeploymentPlan(map.playerEntries.first().id, map.objectives.first().id))
+    }
+
+    fun replayV3(seed: Long, commanderLevel: Int, operation: OperationOffer, tactic: Tactic, group: CombatGroupSnapshot): BattleResult {
         require(group.units.isNotEmpty()) { "Combat group cannot be empty" }
         val random = Random(seed)
         val assessment = assess(tactic, group)
@@ -148,6 +213,7 @@ class BattleEngine {
         return ((attack * 3 + armor * 2 + mobility + recon + support) / 10 + group.units.size * 2).coerceAtLeast(1)
     }
 
+    /** Legacy engine-v3 assessment retained only to reproduce historical battles. */
     fun assess(tactic: Tactic, group: CombatGroupSnapshot): TacticAssessment {
         require(group.units.isNotEmpty()) { "Combat group cannot be empty" }
         val required = when (tactic) {
@@ -245,6 +311,37 @@ class BattleEngine {
         round == rounds -> "Стороны ведут бой за главную цель"
         won -> listOf("точный огонь подавил ключевую позицию", "фланговый участок противника потерял темп", "разведданные позволили сорвать атаку")[round % 3]
         else -> listOf("противник удержал огневой рубеж", "группа попала под ответный огонь", "продвижение замедлено сопротивлением")[round % 3]
+    }
+
+    private fun summarizeSpatialEvents(result: SpatialBattleResult): List<BattleEvent> {
+        var playerCondition = result.playerUnits.size * 100
+        var enemyCondition = result.enemyUnits.size * 100
+        return (1..result.steps).map { step ->
+            val stepEvents = result.events.filter { it.step == step }
+            stepEvents.filter { it.type == SpatialEventType.UNIT_HIT }.forEach {
+                if (it.side == BattleSide.PLAYER) enemyCondition -= it.amount ?: 0 else playerCondition -= it.amount ?: 0
+            }
+            val captured = stepEvents.firstOrNull { it.type == SpatialEventType.OBJECTIVE_CAPTURED }?.objectiveId
+            val destroyed = stepEvents.count { it.type == SpatialEventType.UNIT_DESTROYED }
+            val phase = when {
+                step <= 2 -> "Развёртывание"
+                captured != null -> "Захват"
+                else -> "Контакт"
+            }
+            val text = when {
+                captured != null -> "Объект $captured перешёл под контроль"
+                destroyed > 0 -> "Потеряно боевых единиц: $destroyed"
+                step == result.steps -> "Бой завершён: ${result.endReason.name}"
+                else -> "Группы меняют позиции и ведут огонь"
+            }
+            BattleEvent(
+                round = step,
+                phase = phase,
+                text = text,
+                playerScore = playerCondition.coerceAtLeast(0),
+                enemyScore = enemyCondition.coerceAtLeast(0),
+            )
+        }
     }
 
     private fun reward(base: Int, percent: Int): Int = base * percent / 100

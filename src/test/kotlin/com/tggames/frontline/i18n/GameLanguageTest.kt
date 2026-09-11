@@ -11,4 +11,13 @@ class GameLanguageTest {
         assertThat(GameLanguage.fromTelegram("zh-hans")).isEqualTo(GameLanguage.EN)
         assertThat(GameLanguage.fromTelegram(null)).isEqualTo(GameLanguage.EN)
     }
+
+    @Test
+    fun `spatial battle interface is translated in every supported language`() {
+        val keys = listOf("map_legend", "map_legend_open", "choose_entry", "choose_objective", "choose_tactic_spatial", "objective_control", "end_army_routed")
+
+        GameLanguage.entries.forEach { language ->
+            keys.forEach { key -> assertThat(GameI18n.t(language, key)).isNotBlank() }
+        }
+    }
 }

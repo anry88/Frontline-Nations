@@ -6,13 +6,13 @@ Frontline Nations is a planned asynchronous multiplayer strategy game designed a
 
 A player opens the bot, reviews the state of the current campaign, and chooses from several operations tied to named real-world landscapes. Before battle, the player selects a saved combat group and one tactic. The server resolves the encounter immediately and returns rewards and an optional replay.
 
-The command-only MVP now implements this strategic slice: five operation offers drawn from 24 named battlefields expose different intelligence and reward multipliers. The active equipment preset determines the actual fitness of all five tactical orders, while enemy archetype and terrain create additional counters. Full replay playback remains planned.
+The command-only MVP now implements this strategic slice: five operation offers drawn from 24 named battlefields expose different intelligence and reward multipliers. Each operation uses a 7×7 sector map with terrain, three entry points, and three important objectives. The player assigns the active group an entry, a first objective, and a behavior doctrine. Units then move, spot, fire at finite ranges, capture objectives over consecutive steps, and can contest or retake them. Full graphical replay playback remains planned.
 
 Between battles, players can buy or craft seven personal equipment classes, select them into one of three CP-limited presets, and upgrade individual units through five levels. Modules, research spending, repairs, and doctrines remain planned. Expendable campaign assets will be manufactured separately and will not consume personal equipment.
 
 ## Strategic Depth
 
-Combat groups are constrained by Command Points rather than a simple slot count. Heavy armor, artillery, reconnaissance, aircraft, and air defense compete for the same budget. Terrain, intelligence, tactics, module trade-offs, and active doctrine perks determine whether a composition is suitable for an operation.
+Combat groups are constrained by Command Points rather than a simple slot count. Heavy armor, artillery, reconnaissance, aircraft, and air defense compete for the same budget. Every class has different terrain movement, sight, range, minimum range, and fire rules. Direct fire needs line of sight, artillery may fire indirectly when allies spot its target, and aircraft still have finite movement and attack range. Tactics are visible behavioral orders—route preference, holding, movement order, and target priority—rather than hidden percentage bonuses.
 
 Higher tiers should broaden specialization rather than provide unconditional percentage upgrades. Commander progression unlocks options gradually, while seasonal prestige emphasizes recognition and cosmetics instead of endless power growth.
 

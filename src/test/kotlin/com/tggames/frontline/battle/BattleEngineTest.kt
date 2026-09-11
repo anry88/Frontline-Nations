@@ -1,11 +1,17 @@
 package com.tggames.frontline.battle
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.tggames.frontline.catalog.EquipmentCatalog
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.util.UUID
 
 class BattleEngineTest {
-    private val engine = BattleEngine()
+    private val objectMapper = jacksonObjectMapper()
+    private val equipment = EquipmentCatalog(objectMapper)
+    private val maps = BattleMapCatalog(objectMapper)
+    private val spatial = SpatialBattleEngine(equipment)
+    private val engine = BattleEngine(spatial, maps)
     private val operation = OperationOffer(0, Battlefield("Дунайская долина", "речная долина"), EnemyArchetype.ARTILLERY, Difficulty.STANDARD)
     private val balancedGroup = group(
         unit("MBT", 3, 30, 32, 12, 5, 4, "ARMOR", "FIREPOWER"),
@@ -33,7 +39,7 @@ class BattleEngineTest {
     }
 
     @Test
-    fun `tactic effectiveness depends on selected equipment`() {
+    fun `legacy v3 tactic assessment remains reproducible for historical battles`() {
         val armored = group(
             unit("MBT", 3, 32, 36, 12, 4, 3, "ARMOR", "FIREPOWER"),
             unit("ARTILLERY", 3, 40, 6, 8, 4, 8, "FIREPOWER", "SUPPORT"),
@@ -47,7 +53,7 @@ class BattleEngineTest {
     }
 
     @Test
-    fun `missing required equipment applies a real tactic penalty`() {
+    fun `legacy v3 assessment retains missing-role penalties`() {
         val artilleryOnly = group(unit("ARTILLERY", 3, 40, 5, 7, 3, 6, "FIREPOWER", "SUPPORT"))
         val ambush = engine.assess(Tactic.AMBUSH, artilleryOnly)
         assertThat(ambush.requirementsMet).isFalse()
@@ -67,7 +73,7 @@ class BattleEngineTest {
     @Test
     fun `battle produces bounded report and all rewards`() {
         val result = engine.resolve("secret", "another-battle", 1, operation, Tactic.RECON, balancedGroup)
-        assertThat(result.events).hasSizeBetween(8, 12)
+        assertThat(result.events).hasSizeBetween(1, SpatialBattleEngine.MAX_STEPS)
         assertThat(result.playerPower).isPositive()
         assertThat(result.enemyPower).isPositive()
         assertThat(result.xp).isPositive()
@@ -75,6 +81,10 @@ class BattleEngineTest {
         assertThat(result.researchPoints).isPositive()
         assertThat(result.materials).isPositive()
         assertThat(result.seedHash).hasSize(64)
+        assertThat(result.spatial).isNotNull
+        assertThat(result.tacticBonus).isZero()
+        assertThat(result.terrainBonus).isZero()
+        assertThat(result.counterBonus).isZero()
     }
 
     private fun group(vararg units: UnitBattleSnapshot) = CombatGroupSnapshot(UUID.randomUUID(), 1, 10, units.toList())

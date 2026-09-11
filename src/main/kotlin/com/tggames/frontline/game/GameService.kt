@@ -1,8 +1,15 @@
 package com.tggames.frontline.game
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.tggames.frontline.battle.BattleMapDefinition
+import com.tggames.frontline.battle.BattleSide
 import com.tggames.frontline.battle.BattleEngine
+import com.tggames.frontline.battle.DeploymentPlan
+import com.tggames.frontline.battle.HexCoord
 import com.tggames.frontline.battle.OperationOffer
+import com.tggames.frontline.battle.SpatialBattleEvent
+import com.tggames.frontline.battle.SpatialEndReason
+import com.tggames.frontline.battle.SpatialEventType
 import com.tggames.frontline.battle.Tactic
 import com.tggames.frontline.campaign.CampaignService
 import com.tggames.frontline.catalog.EquipmentCatalog
@@ -94,7 +101,9 @@ class GameService(
             data == "nav:profile" -> telegram.sendMessage(chatId, profileText(callback.from.id), actionKeyboard(language))
             data == "nav:front" -> front(callback.from.id, callback.from.firstName, chatId)
             data == "nav:settings" -> settings(callback.from.id, chatId)
-            data.startsWith("op:") -> showTactics(callback.from.id, callback.from.firstName, chatId, data)
+            data.startsWith("op:") -> showDeployment(callback.from.id, callback.from.firstName, chatId, data)
+            data.startsWith("deploy:") -> showObjectives(callback.from.id, callback.from.firstName, chatId, data)
+            data.startsWith("objective:") -> showTactics(callback.from.id, callback.from.firstName, chatId, data)
             data.startsWith("fight:") -> resolveBattle(callback.from.id, callback.from.firstName, chatId, data)
             data.startsWith("shop:view:") -> shopDetails(callback.from.id, chatId, data.substringAfterLast(':'))
             data.startsWith("shop:buy:") -> acquireUnit(callback.from.id, chatId, data.substringAfterLast(':'), false)
@@ -189,7 +198,7 @@ class GameService(
         telegram.sendMessage(chatId, text, keyboard)
     }
 
-    private fun showTactics(telegramId: Long, firstName: String, chatId: Long, callbackData: String) {
+    private fun showDeployment(telegramId: Long, firstName: String, chatId: Long, callbackData: String) {
         ensurePlayer(telegramId, firstName)
         val parsed = parseSelection(callbackData, "op") ?: return staleSelection(chatId)
         val player = player(telegramId)
@@ -199,28 +208,101 @@ class GameService(
         val army = inventory.army(telegramId)
         val group = inventory.battleSnapshot(army)
         if (group.units.isEmpty()) return armyMenu(telegramId, chatId)
+        val map = battleEngine.mapFor(operation)
+
+        val text = buildString {
+            appendLine("🗺️ ${GameI18n.t(language, map.nameKey)}")
+            appendLine("${GameI18n.battlefield(language, operation.battlefield.location)} · ${GameI18n.biome(language, operation.battlefield.biome)}")
+            appendLine()
+            appendLine(mapDiagram(map))
+            appendLine(GameI18n.t(language, "map_legend"))
+            appendLine(GameI18n.t(language, "map_legend_open"))
+            appendLine()
+            map.objectives.forEachIndexed { index, objective ->
+                appendLine("${index + 1} — ${GameI18n.t(language, objective.nameKey)} · ${GameI18n.t(language, "capture_steps", objective.captureSteps)}")
+            }
+            appendLine()
+            appendLine("${GameI18n.t(language, "active_group")}: ${army.activeGroup.name} · ${group.usedCp}/${group.cpLimit} CP")
+            append(GameI18n.t(language, "choose_entry"))
+        }
+        val buttons = map.playerEntries.mapIndexed { index, entry ->
+            listOf(
+                InlineKeyboardButton(
+                    "${('A'.code + index).toChar()} · ${GameI18n.t(language, entry.nameKey)}",
+                    "deploy:${parsed.expectedOrders}:${parsed.slot}:${entry.id}:${group.version}",
+                ),
+            )
+        } + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "other_operations"), "nav:battle")))
+        telegram.sendMessage(chatId, text, InlineKeyboardMarkup(buttons))
+    }
+
+    private fun showObjectives(telegramId: Long, firstName: String, chatId: Long, callbackData: String) {
+        ensurePlayer(telegramId, firstName)
+        val parts = callbackData.split(':')
+        if (parts.size != 5 || parts[0] != "deploy") return staleSelection(chatId)
+        val expectedOrders = parts[1].toIntOrNull() ?: return staleSelection(chatId)
+        val slot = parts[2].toIntOrNull() ?: return staleSelection(chatId)
+        val entryId = parts[3]
+        val expectedGroupVersion = parts[4].toIntOrNull() ?: return staleSelection(chatId)
+        val player = player(telegramId)
+        val language = GameLanguage.fromStored(player.language)
+        if (player.allianceCode == null || player.combatOrders != expectedOrders) return staleSelection(chatId)
+        val operation = offersFor(telegramId, expectedOrders).getOrNull(slot) ?: return staleSelection(chatId)
+        val army = inventory.army(telegramId)
+        if (army.activeGroup.version != expectedGroupVersion || army.activeGroup.units.isEmpty()) return staleSelection(chatId)
+        val map = battleEngine.mapFor(operation)
+        val entry = map.playerEntries.firstOrNull { it.id == entryId } ?: return staleSelection(chatId)
+
+        val text = buildString {
+            appendLine("🧭 ${GameI18n.t(language, "route")}")
+            appendLine("${army.activeGroup.name} → ${GameI18n.t(language, entry.nameKey)}")
+            appendLine()
+            append(GameI18n.t(language, "choose_objective"))
+        }
+        val buttons = map.objectives.mapIndexed { index, objective ->
+            listOf(
+                InlineKeyboardButton(
+                    "${index + 1} · ${GameI18n.t(language, objective.nameKey)}",
+                    "objective:$expectedOrders:$slot:$entryId:${objective.id}:$expectedGroupVersion",
+                ),
+            )
+        } + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "other_operations"), "nav:battle")))
+        telegram.sendMessage(chatId, text, InlineKeyboardMarkup(buttons))
+    }
+
+    private fun showTactics(telegramId: Long, firstName: String, chatId: Long, callbackData: String) {
+        ensurePlayer(telegramId, firstName)
+        val parts = callbackData.split(':')
+        if (parts.size != 6 || parts[0] != "objective") return staleSelection(chatId)
+        val expectedOrders = parts[1].toIntOrNull() ?: return staleSelection(chatId)
+        val slot = parts[2].toIntOrNull() ?: return staleSelection(chatId)
+        val entryId = parts[3]
+        val objectiveId = parts[4]
+        val expectedGroupVersion = parts[5].toIntOrNull() ?: return staleSelection(chatId)
+        val player = player(telegramId)
+        val language = GameLanguage.fromStored(player.language)
+        if (player.allianceCode == null || player.combatOrders != expectedOrders) return staleSelection(chatId)
+        val operation = offersFor(telegramId, expectedOrders).getOrNull(slot) ?: return staleSelection(chatId)
+        val army = inventory.army(telegramId)
+        if (army.activeGroup.version != expectedGroupVersion || army.activeGroup.units.isEmpty()) return staleSelection(chatId)
+        val map = battleEngine.mapFor(operation)
+        val entry = map.playerEntries.firstOrNull { it.id == entryId } ?: return staleSelection(chatId)
+        val objective = map.objectives.firstOrNull { it.id == objectiveId } ?: return staleSelection(chatId)
 
         val text = buildString {
             appendLine("🎯 ${GameI18n.battlefield(language, operation.battlefield.location)}")
-            appendLine()
-            appendLine("${GameI18n.t(language, "terrain")}: ${GameI18n.biome(language, operation.battlefield.biome)}")
-            appendLine("${GameI18n.t(language, "risk")}: ${GameI18n.difficulty(language, operation.difficulty)}")
-            appendLine("${GameI18n.t(language, "reward")}: ${operation.difficulty.rewardPercent}%")
+            appendLine("${GameI18n.t(language, "route")}: ${army.activeGroup.name} → ${GameI18n.t(language, entry.nameKey)} → ${GameI18n.t(language, objective.nameKey)}")
             appendLine("${GameI18n.t(language, "intel")} (${GameI18n.intelLevel(language, operation.difficulty)}): ${localizedIntel(language, operation)}")
-            appendLine("${GameI18n.t(language, "active_group")}: ${army.activeGroup.name} · ${group.usedCp}/${group.cpLimit} CP")
-            appendLine(group.units.joinToString(" · ") { unitLabel(it.code, it.level, language) })
             appendLine()
-            appendLine(GameI18n.t(language, "choose_tactic"))
+            appendLine(GameI18n.t(language, "choose_tactic_spatial"))
             Tactic.entries.forEach {
-                val assessment = battleEngine.assess(it, group)
-                val warning = if (assessment.requirementsMet) "✅" else "⚠️"
-                appendLine("${it.icon} ${GameI18n.tactic(language, it)} — $warning ${assessment.fit}% (${signed(assessment.bonus)}) · ${GameI18n.tacticHint(language, it)}")
+                appendLine("${it.icon} ${GameI18n.tactic(language, it)} — ${GameI18n.tacticHint(language, it)}")
             }
         }
         val buttons = Tactic.entries.map { tactic ->
             InlineKeyboardButton(
                 "${tactic.icon} ${GameI18n.tactic(language, tactic)}",
-                "fight:${parsed.expectedOrders}:${parsed.slot}:${tactic.code}:${group.version}",
+                "fight:$expectedOrders:$slot:$entryId:$objectiveId:${tactic.code}:$expectedGroupVersion",
             )
         }.chunked(2) + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "other_operations"), "nav:battle")))
         telegram.sendMessage(chatId, text.trim(), InlineKeyboardMarkup(buttons))
@@ -229,11 +311,13 @@ class GameService(
     private fun resolveBattle(telegramId: Long, firstName: String, chatId: Long, callbackData: String) {
         ensurePlayer(telegramId, firstName)
         val parts = callbackData.split(':')
-        if (parts.size != 5 || parts[0] != "fight") return staleSelection(chatId)
+        if (parts.size != 7 || parts[0] != "fight") return staleSelection(chatId)
         val expectedOrders = parts[1].toIntOrNull() ?: return staleSelection(chatId)
         val slot = parts[2].toIntOrNull() ?: return staleSelection(chatId)
-        val tactic = Tactic.fromCode(parts[3]) ?: return staleSelection(chatId)
-        val expectedGroupVersion = parts[4].toIntOrNull() ?: return staleSelection(chatId)
+        val entryId = parts[3]
+        val objectiveId = parts[4]
+        val tactic = Tactic.fromCode(parts[5]) ?: return staleSelection(chatId)
+        val expectedGroupVersion = parts[6].toIntOrNull() ?: return staleSelection(chatId)
         val player = player(telegramId)
         val language = GameLanguage.fromStored(player.language)
         if (player.allianceCode == null || player.combatOrders != expectedOrders) return staleSelection(chatId)
@@ -241,6 +325,9 @@ class GameService(
         val army = inventory.army(telegramId)
         if (army.activeGroup.version != expectedGroupVersion || army.activeGroup.units.isEmpty()) return staleSelection(chatId)
         val group = inventory.battleSnapshot(army)
+        val map = battleEngine.mapFor(operation)
+        if (map.playerEntries.none { it.id == entryId } || map.objectives.none { it.id == objectiveId }) return staleSelection(chatId)
+        val plan = DeploymentPlan(entryId, objectiveId)
         val battleId = UUID.randomUUID()
         val battle = battleEngine.resolve(
             properties.battleServerSalt,
@@ -249,7 +336,9 @@ class GameService(
             operation,
             tactic,
             group,
+            plan,
         )
+        val spatial = requireNotNull(battle.spatial)
 
         val updated = jdbc.sql(
             """
@@ -285,14 +374,21 @@ class GameService(
                 xp_reward, credits_reward, research_points_reward, materials_reward,
                 battle_seed, commander_level_snapshot, seed_hash, engine_version, location, biome, difficulty,
                 enemy_archetype, tactic, rounds, events_json,
-                battle_group_id, group_snapshot_json, battle_group_version, composition_power, tactic_fit, counter_bonus
+                battle_group_id, group_snapshot_json, battle_group_version, composition_power, tactic_fit, counter_bonus,
+                map_id, map_version, deployment_entry, primary_objective,
+                enemy_entry, enemy_objective, enemy_tactic, end_reason,
+                map_snapshot_json, enemy_group_snapshot_json, spatial_events_json, objective_state_json
             )
             VALUES (
                 :id, :playerId, :victory, :playerPower, :enemyPower,
                 :xp, :credits, :research, :materials,
-                :battleSeed, :commanderLevel, :seedHash, 3, :location, :biome, :difficulty,
+                :battleSeed, :commanderLevel, :seedHash, 4, :location, :biome, :difficulty,
                 :enemy, :tactic, :rounds, CAST(:events AS jsonb),
-                :groupId, CAST(:groupSnapshot AS jsonb), :groupVersion, :compositionPower, :tacticFit, :counterBonus
+                :groupId, CAST(:groupSnapshot AS jsonb), :groupVersion, :compositionPower, 0, 0,
+                :mapId, :mapVersion, :deploymentEntry, :primaryObjective,
+                :enemyEntry, :enemyObjective, :enemyTactic, :endReason,
+                CAST(:mapSnapshot AS jsonb), CAST(:enemyGroupSnapshot AS jsonb),
+                CAST(:spatialEvents AS jsonb), CAST(:objectiveState AS jsonb)
             )
             """.trimIndent(),
         ).param("id", battleId)
@@ -318,8 +414,18 @@ class GameService(
             .param("groupId", group.id)
             .param("groupVersion", group.version)
             .param("compositionPower", battle.compositionPower)
-            .param("tacticFit", battle.tacticFit)
-            .param("counterBonus", battle.counterBonus)
+            .param("mapId", spatial.map.id)
+            .param("mapVersion", spatial.map.version)
+            .param("deploymentEntry", spatial.playerPlan.entryId)
+            .param("primaryObjective", spatial.playerPlan.objectiveId)
+            .param("enemyEntry", spatial.enemyEntryId)
+            .param("enemyObjective", spatial.enemyObjectiveId)
+            .param("enemyTactic", spatial.enemyTactic.name)
+            .param("endReason", spatial.endReason.name)
+            .param("mapSnapshot", objectMapper.writeValueAsString(spatial.map))
+            .param("enemyGroupSnapshot", objectMapper.writeValueAsString(spatial.enemyGroup))
+            .param("spatialEvents", objectMapper.writeValueAsString(spatial.events))
+            .param("objectiveState", objectMapper.writeValueAsString(spatial.objectives))
             .update()
 
         recordWalletChange(telegramId, "XP", battle.xp.toLong(), "BATTLE_REWARD", battleId)
@@ -328,29 +434,41 @@ class GameService(
         recordWalletChange(telegramId, "MATERIALS", battle.materials.toLong(), "BATTLE_REWARD", battleId)
 
         val fresh = player(telegramId)
-        val highlights = listOf(0, battle.events.size / 2, battle.events.lastIndex).distinct()
-            .joinToString("\n") { index ->
-                val event = battle.events[index]
-                localizedEvent(language, event.round, battle.events.size, event.playerScore >= event.enemyScore, index == battle.events.lastIndex, battle.victory, tactic, operation)
+        val entry = spatial.map.playerEntries.first { it.id == spatial.playerPlan.entryId }
+        val objective = spatial.map.objectives.first { it.id == spatial.playerPlan.objectiveId }
+        val highlights = spatialHighlights(language, spatial.events, spatial.map)
+        val objectives = spatial.objectives.joinToString("\n") { state ->
+            val definition = spatial.map.objectives.first { it.id == state.id }
+            val marker = when (state.owner) {
+                BattleSide.PLAYER -> "🟦"
+                BattleSide.ENEMY -> "🟥"
+                null -> "⬜"
             }
+            "$marker ${GameI18n.t(language, definition.nameKey)}"
+        }
+        val playerRemaining = spatial.playerUnits.count { it.hitPoints > 0 && !it.routed }
+        val enemyRemaining = spatial.enemyUnits.count { it.hitPoints > 0 && !it.routed }
         val outcome = GameI18n.t(language, if (battle.victory) "victory" else "withdrawal")
-        val tacticImpact = signed(battle.tacticBonus)
-        val terrainImpact = signed(battle.terrainBonus)
         val levelUp = if (fresh.commanderLevel > player.commanderLevel) "\n⭐ ${GameI18n.t(language, "new_level")}: ${fresh.commanderLevel}" else ""
         val report = buildString {
             appendLine(GameI18n.t(language, "battle_complete"))
             appendLine("${GameI18n.battlefield(language, operation.battlefield.location)} · ${GameI18n.biome(language, operation.battlefield.biome)}")
             appendLine("${tactic.icon} ${GameI18n.tactic(language, tactic)}")
-            appendLine("${GameI18n.t(language, "active_group")}: ${army.activeGroup.name} · ${group.usedCp}/${group.cpLimit} CP")
+            appendLine("${GameI18n.t(language, "route")}: ${army.activeGroup.name} → ${GameI18n.t(language, entry.nameKey)} → ${GameI18n.t(language, objective.nameKey)}")
             appendLine("${GameI18n.t(language, "enemy_label")}: ${GameI18n.enemy(language, operation.enemy)}")
             appendLine()
             appendLine(outcome)
-            appendLine("${GameI18n.t(language, "final_power")}: ${battle.playerPower} : ${battle.enemyPower}")
-            appendLine("${GameI18n.t(language, "composition_power")}: ${battle.compositionPower}")
-            appendLine("${GameI18n.t(language, "tactic_fit")}: ${battle.tacticFit}% ($tacticImpact) · ${GameI18n.t(language, "counter_order")}: ${signed(battle.counterBonus)} · ${GameI18n.t(language, "terrain")}: $terrainImpact")
+            appendLine("${GameI18n.t(language, "battle_steps")}: ${spatial.steps}")
+            appendLine("${GameI18n.t(language, "end_reason")}: ${GameI18n.t(language, endReasonKey(spatial.endReason))}")
+            appendLine("${GameI18n.t(language, "units_remaining")}: $playerRemaining : $enemyRemaining")
             appendLine()
-            appendLine(highlights)
+            appendLine(GameI18n.t(language, "objective_control"))
+            appendLine(objectives)
             appendLine()
+            if (highlights.isNotBlank()) {
+                appendLine(highlights)
+                appendLine()
+            }
             appendLine("+${battle.xp} XP")
             appendLine("+${battle.credits} Credits")
             appendLine("+${battle.researchPoints} Research Points")
@@ -449,6 +567,8 @@ class GameService(
             ${definition.emoji} ${definition.name(language)} · $state
 
             ${GameI18n.t(language, "unit_stats")}: ⚔ ${stats.attack} · 🛡 ${stats.armor} · 🏎 ${stats.mobility} · 🔭 ${stats.recon} · 📡 ${stats.support}
+            ${GameI18n.t(language, "spatial_stats")}: 🛞 ${definition.spatial.movementPoints} · 🎯 ${definition.spatial.minimumRange}–${definition.spatial.weaponRange} · 👁 ${definition.spatial.sightRange}
+            ${GameI18n.fireMode(language, definition.spatial.fireMode)}
             CP: ${definition.cpCost}
 
             ${GameI18n.t(language, "buy")}: ${definition.buyCredits} Credits
@@ -781,35 +901,57 @@ class GameService(
         .param("id", chatId).query(String::class.java).optional()
         .map(GameLanguage::fromStored).orElse(GameLanguage.EN)
 
+    private fun mapDiagram(map: BattleMapDefinition): String {
+        val objectives = map.objectives.withIndex().associate { it.value.position to (it.index + 1).toString() }
+        val entries = map.playerEntries.withIndex().associate { it.value.position to ('A'.code + it.index).toChar().toString() }
+        return (0 until map.height).joinToString("\n") { r ->
+            val indent = if (r % 2 == 1) " " else ""
+            indent + (0 until map.width).joinToString(" ") { q ->
+                val position = HexCoord(q, r)
+                objectives[position] ?: entries[position] ?: map.terrainAt(position).symbol
+            }
+        }
+    }
+
+    private fun spatialHighlights(
+        language: GameLanguage,
+        events: List<SpatialBattleEvent>,
+        map: BattleMapDefinition,
+    ): String = events.filter {
+        it.type in setOf(SpatialEventType.OBJECTIVE_CAPTURED, SpatialEventType.UNIT_DESTROYED, SpatialEventType.UNIT_ROUTED)
+    }.takeLast(4).joinToString("\n") { event ->
+        val side = GameI18n.t(language, if (event.side == BattleSide.PLAYER) "player_side" else "enemy_side")
+        val text = when (event.type) {
+            SpatialEventType.OBJECTIVE_CAPTURED -> {
+                val objective = map.objectives.first { it.id == event.objectiveId }
+                GameI18n.t(language, "event_objective_captured", side, GameI18n.t(language, objective.nameKey))
+            }
+            SpatialEventType.UNIT_DESTROYED -> {
+                val unit = event.targetUnitCode?.let(equipment::get)?.name(language) ?: event.targetUnitCode.orEmpty()
+                GameI18n.t(language, "event_unit_destroyed", side, unit)
+            }
+            SpatialEventType.UNIT_ROUTED -> {
+                val unit = event.unitCode?.let(equipment::get)?.name(language) ?: event.unitCode.orEmpty()
+                GameI18n.t(language, "event_unit_routed", side, unit)
+            }
+            else -> ""
+        }
+        "${GameI18n.t(language, "step")} ${event.step}: $text"
+    }
+
+    private fun endReasonKey(reason: SpatialEndReason): String = when (reason) {
+        SpatialEndReason.ALL_OBJECTIVES_CAPTURED -> "end_all_objectives"
+        SpatialEndReason.ARMY_DESTROYED -> "end_army_destroyed"
+        SpatialEndReason.ARMY_ROUTED -> "end_army_routed"
+    }
+
     private fun localizedIntel(language: GameLanguage, offer: OperationOffer): String = when (offer.difficulty) {
         com.tggames.frontline.battle.Difficulty.SCOUTED -> GameI18n.enemyIntel(language, offer.enemy)
         com.tggames.frontline.battle.Difficulty.STANDARD -> "${GameI18n.t(language, "likely")}: ${GameI18n.enemy(language, offer.enemy)}"
         com.tggames.frontline.battle.Difficulty.RISKY -> GameI18n.t(language, "unknown_composition")
     }
 
-    private fun localizedEvent(
-        language: GameLanguage,
-        round: Int,
-        rounds: Int,
-        wonRound: Boolean,
-        final: Boolean,
-        victory: Boolean,
-        tactic: Tactic,
-        operation: OperationOffer,
-    ): String {
-        val text = when {
-            final -> GameI18n.t(language, if (victory) "objective_secured" else "unit_withdrew")
-            round == 1 && wonRound -> "${GameI18n.tactic(language, tactic)}: ${GameI18n.t(language, "initiative_seized")}"
-            round == 1 -> "${GameI18n.enemy(language, operation.enemy)}: ${GameI18n.t(language, "initiative_seized")}"
-            wonRound -> GameI18n.t(language, "enemy_suppressed")
-            else -> GameI18n.t(language, "advance_slowed")
-        }
-        return "${GameI18n.t(language, "round")} $round/$rounds: $text"
-    }
-
     private fun todayKey(): String = LocalDate.now(ZoneId.of(properties.gameTimezone)).toString()
-
-    private fun signed(value: Int): String = if (value >= 0) "+$value" else value.toString()
 
     private fun helpText(language: GameLanguage) = buildString {
         appendLine(GameI18n.t(language, "help"))

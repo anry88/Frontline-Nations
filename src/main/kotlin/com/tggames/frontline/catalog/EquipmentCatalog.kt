@@ -20,6 +20,19 @@ data class UnitStats(
     }
 }
 
+enum class MovementProfile { TRACKED, WHEELED, AIR }
+
+enum class FireMode { DIRECT, INDIRECT, AIR_TO_GROUND, AIR_INTERCEPT, AIR_DEFENSE }
+
+data class SpatialProfile(
+    val movementProfile: MovementProfile,
+    val movementPoints: Int,
+    val weaponRange: Int,
+    val minimumRange: Int = 1,
+    val sightRange: Int,
+    val fireMode: FireMode,
+)
+
 data class EquipmentDefinition(
     val code: String,
     val emoji: String,
@@ -32,6 +45,7 @@ data class EquipmentDefinition(
     val upgradeCredits: Int,
     val upgradeMaterials: Int,
     val stats: UnitStats,
+    val spatial: SpatialProfile,
     val roles: Set<String>,
     val names: Map<String, String>,
 ) {
@@ -57,6 +71,10 @@ class EquipmentCatalog(objectMapper: ObjectMapper) {
         definitions.forEach {
             require(it.cpCost in 1..5 && it.unlockLevel in 1..50)
             require(it.buyCredits > 0 && it.craftCredits > 0 && it.craftMaterials > 0)
+            require(it.spatial.movementPoints in 1..8)
+            require(it.spatial.weaponRange in 1..6)
+            require(it.spatial.minimumRange in 1..it.spatial.weaponRange)
+            require(it.spatial.sightRange in 1..6)
             require(GameLanguage.entries.all { language -> it.names.containsKey(language.code) }) {
                 "${it.code} is missing a supported translation"
             }

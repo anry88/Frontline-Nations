@@ -2,7 +2,7 @@
 
 Suggested repository description:
 
-`Multilingual command-first Telegram strategy game with deterministic battles, 250 selectable countries and territories, commander progression, and weekly alliance campaigns.`
+`Multilingual command-first Telegram strategy game with deterministic spatial battles, equipment progression, and weekly alliance campaigns.`
 
 Suggested topics:
 

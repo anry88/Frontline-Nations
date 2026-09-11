@@ -15,6 +15,9 @@ class EquipmentCatalogTest {
         assertThat(catalog.units.map { it.code }).contains("MBT", "ARTILLERY", "ATTACK_AIRCRAFT", "AIR_DEFENSE", "RECON_VEHICLE")
         assertThat(catalog.units).allSatisfy { definition ->
             assertThat(GameLanguage.entries.map(definition::name)).allSatisfy { assertThat(it).isNotBlank() }
+            assertThat(definition.spatial.movementPoints).isBetween(1, 8)
+            assertThat(definition.spatial.minimumRange).isBetween(1, definition.spatial.weaponRange)
+            assertThat(definition.spatial.sightRange).isBetween(1, 6)
         }
     }
 

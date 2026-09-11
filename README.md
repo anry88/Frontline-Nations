@@ -11,7 +11,7 @@ The repository contains a command-only MVP bot backed by Kotlin, Spring Boot, an
 Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
 
 - `/start` — register and choose an alliance with inline buttons
-- `/battle` — choose one of five operations and a composition-dependent tactic
+- `/battle` — choose an operation, map entry, first objective, and behavior doctrine for the active group
 - `/army` or `/hangar` — switch between three presets and select equipment within the CP limit
 - `/shop` — inspect illustrated equipment cards and buy or craft a unit
 - `/upgrade` — improve an owned unit from level 1 to 5
@@ -29,7 +29,7 @@ New accounts infer their initial language from Telegram and receive language-rel
 ## Product Principles
 
 - A normal play session should produce a complete result in 1–3 minutes.
-- Strategic depth comes from unit composition, modules, doctrines, tactics, and campaign allocation rather than real-time micromanagement.
+- Strategic depth comes from unit composition, terrain, routes, weapon ranges, behavior doctrines, modules, and campaign allocation rather than real-time micromanagement.
 - Personal progression contributes to a weekly alliance war, while matchmaking, NPC garrisons, and contribution modifiers keep smaller alliances viable.
 - Battles are calculated on the server. Replays visualize an immutable event log and never determine the result.
 - Balance values, schedules, units, battlefields, rewards, and other content are data-driven.
@@ -39,7 +39,7 @@ New accounts infer their initial language from Telegram and receive language-rel
 
 ### Daily operations
 
-Players receive a limited number of Combat Orders, choose one of several operations, select a saved combat group and tactic, and receive an immediate deterministic result. Operations award commander XP, credits, research points, and materials.
+Players receive a limited number of Combat Orders and choose one of several operations. The bot shows a compact 7×7 sector map with three entry points and three important objectives; the player orders the active group through an entry toward its first objective and selects a movement/target-priority doctrine. The deterministic engine moves individual units, resolves spotting and finite-range fire, and tracks multi-step objective capture and recapture. A battle ends when one side controls every objective or the opposing army is destroyed or routed. Operations award commander XP, credits, research points, and materials.
 
 ### Weekly campaigns
 
@@ -47,7 +47,7 @@ The command-only MVP pairs player-selected alliances each week. Contributions re
 
 ### Progression
 
-The command MVP now includes seven configurable equipment classes, individual owned units, three reusable combat-group presets, commander-level unlocks, purchase and lower-credit crafting recipes, and five unit levels. Every level adds 12% to the unit's five base statistics. The CP limit grows slowly from 10 to 14 with commander level.
+The command MVP now includes seven configurable equipment classes, individual owned units, three reusable combat-group presets, commander-level unlocks, purchase and lower-credit crafting recipes, and five unit levels. Every class has map movement, sight, minimum/maximum weapon range, and a fire mode in addition to its five combat statistics. Aircraft movement remains finite; attack aircraft and fighters cannot strike across the whole map. Every level adds 12% to the unit's five base statistics. The CP limit grows slowly from 10 to 14 with commander level.
 
 New commanders receive the specification's 10 CP starter group: two main battle tanks, one artillery unit, and one reconnaissance vehicle. The active preset becomes an immutable input snapshot for battle resolution. Modules, branching research spending, doctrine perks, repairs, and seasonal prestige remain planned.
 
@@ -99,6 +99,7 @@ Mini App and replay-renderer directories will be added only when those milestone
 - [Architecture baseline decision](docs/decisions/0001-architecture-baseline.md)
 - [Localized identity and alliance catalog decision](docs/decisions/0004-localized-identity-and-alliance-catalog.md)
 - [Personal equipment and tactical composition decision](docs/decisions/0005-personal-equipment-and-tactical-composition.md)
+- [Spatial personal battles decision](docs/decisions/0006-spatial-personal-battles.md)
 - [Contributor guide](CONTRIBUTING.md)
 - [Agent guide](AGENTS.md)
 - [GitHub About metadata](docs/github-about.md)
@@ -106,9 +107,9 @@ Mini App and replay-renderer directories will be added only when those milestone
 
 ## Development Status
 
-Current phase: command-only MVP with persistent equipment progression, interactive personal operations, and scheduled weekly battles.
+Current phase: command-only MVP with persistent equipment progression, spatial personal operations, and scheduled weekly battles.
 
-The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog, moderated nicknames, a seven-class equipment catalog, transactional purchase/crafting/upgrades, three CP-limited presets, five operation offers drawn from 24 battlefields, deterministic composition-aware battles, weekly pairings, scheduled aggregate resolution, NPC compensation, idempotent campaign rewards, and durable Telegram notifications. Seasonal alliance switching, modules, typed campaign assets, research spending, full replay UI, Mini App, and video rendering remain planned.
+The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog, moderated nicknames, a seven-class equipment catalog, transactional purchase/crafting/upgrades, three CP-limited presets, five operation offers drawn from 24 battlefields, three data-driven tactical maps, deterministic spatial battles with objective control, weekly pairings, scheduled aggregate resolution, NPC compensation, idempotent campaign rewards, and durable Telegram notifications. Graphical maps/replays, spatial mass battles, seasonal alliance switching, modules, typed campaign assets, research spending, Mini App, and video rendering remain planned.
 
 Run tests with `GRADLE_USER_HOME="$PWD/.gradle-home" ./gradlew test`. For a local Docker run, copy `.env.example` to an ignored `.env`, replace every secret, create the PostgreSQL data directory, and run `docker compose up --build`.
 

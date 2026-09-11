@@ -3,6 +3,7 @@ package com.tggames.frontline.i18n
 import com.tggames.frontline.battle.Difficulty
 import com.tggames.frontline.battle.EnemyArchetype
 import com.tggames.frontline.battle.Tactic
+import com.tggames.frontline.catalog.FireMode
 
 object GameI18n {
     fun t(language: GameLanguage, key: String, vararg args: Any): String {
@@ -20,6 +21,7 @@ object GameI18n {
     fun intelLevel(language: GameLanguage, difficulty: Difficulty): String = localized(language, intelLevels.getValue(difficulty))
     fun battlefield(language: GameLanguage, russianName: String): String = localized(language, battlefields[russianName] ?: eight(russianName))
     fun biome(language: GameLanguage, russianName: String): String = localized(language, biomes[russianName] ?: eight(russianName))
+    fun fireMode(language: GameLanguage, fireMode: FireMode): String = localized(language, fireModes.getValue(fireMode))
 
     private fun localized(language: GameLanguage, values: List<String>) = values[language.ordinal]
     private fun eight(value: String) = List(GameLanguage.entries.size) { value }
@@ -28,6 +30,37 @@ object GameI18n {
 
     private val messages = mapOf(
         "battle_complete" to v("⚔ OPERATION COMPLETE", "⚔ ОПЕРАЦИЯ ЗАВЕРШЕНА", "⚔ OPERACIÓN COMPLETADA", "⚔ OPERAÇÃO CONCLUÍDA", "⚔ اكتملت العملية", "⚔ OPERASI SELESAI", "⚔ अभियान पूरा", "⚔ OPERASYON TAMAMLANDI"),
+        "map_mountain_pass" to v("Mountain pass tactical map", "Тактическая карта горного перевала", "Mapa táctico del paso montañoso", "Mapa tático do passo montanhoso", "خريطة تكتيكية للممر الجبلي", "Peta taktis celah gunung", "पर्वतीय दर्रे का सामरिक मानचित्र", "Dağ geçidi taktik haritası"),
+        "map_river_valley" to v("River valley tactical map", "Тактическая карта речной долины", "Mapa táctico del valle fluvial", "Mapa tático do vale fluvial", "خريطة تكتيكية لوادي النهر", "Peta taktis lembah sungai", "नदी घाटी का सामरिक मानचित्र", "Nehir vadisi taktik haritası"),
+        "map_open_front" to v("Open-front tactical map", "Тактическая карта открытого фронта", "Mapa táctico del frente abierto", "Mapa tático da frente aberta", "خريطة تكتيكية للجبهة المفتوحة", "Peta taktis front terbuka", "खुले मोर्चे का सामरिक मानचित्र", "Açık cephe taktik haritası"),
+        "map_legend" to v("A–C entry · 1–3 objectives · △ mountain · ▲ hill · ♣ forest · ≈ water · ≋ marsh · ═ road", "A–C вход · 1–3 объекты · △ гора · ▲ холм · ♣ лес · ≈ вода · ≋ болото · ═ дорога", "A–C entrada · 1–3 objetivos · △ montaña · ▲ colina · ♣ bosque · ≈ agua · ≋ pantano · ═ camino", "A–C entrada · 1–3 objetivos · △ montanha · ▲ colina · ♣ floresta · ≈ água · ≋ pântano · ═ estrada", "A–C مدخل · 1–3 أهداف · △ جبل · ▲ تل · ♣ غابة · ≈ ماء · ≋ مستنقع · ═ طريق", "A–C masuk · 1–3 sasaran · △ gunung · ▲ bukit · ♣ hutan · ≈ air · ≋ rawa · ═ jalan", "A–C प्रवेश · 1–3 लक्ष्य · △ पहाड़ · ▲ पहाड़ी · ♣ जंगल · ≈ पानी · ≋ दलदल · ═ सड़क", "A–C giriş · 1–3 hedef · △ dağ · ▲ tepe · ♣ orman · ≈ su · ≋ bataklık · ═ yol"),
+        "map_legend_open" to v("· plain · ∘ desert · ∗ tundra · ∼ coast", "· равнина · ∘ пустыня · ∗ тундра · ∼ побережье", "· llanura · ∘ desierto · ∗ tundra · ∼ costa", "· planície · ∘ deserto · ∗ tundra · ∼ costa", "· سهل · ∘ صحراء · ∗ تندرا · ∼ ساحل", "· dataran · ∘ gurun · ∗ tundra · ∼ pesisir", "· मैदान · ∘ रेगिस्तान · ∗ टुंड्रा · ∼ तट", "· ova · ∘ çöl · ∗ tundra · ∼ kıyı"),
+        "entry_south_pass" to v("Southern pass", "Южный перевал", "Paso sur", "Passo sul", "الممر الجنوبي", "Celah selatan", "दक्षिणी दर्रा", "Güney geçidi"),
+        "entry_south_road" to v("Southern road", "Южная дорога", "Camino sur", "Estrada sul", "الطريق الجنوبي", "Jalan selatan", "दक्षिणी सड़क", "Güney yolu"),
+        "entry_west_road" to v("Western road", "Западная дорога", "Camino occidental", "Estrada oeste", "الطريق الغربي", "Jalan barat", "पश्चिमी सड़क", "Batı yolu"),
+        "entry_east_route" to v("Eastern route", "Восточный маршрут", "Ruta oriental", "Rota leste", "المسار الشرقي", "Rute timur", "पूर्वी मार्ग", "Doğu rotası"),
+        "entry_north" to v("Northern approach", "Северный подход", "Acceso norte", "Acesso norte", "المدخل الشمالي", "Jalur utara", "उत्तरी मार्ग", "Kuzey yaklaşımı"),
+        "objective_signal_tower" to v("Signal tower", "Вышка связи", "Torre de comunicaciones", "Torre de comunicações", "برج الاتصالات", "Menara komunikasi", "संचार टावर", "İletişim kulesi"),
+        "objective_central_crossing" to v("Central crossing", "Центральная переправа", "Cruce central", "Travessia central", "المعبر المركزي", "Penyeberangan tengah", "केंद्रीय पारपथ", "Merkez geçişi"),
+        "objective_supply_depot" to v("Supply depot", "Склад снабжения", "Depósito de suministros", "Depósito de suprimentos", "مستودع الإمداد", "Depot suplai", "आपूर्ति डिपो", "İkmal deposu"),
+        "capture_steps" to v("capture: {0} uninterrupted steps", "захват: {0} непрерывных шага", "captura: {0} pasos continuos", "captura: {0} passos contínuos", "السيطرة: {0} خطوات متواصلة", "rebut: {0} langkah beruntun", "कब्ज़ा: {0} लगातार चरण", "ele geçirme: {0} kesintisiz adım"),
+        "choose_entry" to v("Choose where the active group enters the map:", "Выберите точку входа активной группы:", "Elige la entrada del grupo activo:", "Escolha a entrada do grupo ativo:", "اختر نقطة دخول المجموعة النشطة:", "Pilih titik masuk grup aktif:", "सक्रिय समूह का प्रवेश चुनें:", "Aktif grubun girişini seç:"),
+        "route" to v("Route", "Маршрут", "Ruta", "Rota", "المسار", "Rute", "मार्ग", "Rota"),
+        "choose_objective" to v("Choose the group's first objective. After securing it, surviving units advance to the remaining objectives.", "Выберите первую цель группы. После её захвата уцелевшая техника пойдёт к оставшимся объектам.", "Elige el primer objetivo. Tras capturarlo, las unidades restantes avanzarán a los demás.", "Escolha o primeiro objetivo. Após capturá-lo, as unidades restantes avançam para os demais.", "اختر الهدف الأول. بعد السيطرة عليه تتقدم الوحدات الباقية نحو الأهداف الأخرى.", "Pilih sasaran pertama. Setelah direbut, unit yang tersisa maju ke sasaran lain.", "समूह का पहला लक्ष्य चुनें। कब्ज़े के बाद बची इकाइयाँ अन्य लक्ष्यों की ओर बढ़ेंगी।", "Grubun ilk hedefini seç. Ele geçirildikten sonra kalan birlikler diğer hedeflere ilerler."),
+        "choose_tactic_spatial" to v("Choose movement and target-priority doctrine. It gives no hidden power bonus:", "Выберите порядок движения и приоритет целей. Скрытого бонуса к силе нет:", "Elige la doctrina de movimiento y prioridad de objetivos. No otorga bonificación oculta:", "Escolha a doutrina de movimento e prioridade de alvos. Não há bônus oculto:", "اختر عقيدة الحركة وأولوية الأهداف. لا توجد مكافأة قوة مخفية:", "Pilih doktrin gerak dan prioritas target. Tidak ada bonus kekuatan tersembunyi:", "चाल और लक्ष्य-प्राथमिकता सिद्धांत चुनें। कोई छिपा शक्ति बोनस नहीं है:", "Hareket ve hedef önceliği doktrinini seç. Gizli güç bonusu yoktur:"),
+        "battle_steps" to v("Battle steps", "Шагов боя", "Pasos de batalla", "Passos da batalha", "خطوات المعركة", "Langkah pertempuran", "युद्ध चरण", "Savaş adımları"),
+        "end_reason" to v("Battle ended by", "Причина завершения", "Fin de la batalla", "Fim da batalha", "سبب انتهاء المعركة", "Pertempuran berakhir karena", "युद्ध समाप्ति कारण", "Savaşın bitiş nedeni"),
+        "end_all_objectives" to v("all objectives captured", "захвачены все важные объекты", "todos los objetivos capturados", "todos os objetivos capturados", "تمت السيطرة على جميع الأهداف", "semua sasaran direbut", "सभी लक्ष्य कब्ज़े में", "tüm hedefler ele geçirildi"),
+        "end_army_destroyed" to v("one army lost all combat-capable units", "одна из армий полностью утратила боеспособность", "un ejército perdió todas sus unidades operativas", "um exército perdeu todas as unidades operacionais", "فقد أحد الجيشين جميع وحداته القتالية", "satu pasukan kehilangan semua unit operasional", "एक सेना की सभी लड़ाकू इकाइयाँ समाप्त", "bir ordu tüm muharip birliklerini kaybetti"),
+        "end_army_routed" to v("one army broke and withdrew", "одна из армий была разбита и отступила", "un ejército fue derrotado y se retiró", "um exército foi derrotado e recuou", "انهار أحد الجيشين وانسحب", "satu pasukan terpukul mundur", "एक सेना टूटकर पीछे हटी", "bir ordu bozulup geri çekildi"),
+        "units_remaining" to v("Operational units (you : enemy)", "Боеспособная техника (вы : противник)", "Unidades operativas (tú : enemigo)", "Unidades operacionais (você : inimigo)", "الوحدات القتالية (أنت : العدو)", "Unit operasional (Anda : musuh)", "सक्रिय इकाइयाँ (आप : शत्रु)", "Muharip birlikler (sen : düşman)"),
+        "objective_control" to v("Important-object control:", "Контроль важных объектов:", "Control de objetivos importantes:", "Controle de objetivos importantes:", "السيطرة على الأهداف المهمة:", "Kontrol sasaran penting:", "महत्वपूर्ण लक्ष्यों का नियंत्रण:", "Önemli hedeflerin kontrolü:"),
+        "player_side" to v("Your side", "Ваша сторона", "Tu bando", "Seu lado", "جانبك", "Pihak Anda", "आपकी ओर", "Senin tarafın"),
+        "enemy_side" to v("Enemy", "Противник", "Enemigo", "Inimigo", "العدو", "Musuh", "शत्रु", "Düşman"),
+        "event_objective_captured" to v("{0} captured {1}", "{0}: захвачен объект «{1}»", "{0} capturó {1}", "{0} capturou {1}", "{0} سيطر على {1}", "{0} merebut {1}", "{0} ने {1} पर कब्ज़ा किया", "{0}, {1} hedefini ele geçirdi"),
+        "event_unit_destroyed" to v("{0} destroyed {1}", "{0}: уничтожена техника «{1}»", "{0} destruyó {1}", "{0} destruiu {1}", "{0} دمّر {1}", "{0} menghancurkan {1}", "{0} ने {1} नष्ट किया", "{0}, {1} birliğini imha etti"),
+        "event_unit_routed" to v("{0}: {1} withdrew", "{0}: техника «{1}» отступила", "{0}: {1} se retiró", "{0}: {1} recuou", "{0}: انسحب {1}", "{0}: {1} mundur", "{0}: {1} पीछे हटी", "{0}: {1} geri çekildi"),
+        "step" to v("Step", "Шаг", "Paso", "Passo", "الخطوة", "Langkah", "चरण", "Adım"),
         "enemy_label" to v("Enemy", "Противник", "Enemigo", "Inimigo", "العدو", "Musuh", "शत्रु", "Düşman"),
         "final_power" to v("Final power", "Итоговая сила", "Fuerza final", "Força final", "القوة النهائية", "Kekuatan akhir", "अंतिम शक्ति", "Nihai güç"),
         "counter_order" to v("Counter-order", "Контрприказ", "Contraorden", "Contraordem", "الأمر المضاد", "Kontra-perintah", "जवाबी आदेश", "Karşı emir"),
@@ -43,6 +76,7 @@ object GameI18n {
         "shop_title" to v("🏭 EQUIPMENT ARSENAL", "🏭 АРСЕНАЛ ТЕХНИКИ", "🏭 ARSENAL DE EQUIPO", "🏭 ARSENAL DE EQUIPAMENTO", "🏭 ترسانة المعدات", "🏭 ARSENAL UNIT", "🏭 उपकरण शस्त्रागार", "🏭 TEÇHİZAT CEPHANELİĞİ"),
         "shop_hint" to v("Buy with Credits or craft more efficiently with Credits and Materials.", "Покупайте за Credits или производите выгоднее из Credits и Materials.", "Compra con Credits o fabrica con Credits y Materials.", "Compre com Credits ou fabrique com Credits e Materials.", "اشترِ بالاعتمادات أو اصنع بكفاءة باستخدام الاعتمادات والمواد.", "Beli dengan Credits atau rakit lebih hemat memakai Credits dan Materials.", "Credits से खरीदें या Credits और Materials से कम लागत में बनाएँ।", "Credits ile satın al veya Credits ve Materials ile daha verimli üret."),
         "unit_stats" to v("Attack · armor · mobility · recon · support", "Атака · броня · мобильность · разведка · поддержка", "Ataque · blindaje · movilidad · reconocimiento · apoyo", "Ataque · blindagem · mobilidade · reconhecimento · suporte", "هجوم · درع · حركة · استطلاع · دعم", "Serang · zirah · mobilitas · pengintaian · dukungan", "आक्रमण · कवच · गतिशीलता · टोही · समर्थन", "Saldırı · zırh · hareket · keşif · destek"),
+        "spatial_stats" to v("Map movement · weapon range · sight", "Движение по карте · дальность оружия · обзор", "Movimiento · alcance · visión", "Movimento · alcance · visão", "الحركة · مدى السلاح · الرؤية", "Gerak · jangkauan · penglihatan", "चाल · हथियार दूरी · दृष्टि", "Hareket · silah menzili · görüş"),
         "buy" to v("Buy", "Купить", "Comprar", "Comprar", "شراء", "Beli", "खरीदें", "Satın al"),
         "craft" to v("Craft", "Произвести", "Fabricar", "Produzir", "تصنيع", "Rakit", "निर्माण", "Üret"),
         "upgrade_title" to v("⬆️ EQUIPMENT UPGRADES", "⬆️ ПРОКАЧКА ТЕХНИКИ", "⬆️ MEJORAS DE EQUIPO", "⬆️ MELHORIAS DE EQUIPAMENTO", "⬆️ ترقيات المعدات", "⬆️ PENINGKATAN UNIT", "⬆️ उपकरण उन्नयन", "⬆️ TEÇHİZAT YÜKSELTMELERİ"),
@@ -128,11 +162,11 @@ object GameI18n {
     )
     private val tacticHints = Tactic.entries.associateWith { tactic ->
         when (tactic) {
-            Tactic.ASSAULT -> v("needs firepower and armor", "нужны огневая мощь и броня", "requiere potencia y blindaje", "requer poder de fogo e blindagem", "يحتاج قوة نارية ودرعًا", "butuh daya tembak dan zirah", "अग्निशक्ति और कवच चाहिए", "ateş gücü ve zırh ister")
-            Tactic.DEFENSE -> v("needs armor and support", "нужны броня и поддержка", "requiere blindaje y apoyo", "requer blindagem e suporte", "يحتاج درعًا ودعمًا", "butuh zirah dan dukungan", "कवच और समर्थन चाहिए", "zırh ve destek ister")
-            Tactic.AMBUSH -> v("needs recon and firepower", "нужны разведка и огневая мощь", "requiere reconocimiento y potencia", "requer reconhecimento e poder de fogo", "يحتاج استطلاعًا وقوة نارية", "butuh pengintaian dan daya tembak", "टोही और अग्निशक्ति चाहिए", "keşif ve ateş gücü ister")
-            Tactic.MANEUVER -> v("needs mobility and armor", "нужны мобильность и броня", "requiere movilidad y blindaje", "requer mobilidade e blindagem", "يحتاج حركة ودرعًا", "butuh mobilitas dan zirah", "गतिशीलता और कवच चाहिए", "hareket ve zırh ister")
-            Tactic.RECON -> v("needs reconnaissance equipment", "нужна разведывательная техника", "requiere equipo de reconocimiento", "requer equipamento de reconhecimento", "يحتاج معدات استطلاع", "butuh unit pengintai", "टोही उपकरण चाहिए", "keşif teçhizatı ister")
+            Tactic.ASSAULT -> v("advance directly and finish damaged targets", "идти прямо к цели и добивать повреждённые цели", "avanzar directo y rematar objetivos dañados", "avançar direto e finalizar alvos danificados", "تقدم مباشر وإنهاء الأهداف المتضررة", "maju langsung dan habisi target rusak", "सीधे बढ़ें और क्षतिग्रस्त लक्ष्यों को खत्म करें", "doğrudan ilerle ve hasarlı hedefleri bitir")
+            Tactic.DEFENSE -> v("hold controlled objectives and engage the nearest threat", "удерживать объекты и атаковать ближайшую угрозу", "mantener objetivos y atacar la amenaza más cercana", "manter objetivos e atacar a ameaça mais próxima", "الثبات على الأهداف وضرب أقرب تهديد", "pertahankan sasaran dan serang ancaman terdekat", "लक्ष्यों को थामें और निकटतम खतरे पर हमला करें", "hedefleri tut ve en yakın tehdide saldır")
+            Tactic.AMBUSH -> v("prefer covered routes and high-value targets", "выбирать укрытые маршруты и наиболее опасные цели", "preferir rutas cubiertas y objetivos valiosos", "preferir rotas protegidas e alvos valiosos", "تفضيل المسارات المحمية والأهداف عالية القيمة", "pilih rute terlindung dan target bernilai tinggi", "आवृत मार्ग और महत्वपूर्ण लक्ष्य चुनें", "örtülü rotaları ve değerli hedefleri seç")
+            Tactic.MANEUVER -> v("use fast terrain and hunt artillery or air defense", "использовать быстрые маршруты и охотиться за артиллерией или ПВО", "usar terreno rápido y cazar artillería o defensa aérea", "usar terreno rápido e caçar artilharia ou defesa aérea", "استخدام المسارات السريعة ومطاردة المدفعية أو الدفاع الجوي", "gunakan jalur cepat dan buru artileri atau pertahanan udara", "तेज़ मार्ग लें और तोपखाने या वायु रक्षा का शिकार करें", "hızlı rotaları kullanıp topçu veya hava savunmasını avla")
+            Tactic.RECON -> v("send scouts first and disrupt enemy reconnaissance", "выдвигать разведку первой и подавлять разведку противника", "enviar exploradores primero e interrumpir el reconocimiento enemigo", "enviar reconhecimento primeiro e neutralizar batedores inimigos", "إرسال الاستطلاع أولاً وتعطيل استطلاع العدو", "kirim pengintai lebih dulu dan ganggu pengintaian musuh", "स्काउट पहले भेजें और शत्रु टोही बाधित करें", "keşfi önden gönder ve düşman keşfini boz")
         }
     }
     private val enemyNames = mapOf(
@@ -143,6 +177,13 @@ object GameI18n {
         EnemyArchetype.MOBILE to v("mobile group", "мобильная группа", "grupo móvil", "grupo móvel", "مجموعة متحركة", "grup bergerak", "गतिशील समूह", "hareketli grup"),
         EnemyArchetype.AIR to v("air strike group", "авиационная группа", "grupo aéreo", "grupo aéreo", "مجموعة جوية", "grup udara", "वायु समूह", "hava grubu"),
         EnemyArchetype.AIR_DEFENSE to v("air-defense group", "группа ПВО", "grupo antiaéreo", "grupo antiaéreo", "مجموعة دفاع جوي", "grup pertahanan udara", "वायु रक्षा समूह", "hava savunma grubu"),
+    )
+    private val fireModes = mapOf(
+        FireMode.DIRECT to v("direct fire", "прямой огонь", "fuego directo", "fogo direto", "نيران مباشرة", "tembakan langsung", "प्रत्यक्ष आग", "doğrudan ateş"),
+        FireMode.INDIRECT to v("indirect fire", "навесной огонь", "fuego indirecto", "fogo indireto", "نيران غير مباشرة", "tembakan tidak langsung", "अप्रत्यक्ष आग", "dolaylı ateş"),
+        FireMode.AIR_TO_GROUND to v("air-to-ground", "удар по наземным целям", "aire-tierra", "ar-solo", "جو-أرض", "udara-ke-darat", "हवा से ज़मीन", "hava-yer"),
+        FireMode.AIR_INTERCEPT to v("air interception", "воздушный перехват", "intercepción aérea", "interceptação aérea", "اعتراض جوي", "intersepsi udara", "वायु अवरोधन", "hava önleme"),
+        FireMode.AIR_DEFENSE to v("air defense", "противовоздушная оборона", "defensa aérea", "defesa aérea", "دفاع جوي", "pertahanan udara", "वायु रक्षा", "hava savunması"),
     )
     private val enemyIntel = EnemyArchetype.entries.associateWith { v("enemy profile identified: ${it.name.lowercase()}", it.intel, "perfil enemigo: ${it.name.lowercase()}", "perfil inimigo: ${it.name.lowercase()}", "تم تحديد نمط العدو", "profil musuh teridentifikasi", "शत्रु स्वरूप पहचाना गया", "düşman profili belirlendi") }
     private val difficultyNames = mapOf(

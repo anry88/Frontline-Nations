@@ -7,7 +7,7 @@ Repository-level guidance for coding agents and automated review tools.
 - This repository contains a minimal command-only Telegram bot implemented with Kotlin, Spring Boot, JDBC/Flyway, and PostgreSQL.
 - [Documents/Frontline_TZ_v0.1_RU.docx](Documents/Frontline_TZ_v0.1_RU.docx) is the primary product and technical source.
 - [README.md](README.md) is the public overview, [docs/product-overview.md](docs/product-overview.md) summarizes product intent, and [DOCUMENTATION.md](DOCUMENTATION.md) defines the target engineering boundaries.
-- The implemented surface is localized `/start`, `/country`, `/language`, `/nickname`, `/settings`, `/army` and `/hangar` presets, `/shop` purchase/crafting, `/upgrade`, a composition-aware `/battle` flow, `/profile`, scheduled weekly views in `/front`, `/contribute`, and `/help`. Mini App, seasonal alliance switching, full replay UI, modules, research spending, and campaign-asset classes remain planned.
+- The implemented surface is localized `/start`, `/country`, `/language`, `/nickname`, `/settings`, `/army` and `/hangar` presets, `/shop` purchase/crafting, `/upgrade`, a spatial entry/objective/doctrine `/battle` flow, `/profile`, scheduled weekly views in `/front`, `/contribute`, and `/help`. Mini App, seasonal alliance switching, graphical replay UI, spatial mass battles, modules, research spending, and campaign-asset classes remain planned.
 - Do not describe planned behavior as implemented. Label plans, examples, and target architecture explicitly until code and tests support the claims.
 
 ## First Pass For Any Agent
@@ -45,6 +45,9 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/main/resources/catalog/equipment-catalog.json`: localized unit costs, roles, statistics, unlocks, and icon paths.
 - `src/main/resources/static/assets/units/`: generated fictional equipment-class icons served by the backend.
 - `src/main/resources/db/migration/V5__personal_equipment_and_battle_groups.sql`: inventory, presets, audit history, and battle snapshots.
+- `src/main/kotlin/com/tggames/frontline/battle/`: versioned personal engines, data-driven axial maps, deterministic movement/fire/capture events, and legacy replay support.
+- `src/main/resources/catalog/battle-maps.json`: versioned 7×7 terrain maps, entries, and important objectives.
+- `src/main/resources/db/migration/V6__spatial_personal_battles.sql`: map/route/opponent snapshots, spatial events, final objective state, and end reason.
 - `src/main/kotlin/com/tggames/frontline/i18n/`: supported locales and command-interface translations.
 - `src/main/resources/catalog/alliance-codes.txt`: versioned 249-entry ISO catalog plus explicitly supported Kosovo.
 - `compose.yml`: production-shaped application and PostgreSQL services.

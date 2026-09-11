@@ -128,6 +128,12 @@ class InventoryService(
                     recon = stats.recon,
                     support = stats.support,
                     roles = definition.roles,
+                    movementProfile = definition.spatial.movementProfile,
+                    movementPoints = definition.spatial.movementPoints,
+                    weaponRange = definition.spatial.weaponRange,
+                    minimumRange = definition.spatial.minimumRange,
+                    sightRange = definition.spatial.sightRange,
+                    fireMode = definition.spatial.fireMode,
                 )
             },
         )

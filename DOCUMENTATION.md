@@ -11,7 +11,7 @@ The deployed MVP has two runtime surfaces:
 - Telegram Bot commands, callback queries, and inline alliance-selection buttons
 - Spring Boot backend as the authority for gameplay and economy
 
-PostgreSQL stores players and their explicit locale/nickname settings, processed Telegram updates, owned personal units, three combat-group presets, equipment audit records, personal battles and their immutable group snapshots, ordered event JSON, campaign weeks and matchups, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs restore daily Combat Orders and drive the weekly campaign. Mini App, full replay visualization, equipment modules, research spending, and typed campaign assets remain future milestones.
+PostgreSQL stores players and their explicit locale/nickname settings, processed Telegram updates, owned personal units, three combat-group presets, equipment audit records, personal battles and their immutable group/map/opponent snapshots, ordered spatial event JSON, campaign weeks and matchups, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs restore daily Combat Orders and drive the weekly campaign. Mini App, graphical replay visualization, spatial mass battles, equipment modules, research spending, and typed campaign assets remain future milestones.
 
 ### Identity, locale, and alliance selection
 
@@ -27,16 +27,19 @@ PostgreSQL stores players and their explicit locale/nickname settings, processed
 
 1. The server deterministically generates five operation offers from a catalog of 24 battlefields for the player's current daily-order state.
 2. The bot shows a named battlefield, biome, risk/reward tier, and tier-dependent intelligence for each offer.
-3. The player maintains one of three reusable presets through `/army`. The 10–14 CP budget makes heavy armor, artillery, aircraft, support, and reconnaissance compete for space.
-4. Before confirmation, the bot scores all five tactics against the active group's attack, armor, mobility, reconnaissance, support, and role coverage. Missing required roles produce a real penalty.
-5. The backend binds the callback to the group version, rejects stale changes, derives a protected seed, and simulates 8–12 logical rounds.
-6. One transaction consumes the Combat Order and records the result, rewards, statistics, operation metadata, ordered `BattleEvent` JSON, and full equipment snapshot.
-7. The bot explains composition power, tactic fit, counter-order, and terrain modifiers and presents three battle highlights. A full replay UI remains planned.
+3. The player maintains one of three reusable presets through `/army`. The 10–14 CP budget makes heavy armor, artillery, aircraft, air defense, and reconnaissance compete for space.
+4. The selected operation resolves to a versioned 7×7 axial sector map. The bot displays its terrain, three player entry points, and three important objectives.
+5. The player binds the active group to an entry and a first objective, then chooses a behavior doctrine. Doctrines change route preference, holding behavior, movement order, and target selection; engine v4 applies no hidden tactic, counter, or terrain power percentage.
+6. The backend binds callbacks to the current order count and group version, rejects stale changes, derives a protected seed, and moves units through logical steps. Movement costs, line of sight, spotting, weapon range, minimum artillery range, cover, damage, and objective control are resolved using integer arithmetic.
+7. Ground units capture an uncontested objective after its configured number of consecutive steps. Existing control remains until an opponent completes the same process, so defenders may contest or retake it. Aircraft do not capture objectives.
+8. The battle ends when one side holds all important objectives, one army has no combat-capable units, or the 24-step safety boundary routes the weaker remaining army by objective control and hit points.
+9. One transaction consumes the Combat Order and records the result, rewards, statistics, operation metadata, engine/map version, route orders, full player/opponent/map snapshots, final objective state, and typed spatial events.
+10. The bot presents objective control and selected highlights. A graphical replay UI remains planned; it will consume the stored spatial events rather than recalculate combat.
 
 ### Personal equipment
 
 1. A one-time idempotent grant creates three presets and the 10 CP starter force from the source specification.
-2. `/shop` reads the versioned JSON catalog and offers purchase for Credits or crafting for Credits plus Materials. Commander level gates later classes.
+2. `/shop` reads the versioned JSON catalog and offers purchase for Credits or crafting for Credits plus Materials. Commander level gates later classes. Each class also declares movement profile/points, sight, finite minimum/maximum range, and fire mode.
 3. `/upgrade` spends both resources and scales all base stats by a deterministic integer 12% per level through level 5.
 4. Player balances, wallet ledger rows, owned-unit state, and equipment audit rows change in one transaction.
 5. Generated fictional class icons are served by the backend and sent as Telegram equipment cards. Personal units are persistent and never consumed by the weekly campaign.
@@ -79,7 +82,7 @@ Every completed battle should retain:
 - result summary
 - ordered events with logical ticks and typed payloads
 
-The current engine contract is version 3. After resolution it stores the battle seed and hash, commander-level snapshot, full unit/group snapshot, group version, composition power, tactic fit, counter bonus, selected location, biome, difficulty, enemy archetype, tactic, 8–12 round events, and rewards. Operation offers are bound to the player, game date, current order count, and preset version; an old inline button cannot consume a newer order or silently use a changed group.
+The current personal engine contract is version 4. After resolution it stores the battle seed and hash, commander-level snapshot, full player and generated opponent groups, map/version snapshot, group version, selected location/biome/difficulty/enemy archetype, deployment entry, first objective, both behavior doctrines, final objective control, typed movement/fire/capture events, end reason, and rewards. Operation offers are bound to the player, game date, current order count, and preset version; an old inline button cannot consume a newer order or silently use a changed group. Engine-v3 calculation remains isolated only for historical replay compatibility.
 
 The same engine version, seed, input snapshot, and configuration must reproduce the same outcome and event order. Replay clients may interpolate animations, but they may not invent gameplay outcomes.
 
