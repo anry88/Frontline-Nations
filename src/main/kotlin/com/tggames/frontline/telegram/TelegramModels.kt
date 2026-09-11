@@ -26,6 +26,7 @@ data class TelegramUser(
     val id: Long,
     @param:JsonProperty("first_name") val firstName: String,
     val username: String? = null,
+    @param:JsonProperty("language_code") val languageCode: String? = null,
 )
 
 data class TelegramChat(val id: Long)

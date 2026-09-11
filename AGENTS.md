@@ -7,7 +7,7 @@ Repository-level guidance for coding agents and automated review tools.
 - This repository contains a minimal command-only Telegram bot implemented with Kotlin, Spring Boot, JDBC/Flyway, and PostgreSQL.
 - [Documents/Frontline_TZ_v0.1_RU.docx](Documents/Frontline_TZ_v0.1_RU.docx) is the primary product and technical source.
 - [README.md](README.md) is the public overview, [docs/product-overview.md](docs/product-overview.md) summarizes product intent, and [DOCUMENTATION.md](DOCUMENTATION.md) defines the target engineering boundaries.
-- The implemented surface is `/start`, alliance-selection callbacks, a two-step `/battle` flow with operation and tactic buttons, `/profile`, scheduled weekly matchup and result views in `/front`, locked `/contribute`, and `/help`. Mini App, full replay UI, combat-group composition, research spending, and campaign-asset classes remain planned.
+- The implemented surface is localized `/start`, country recommendations/search/pagination through `/country`, `/language`, confirmed `/nickname`, `/settings`, a two-step `/battle` flow, `/profile`, scheduled weekly views in `/front`, locked `/contribute`, and `/help`. Mini App, seasonal alliance switching, full replay UI, combat-group composition, research spending, and campaign-asset classes remain planned.
 - Do not describe planned behavior as implemented. Label plans, examples, and target architecture explicitly until code and tests support the claims.
 
 ## First Pass For Any Agent
@@ -38,7 +38,10 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/test/`: deterministic-engine and application tests.
 - `src/main/resources/db/migration/V2__battle_choices_and_progression.sql`: battle metadata, research currency, and commander statistics.
 - `src/main/resources/db/migration/V3__weekly_campaign_battles.sql`: campaign weeks, matchups, results, rewards, and notification outbox.
+- `src/main/resources/db/migration/V4__player_locale_and_nickname.sql`: player locale, Telegram locale hint, nickname, and pending confirmation.
 - `src/main/kotlin/com/tggames/frontline/campaign/`: weekly schedule, pairing, aggregate battle, reward, and notification logic.
+- `src/main/kotlin/com/tggames/frontline/i18n/`: supported locales and command-interface translations.
+- `src/main/resources/catalog/alliance-codes.txt`: versioned 249-entry ISO catalog plus explicitly supported Kosovo.
 - `compose.yml`: production-shaped application and PostgreSQL services.
 - `assets/brand/`: repository emblem and Telegram avatar.
 - `scripts/`: operational helpers, including Telegram webhook/profile configuration.

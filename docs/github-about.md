@@ -2,7 +2,7 @@
 
 Suggested repository description:
 
-`Command-first Telegram strategy game with deterministic battles, commander progression, and scheduled weekly alliance campaigns, built with Kotlin, Spring Boot, PostgreSQL, and Docker.`
+`Multilingual command-first Telegram strategy game with deterministic battles, 250 selectable countries and territories, commander progression, and weekly alliance campaigns.`
 
 Suggested topics:
 
@@ -14,6 +14,7 @@ Suggested topics:
 - `postgresql`
 - `docker`
 - `deterministic-simulation`
+- `internationalization`
 - `game-backend`
 
 Website:

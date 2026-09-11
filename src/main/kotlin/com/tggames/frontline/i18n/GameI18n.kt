@@ -1,0 +1,154 @@
+package com.tggames.frontline.i18n
+
+import com.tggames.frontline.battle.Difficulty
+import com.tggames.frontline.battle.EnemyArchetype
+import com.tggames.frontline.battle.Tactic
+
+object GameI18n {
+    fun t(language: GameLanguage, key: String, vararg args: Any): String {
+        val values = messages[key] ?: error("Missing translation key: $key")
+        var result = values[language.ordinal]
+        args.forEachIndexed { index, value -> result = result.replace("{$index}", value.toString()) }
+        return result
+    }
+
+    fun tactic(language: GameLanguage, tactic: Tactic): String = localized(language, tacticNames.getValue(tactic))
+    fun tacticHint(language: GameLanguage, tactic: Tactic): String = localized(language, tacticHints.getValue(tactic))
+    fun enemy(language: GameLanguage, enemy: EnemyArchetype): String = localized(language, enemyNames.getValue(enemy))
+    fun enemyIntel(language: GameLanguage, enemy: EnemyArchetype): String = localized(language, enemyIntel.getValue(enemy))
+    fun difficulty(language: GameLanguage, difficulty: Difficulty): String = localized(language, difficultyNames.getValue(difficulty))
+    fun intelLevel(language: GameLanguage, difficulty: Difficulty): String = localized(language, intelLevels.getValue(difficulty))
+    fun battlefield(language: GameLanguage, russianName: String): String = localized(language, battlefields[russianName] ?: eight(russianName))
+    fun biome(language: GameLanguage, russianName: String): String = localized(language, biomes[russianName] ?: eight(russianName))
+
+    private fun localized(language: GameLanguage, values: List<String>) = values[language.ordinal]
+    private fun eight(value: String) = List(GameLanguage.entries.size) { value }
+    private fun v(en: String, ru: String, es: String, pt: String, ar: String, id: String, hi: String, tr: String) =
+        listOf(en, ru, es, pt, ar, id, hi, tr)
+
+    private val messages = mapOf(
+        "battle_complete" to v("⚔ OPERATION COMPLETE", "⚔ ОПЕРАЦИЯ ЗАВЕРШЕНА", "⚔ OPERACIÓN COMPLETADA", "⚔ OPERAÇÃO CONCLUÍDA", "⚔ اكتملت العملية", "⚔ OPERASI SELESAI", "⚔ अभियान पूरा", "⚔ OPERASYON TAMAMLANDI"),
+        "enemy_label" to v("Enemy", "Противник", "Enemigo", "Inimigo", "العدو", "Musuh", "शत्रु", "Düşman"),
+        "final_power" to v("Final power", "Итоговая сила", "Fuerza final", "Força final", "القوة النهائية", "Kekuatan akhir", "अंतिम शक्ति", "Nihai güç"),
+        "counter_order" to v("Counter-order", "Контрприказ", "Contraorden", "Contraordem", "الأمر المضاد", "Kontra-perintah", "जवाबी आदेश", "Karşı emir"),
+        "victory" to v("🏆 VICTORY", "🏆 ПОБЕДА", "🏆 VICTORIA", "🏆 VITÓRIA", "🏆 انتصار", "🏆 MENANG", "🏆 विजय", "🏆 ZAFER"),
+        "withdrawal" to v("↩️ ORDERLY WITHDRAWAL", "↩️ ОРГАНИЗОВАННОЕ ОТСТУПЛЕНИЕ", "↩️ RETIRADA ORDENADA", "↩️ RETIRADA ORGANIZADA", "↩️ انسحاب منظم", "↩️ MUNDUR TERATUR", "↩️ व्यवस्थित वापसी", "↩️ DÜZENLİ ÇEKİLME"),
+        "round" to v("Round", "Раунд", "Ronda", "Rodada", "الجولة", "Ronde", "दौर", "Tur"),
+        "likely" to v("likely", "вероятно", "probable", "provável", "محتمل", "kemungkinan", "संभावित", "muhtemel"),
+        "unknown_composition" to v("enemy composition unknown", "состав противника неизвестен", "composición enemiga desconocida", "composição inimiga desconhecida", "تشكيل العدو غير معروف", "komposisi musuh tidak diketahui", "शत्रु संरचना अज्ञात", "düşman bileşimi bilinmiyor"),
+        "objective_secured" to v("Objective secured", "Цель операции взята под контроль", "Objetivo asegurado", "Objetivo controlado", "تم تأمين الهدف", "Sasaran diamankan", "लक्ष्य सुरक्षित", "Hedef ele geçirildi"),
+        "unit_withdrew" to v("Unit withdrew in good order", "Группа организованно отошла с рубежа", "La unidad se retiró ordenadamente", "A unidade recuou em ordem", "انسحبت الوحدة بنظام", "Unit mundur dengan teratur", "इकाई व्यवस्थित पीछे हटी", "Birim düzenli çekildi"),
+        "initiative_seized" to v("initiative seized", "захвачена инициатива", "iniciativa tomada", "iniciativa conquistada", "تم انتزاع المبادرة", "inisiatif direbut", "पहल हासिल", "inisiyatif ele geçirildi"),
+        "enemy_suppressed" to v("Enemy position suppressed", "Ключевая позиция противника подавлена", "Posición enemiga neutralizada", "Posição inimiga suprimida", "تم إخماد موقع العدو", "Posisi musuh ditekan", "शत्रु स्थिति दबाई गई", "Düşman mevzisi bastırıldı"),
+        "advance_slowed" to v("Advance slowed by resistance", "Продвижение замедлено сопротивлением", "Avance frenado por la resistencia", "Avanço reduzido pela resistência", "أبطأت المقاومة التقدم", "Gerak maju diperlambat perlawanan", "प्रतिरोध से बढ़त धीमी", "İlerleyiş direnişle yavaşladı"),
+        "new_level" to v("New commander level", "Новый уровень командира", "Nuevo nivel de comandante", "Novo nível de comandante", "مستوى قائد جديد", "Level komandan baru", "नया कमांडर स्तर", "Yeni komutan seviyesi"),
+        "unknown" to v("Unknown command.", "Неизвестная команда.", "Comando desconocido.", "Comando desconhecido.", "أمر غير معروف.", "Perintah tidak dikenal.", "अज्ञात कमांड।", "Bilinmeyen komut."),
+        "welcome" to v("Welcome to Frontline Nations, {0}!", "Добро пожаловать в Frontline Nations, {0}!", "¡Bienvenido a Frontline Nations, {0}!", "Bem-vindo ao Frontline Nations, {0}!", "مرحبًا بك في Frontline Nations، {0}!", "Selamat datang di Frontline Nations, {0}!", "Frontline Nations में आपका स्वागत है, {0}!", "Frontline Nations'a hoş geldin, {0}!"),
+        "country_neutral" to v("Choose your country or territory. Names and flags are neutral game identifiers.", "Выберите страну или территорию. Названия и флаги — нейтральные игровые идентификаторы.", "Elige tu país o territorio. Los nombres y banderas son identificadores neutrales del juego.", "Escolha seu país ou território. Nomes e bandeiras são identificadores neutros do jogo.", "اختر بلدك أو إقليمك. الأسماء والأعلام معرّفات محايدة داخل اللعبة.", "Pilih negara atau wilayah. Nama dan bendera adalah identitas netral dalam gim.", "अपना देश या क्षेत्र चुनें। नाम और झंडे केवल तटस्थ गेम पहचान हैं।", "Ülkeni veya bölgeni seç. Adlar ve bayraklar tarafsız oyun kimlikleridir."),
+        "welcome_back" to v("Welcome back, {0}!", "С возвращением, {0}!", "¡Bienvenido de nuevo, {0}!", "Bem-vindo de volta, {0}!", "مرحبًا بعودتك، {0}!", "Selamat datang kembali, {0}!", "वापसी पर स्वागत है, {0}!", "Tekrar hoş geldin, {0}!"),
+        "choose_country" to v("Choose a country or territory first:", "Сначала выберите страну или территорию:", "Primero elige un país o territorio:", "Primeiro escolha um país ou território:", "اختر بلدًا أو إقليمًا أولًا:", "Pilih negara atau wilayah terlebih dahulu:", "पहले देश या क्षेत्र चुनें:", "Önce bir ülke veya bölge seç:"),
+        "language_title" to v("🌐 LANGUAGE", "🌐 ЯЗЫК", "🌐 IDIOMA", "🌐 IDIOMA", "🌐 اللغة", "🌐 BAHASA", "🌐 भाषा", "🌐 DİL"),
+        "language_choose" to v("Current: {0}\nChoose a language:", "Текущий: {0}\nВыберите язык:", "Actual: {0}\nElige un idioma:", "Atual: {0}\nEscolha um idioma:", "الحالي: {0}\nاختر اللغة:", "Saat ini: {0}\nPilih bahasa:", "वर्तमान: {0}\nभाषा चुनें:", "Mevcut: {0}\nBir dil seç:"),
+        "language_changed" to v("Language changed to {0}.", "Язык изменён на {0}.", "Idioma cambiado a {0}.", "Idioma alterado para {0}.", "تم تغيير اللغة إلى {0}.", "Bahasa diubah ke {0}.", "भाषा {0} में बदल दी गई।", "Dil {0} olarak değiştirildi."),
+        "nickname_prompt" to v("Current nickname: {0}\nSend a new one after the command, for example: /nickname Commander", "Текущий ник: {0}\nУкажите новый после команды, например: /nickname Командир", "Apodo actual: {0}\nEscribe uno nuevo, por ejemplo: /nickname Comandante", "Apelido atual: {0}\nEnvie um novo, por exemplo: /nickname Comandante", "الاسم الحالي: {0}\nأرسل اسمًا جديدًا، مثل: /nickname قائد", "Nama saat ini: {0}\nKirim nama baru, contoh: /nickname Komandan", "वर्तमान नाम: {0}\nनया नाम भेजें, जैसे: /nickname कमांडर", "Mevcut ad: {0}\nYeni adı gönder, örnek: /nickname Komutan"),
+        "not_set" to v("not set", "не установлен", "no definido", "não definido", "غير محدد", "belum diatur", "सेट नहीं", "ayarlanmadı"),
+        "nickname_invalid" to v("Nickname must contain a letter or number and be at most 30 characters. Unsafe control characters are removed and profanity is masked.", "Ник должен содержать букву или цифру и быть не длиннее 30 символов. Опасные управляющие символы удаляются, мат маскируется.", "El apodo debe contener una letra o número y tener hasta 30 caracteres. Se eliminan controles peligrosos y se ocultan insultos.", "O apelido deve conter letra ou número e ter até 30 caracteres. Controles perigosos são removidos e palavrões mascarados.", "يجب أن يحتوي الاسم على حرف أو رقم وألا يتجاوز 30 حرفًا. تُحذف رموز التحكم وتُحجب الألفاظ المسيئة.", "Nama harus memiliki huruf atau angka dan maksimal 30 karakter. Karakter kontrol dihapus dan kata kasar disamarkan.", "नाम में अक्षर या अंक होना चाहिए और अधिकतम 30 वर्ण हो सकते हैं। नियंत्रण चिह्न हटते हैं और अपशब्द छिपते हैं।", "Ad en fazla 30 karakter olmalı ve harf ya da rakam içermelidir. Kontrol karakterleri silinir, küfürler maskelenir."),
+        "nickname_same" to v("This nickname is already set.", "Этот ник уже установлен.", "Ese apodo ya está definido.", "Esse apelido já está definido.", "هذا الاسم مستخدم بالفعل.", "Nama itu sudah digunakan.", "यह नाम पहले से सेट है।", "Bu ad zaten ayarlı."),
+        "nickname_confirm" to v("Change your nickname from “{0}” to “{1}”?", "Изменить ник с «{0}» на «{1}»?", "¿Cambiar el apodo de «{0}» a «{1}»?", "Alterar o apelido de “{0}” para “{1}”?", "تغيير الاسم من «{0}» إلى «{1}»؟", "Ubah nama dari “{0}” menjadi “{1}”?", "नाम “{0}” से “{1}” करें?", "Ad “{0}” iken “{1}” olarak değişsin mi?"),
+        "nickname_changed" to v("Nickname changed to “{0}”.", "Ник изменён на «{0}».", "Apodo cambiado a «{0}».", "Apelido alterado para “{0}”.", "تم تغيير الاسم إلى «{0}».", "Nama diubah menjadi “{0}”.", "नाम “{0}” कर दिया गया।", "Ad “{0}” olarak değiştirildi."),
+        "nickname_cancelled" to v("Nickname change cancelled.", "Смена ника отменена.", "Cambio de apodo cancelado.", "Alteração de apelido cancelada.", "تم إلغاء تغيير الاسم.", "Perubahan nama dibatalkan.", "नाम बदलना रद्द हुआ।", "Ad değişikliği iptal edildi."),
+        "yes" to v("✅ Yes", "✅ Да", "✅ Sí", "✅ Sim", "✅ نعم", "✅ Ya", "✅ हाँ", "✅ Evet"),
+        "no" to v("❌ No", "❌ Нет", "❌ No", "❌ Não", "❌ لا", "❌ Tidak", "❌ नहीं", "❌ Hayır"),
+        "country_title" to v("🌍 COUNTRY OR TERRITORY", "🌍 СТРАНА ИЛИ ТЕРРИТОРИЯ", "🌍 PAÍS O TERRITORIO", "🌍 PAÍS OU TERRITÓRIO", "🌍 البلد أو الإقليم", "🌍 NEGARA ATAU WILAYAH", "🌍 देश या क्षेत्र", "🌍 ÜLKE VEYA BÖLGE"),
+        "country_recommended" to v("Suggested from your Telegram language:", "Предложения на основе языка Telegram:", "Sugerencias según tu idioma de Telegram:", "Sugestões com base no idioma do Telegram:", "اقتراحات بناءً على لغة تيليجرام:", "Saran berdasarkan bahasa Telegram:", "Telegram भाषा के आधार पर सुझाव:", "Telegram diline göre öneriler:"),
+        "country_search" to v("Search all 250 options: /country name or code", "Поиск по 250 вариантам: /country название или код", "Busca entre 250 opciones: /country nombre o código", "Busque entre 250 opções: /country nome ou código", "ابحث في 250 خيارًا: /country الاسم أو الرمز", "Cari dari 250 pilihan: /country nama atau kode", "250 विकल्प खोजें: /country नाम या कोड", "250 seçenek içinde ara: /country ad veya kod"),
+        "country_results" to v("Search results for “{0}”:", "Результаты поиска «{0}»:", "Resultados para «{0}»:", "Resultados para “{0}”:", "نتائج البحث عن «{0}»:", "Hasil pencarian “{0}”:", "“{0}” के खोज परिणाम:", "“{0}” arama sonuçları:"),
+        "country_none" to v("Nothing found. Try a local name, English name, or two-letter code.", "Ничего не найдено. Попробуйте местное/английское название или двухбуквенный код.", "No se encontró nada. Prueba el nombre local, inglés o el código de dos letras.", "Nada encontrado. Tente o nome local, em inglês ou o código de duas letras.", "لم يتم العثور على نتائج. جرّب الاسم المحلي أو الإنجليزي أو الرمز الثنائي.", "Tidak ditemukan. Coba nama lokal, Inggris, atau kode dua huruf.", "कुछ नहीं मिला। स्थानीय/अंग्रेज़ी नाम या दो-अक्षर कोड आज़माएँ।", "Sonuç bulunamadı. Yerel/İngilizce ad veya iki harfli kod deneyin."),
+        "country_page" to v("All options · page {0}/{1}", "Все варианты · страница {0}/{1}", "Todas las opciones · página {0}/{1}", "Todas as opções · página {0}/{1}", "كل الخيارات · الصفحة {0}/{1}", "Semua pilihan · halaman {0}/{1}", "सभी विकल्प · पृष्ठ {0}/{1}", "Tüm seçenekler · sayfa {0}/{1}"),
+        "country_selected" to v("Country selected: {0}", "Страна выбрана: {0}", "País elegido: {0}", "País escolhido: {0}", "تم اختيار البلد: {0}", "Negara dipilih: {0}", "देश चुना गया: {0}", "Ülke seçildi: {0}"),
+        "country_locked" to v("Your current alliance is {0}. Alliance changes will be added with seasonal rules; they are not available yet.", "Ваш текущий альянс — {0}. Смена появится вместе с сезонными правилами и пока недоступна.", "Tu alianza actual es {0}. Los cambios llegarán con las reglas de temporada y aún no están disponibles.", "Sua aliança atual é {0}. A troca chegará com as regras sazonais e ainda não está disponível.", "تحالفك الحالي هو {0}. سيُتاح التغيير مع قواعد الموسم وليس متاحًا الآن.", "Aliansi saat ini {0}. Pergantian akan hadir bersama aturan musim dan belum tersedia.", "आपका मौजूदा गठबंधन {0} है। बदलाव सीज़न नियमों के साथ आएगा और अभी उपलब्ध नहीं है।", "Mevcut ittifakın {0}. Değişiklik sezon kurallarıyla gelecek ve henüz kullanılamıyor."),
+        "all_options" to v("📚 All options", "📚 Все варианты", "📚 Todas", "📚 Todas", "📚 كل الخيارات", "📚 Semua pilihan", "📚 सभी विकल्प", "📚 Tüm seçenekler"),
+        "previous" to v("⬅️ Previous", "⬅️ Назад", "⬅️ Anterior", "⬅️ Anterior", "⬅️ السابق", "⬅️ Sebelumnya", "⬅️ पिछला", "⬅️ Önceki"),
+        "next" to v("Next ➡️", "Далее ➡️", "Siguiente ➡️", "Próxima ➡️", "التالي ➡️", "Berikutnya ➡️", "अगला ➡️", "Sonraki ➡️"),
+        "battle" to v("⚔️ Battle", "⚔️ В бой", "⚔️ Batalla", "⚔️ Batalha", "⚔️ معركة", "⚔️ Bertempur", "⚔️ युद्ध", "⚔️ Savaş"),
+        "profile" to v("🪖 Profile", "🪖 Профиль", "🪖 Perfil", "🪖 Perfil", "🪖 الملف", "🪖 Profil", "🪖 प्रोफ़ाइल", "🪖 Profil"),
+        "front" to v("🌍 Front", "🌍 Фронт", "🌍 Frente", "🌍 Frente", "🌍 الجبهة", "🌍 Front", "🌍 मोर्चा", "🌍 Cephe"),
+        "settings" to v("⚙️ Settings", "⚙️ Настройки", "⚙️ Ajustes", "⚙️ Ajustes", "⚙️ الإعدادات", "⚙️ Pengaturan", "⚙️ सेटिंग", "⚙️ Ayarlar"),
+        "settings_text" to v("Settings: /language · /nickname · /country", "Настройки: /language · /nickname · /country", "Ajustes: /language · /nickname · /country", "Ajustes: /language · /nickname · /country", "الإعدادات: /language · /nickname · /country", "Pengaturan: /language · /nickname · /country", "सेटिंग: /language · /nickname · /country", "Ayarlar: /language · /nickname · /country"),
+        "no_orders" to v("No Combat Orders left. Refill is at 00:00 game time.", "Боевые приказы закончились. Пополнение — в 00:00 по игровому времени.", "No quedan órdenes. Se reponen a las 00:00 del juego.", "Sem ordens. Reposição às 00:00 do jogo.", "نفدت أوامر القتال. التجديد الساعة 00:00 بتوقيت اللعبة.", "Perintah tempur habis. Diisi ulang pukul 00:00 waktu gim.", "युद्ध आदेश खत्म। गेम समय 00:00 पर फिर मिलेंगे।", "Savaş Emri kalmadı. Oyun saatiyle 00:00'da yenilenir."),
+        "operations" to v("🗺 AVAILABLE OPERATIONS", "🗺 ДОСТУПНЫЕ ОПЕРАЦИИ", "🗺 OPERACIONES DISPONIBLES", "🗺 OPERAÇÕES DISPONÍVEIS", "🗺 العمليات المتاحة", "🗺 OPERASI TERSEDIA", "🗺 उपलब्ध अभियान", "🗺 MEVCUT OPERASYONLAR"),
+        "terrain" to v("Terrain", "Местность", "Terreno", "Terreno", "التضاريس", "Medan", "भूभाग", "Arazi"),
+        "risk" to v("Risk", "Риск", "Riesgo", "Risco", "المخاطر", "Risiko", "जोखिम", "Risk"),
+        "reward" to v("Reward", "Награда", "Recompensa", "Recompensa", "المكافأة", "Hadiah", "इनाम", "Ödül"),
+        "intel" to v("Intel", "Разведданные", "Inteligencia", "Inteligência", "الاستخبارات", "Intel", "खुफिया", "İstihbarat"),
+        "orders_choose" to v("Orders: {0}/5. Choose an operation; it is spent only after selecting a tactic.", "Приказов: {0}/5. Выберите операцию — приказ спишется после выбора тактики.", "Órdenes: {0}/5. Elige operación; se gasta al elegir táctica.", "Ordens: {0}/5. Escolha a operação; será gasta após escolher a tática.", "الأوامر: {0}/5. اختر عملية؛ يُستهلك الأمر بعد اختيار التكتيك.", "Perintah: {0}/5. Pilih operasi; terpakai setelah memilih taktik.", "आदेश: {0}/5। अभियान चुनें; रणनीति चुनने के बाद आदेश खर्च होगा।", "Emir: {0}/5. Operasyon seç; taktik seçilince harcanır."),
+        "choose_tactic" to v("Choose a tactic. Counter-orders and terrain can outweigh raw power:", "Выберите тактику. Контрприказ и местность могут перевесить разницу в силе:", "Elige una táctica. Las contraórdenes y el terreno pueden superar la fuerza bruta:", "Escolha uma tática. Contraordens e terreno podem superar a força bruta:", "اختر تكتيكًا. قد تتغلب الأوامر المضادة والتضاريس على القوة الخام:", "Pilih taktik. Kontra-perintah dan medan dapat mengalahkan kekuatan mentah:", "रणनीति चुनें। जवाबी आदेश और भूभाग कच्ची शक्ति पर भारी पड़ सकते हैं:", "Taktik seç. Karşı emir ve arazi ham gücü aşabilir:"),
+        "other_operations" to v("↩️ Other operations", "↩️ Другие операции", "↩️ Otras operaciones", "↩️ Outras operações", "↩️ عمليات أخرى", "↩️ Operasi lain", "↩️ अन्य अभियान", "↩️ Diğer operasyonlar"),
+        "stale" to v("This offer expired or the order was already used. Refresh the operation list.", "Предложение устарело или приказ уже использован. Обновите список операций.", "La oferta caducó o la orden ya se usó. Actualiza la lista.", "A oferta expirou ou a ordem já foi usada. Atualize a lista.", "انتهى العرض أو استُخدم الأمر. حدّث قائمة العمليات.", "Penawaran kedaluwarsa atau perintah sudah dipakai. Muat ulang daftar.", "ऑफ़र समाप्त या आदेश उपयोग हो चुका। सूची रीफ़्रेश करें।", "Teklif süresi doldu veya emir kullanıldı. Listeyi yenile."),
+        "contribute_usage" to v("Enter 10–10000 Credits: /contribute 100", "Укажите от 10 до 10000 Credits: /contribute 100", "Indica 10–10000 Credits: /contribute 100", "Informe 10–10000 Credits: /contribute 100", "أدخل 10–10000 Credits: /contribute 100", "Masukkan 10–10000 Credits: /contribute 100", "10–10000 Credits दर्ज करें: /contribute 100", "10–10000 Credits gir: /contribute 100"),
+        "commander" to v("COMMANDER", "КОМАНДИР", "COMANDANTE", "COMANDANTE", "القائد", "KOMANDAN", "कमांडर", "KOMUTAN"),
+        "alliance" to v("Alliance", "Альянс", "Alianza", "Aliança", "التحالف", "Aliansi", "गठबंधन", "İttifak"),
+        "not_selected" to v("not selected", "не выбран", "sin elegir", "não escolhido", "غير محدد", "belum dipilih", "नहीं चुना", "seçilmedi"),
+        "level" to v("Level", "Уровень", "Nivel", "Nível", "المستوى", "Level", "स्तर", "Seviye"),
+        "victories" to v("Wins", "Победы", "Victorias", "Vitórias", "الانتصارات", "Menang", "जीत", "Galibiyet"),
+        "streak" to v("Streak", "Серия", "Racha", "Sequência", "السلسلة", "Rentetan", "सिलसिला", "Seri"),
+        "record" to v("record", "рекорд", "récord", "recorde", "الرقم القياسي", "rekor", "रिकॉर्ड", "rekor"),
+        "combat_orders" to v("Combat Orders", "Боевые приказы", "Órdenes de combate", "Ordens de combate", "أوامر القتال", "Perintah Tempur", "युद्ध आदेश", "Savaş Emirleri"),
+        "help" to v("Frontline Nations commands:\n/start — start and country choice\n/battle — daily operation\n/profile — progress and resources\n/front — weekly battle\n/contribute 100 — support the front\n/country [name] — country catalog/search\n/language — change language\n/nickname [name] — change nickname\n/help — this help", "Команды Frontline Nations:\n/start — старт и выбор страны\n/battle — ежедневная операция\n/profile — прогресс и ресурсы\n/front — недельная битва\n/contribute 100 — поддержать фронт\n/country [название] — каталог/поиск страны\n/language — сменить язык\n/nickname [имя] — сменить ник\n/help — эта справка", "Comandos:\n/start — inicio y país\n/battle — operación diaria\n/profile — progreso\n/front — batalla semanal\n/contribute 100 — apoyar el frente\n/country [nombre] — catálogo/búsqueda\n/language — idioma\n/nickname [nombre] — apodo\n/help — ayuda", "Comandos:\n/start — início e país\n/battle — operação diária\n/profile — progresso\n/front — batalha semanal\n/contribute 100 — apoiar a frente\n/country [nome] — catálogo/busca\n/language — idioma\n/nickname [nome] — apelido\n/help — ajuda", "الأوامر:\n/start — البدء واختيار البلد\n/battle — عملية يومية\n/profile — التقدم\n/front — المعركة الأسبوعية\n/contribute 100 — دعم الجبهة\n/country [اسم] — البحث عن بلد\n/language — اللغة\n/nickname [اسم] — الاسم\n/help — المساعدة", "Perintah:\n/start — mulai dan pilih negara\n/battle — operasi harian\n/profile — progres\n/front — pertempuran mingguan\n/contribute 100 — dukung front\n/country [nama] — katalog/cari\n/language — bahasa\n/nickname [nama] — nama\n/help — bantuan", "कमांड:\n/start — शुरू और देश चयन\n/battle — दैनिक अभियान\n/profile — प्रगति\n/front — साप्ताहिक युद्ध\n/contribute 100 — मोर्चे का समर्थन\n/country [नाम] — देश खोज\n/language — भाषा\n/nickname [नाम] — नाम\n/help — सहायता", "Komutlar:\n/start — başlangıç ve ülke\n/battle — günlük operasyon\n/profile — ilerleme\n/front — haftalık savaş\n/contribute 100 — cepheyi destekle\n/country [ad] — katalog/arama\n/language — dil\n/nickname [ad] — kullanıcı adı\n/help — yardım"),
+    )
+
+    private val tacticNames = mapOf(
+        Tactic.ASSAULT to v("Assault", "Штурм", "Asalto", "Assalto", "هجوم", "Serbu", "आक्रमण", "Taarruz"),
+        Tactic.DEFENSE to v("Defense", "Оборона", "Defensa", "Defesa", "دفاع", "Pertahanan", "रक्षा", "Savunma"),
+        Tactic.AMBUSH to v("Ambush", "Засада", "Emboscada", "Emboscada", "كمين", "Penyergapan", "घात", "Pusu"),
+        Tactic.MANEUVER to v("Maneuver", "Манёвр", "Maniobra", "Manobra", "مناورة", "Manuver", "चाल", "Manevra"),
+        Tactic.RECON to v("Recon in force", "Разведка боем", "Reconocimiento", "Reconhecimento", "استطلاع قتالي", "Pengintaian tempur", "युद्ध टोही", "Muharebe keşfi"),
+    )
+    private val tacticHints = Tactic.entries.associateWith { tactic ->
+        when (tactic) {
+            Tactic.ASSAULT -> v("breaks artillery positions", "прорывает артиллерийские позиции", "rompe posiciones de artillería", "rompe posições de artilharia", "يخترق مواقع المدفعية", "menembus posisi artileri", "तोपखाने की स्थिति तोड़ता है", "topçu mevzilerini yarar")
+            Tactic.DEFENSE -> v("holds armored attacks", "сдерживает бронетанковый натиск", "frena ataques blindados", "contém ataques blindados", "يصد الهجمات المدرعة", "menahan serangan lapis baja", "बख़्तरबंद हमले रोकता है", "zırhlı saldırıyı tutar")
+            Tactic.AMBUSH -> v("threatens armor in rough terrain", "опасна для брони в сложной местности", "amenaza blindados en terreno difícil", "ameaça blindados em terreno difícil", "يهدد المدرعات في التضاريس الصعبة", "mengancam kendaraan di medan sulit", "कठिन भूभाग में कवच के लिए घातक", "zorlu arazide zırhlılara etkilidir")
+            Tactic.MANEUVER -> v("bypasses defense and long-range fire", "обходит оборону и дальний огонь", "rodea defensas y fuego lejano", "contorna defesa e fogo distante", "يتجاوز الدفاع والنيران البعيدة", "melewati pertahanan dan tembakan jauh", "रक्षा और दूर की आग को पार करता है", "savunma ve uzun menzilli ateşi aşar")
+            Tactic.RECON -> v("reveals ambushes and seizes initiative", "вскрывает засады и захватывает инициативу", "revela emboscadas y gana iniciativa", "revela emboscadas e ganha iniciativa", "يكشف الكمائن وينتزع المبادرة", "membuka penyergapan dan merebut inisiatif", "घात खोलता और पहल लेता है", "pusuları açığa çıkarır ve inisiyatif alır")
+        }
+    }
+    private val enemyNames = mapOf(
+        EnemyArchetype.ARMOR to v("armored group", "бронетанковая группа", "grupo blindado", "grupo blindado", "مجموعة مدرعة", "grup lapis baja", "बख़्तरबंद समूह", "zırhlı grup"),
+        EnemyArchetype.ARTILLERY to v("artillery group", "артиллерийская группа", "grupo de artillería", "grupo de artilharia", "مجموعة مدفعية", "grup artileri", "तोपखाना समूह", "topçu grubu"),
+        EnemyArchetype.FORTIFIED to v("fortified group", "укреплённая группа", "grupo fortificado", "grupo fortificado", "مجموعة محصنة", "grup berbenteng", "किलेबंद समूह", "tahkim edilmiş grup"),
+        EnemyArchetype.AMBUSH to v("concealed group", "скрытная группа", "grupo oculto", "grupo oculto", "مجموعة متخفية", "grup tersembunyi", "छिपा समूह", "gizli grup"),
+        EnemyArchetype.MOBILE to v("mobile group", "мобильная группа", "grupo móvil", "grupo móvel", "مجموعة متحركة", "grup bergerak", "गतिशील समूह", "hareketli grup"),
+    )
+    private val enemyIntel = EnemyArchetype.entries.associateWith { v("enemy profile identified: ${it.name.lowercase()}", it.intel, "perfil enemigo: ${it.name.lowercase()}", "perfil inimigo: ${it.name.lowercase()}", "تم تحديد نمط العدو", "profil musuh teridentifikasi", "शत्रु स्वरूप पहचाना गया", "düşman profili belirlendi") }
+    private val difficultyNames = mapOf(
+        Difficulty.SCOUTED to v("Scouted", "Разведанная", "Reconocida", "Reconhecida", "مستطلعة", "Terintai", "टोही की गई", "Keşfedilmiş"),
+        Difficulty.STANDARD to v("Standard", "Обычная", "Normal", "Normal", "عادية", "Standar", "सामान्य", "Standart"),
+        Difficulty.RISKY to v("Risky", "Рискованная", "Arriesgada", "Arriscada", "خطرة", "Berisiko", "जोखिमपूर्ण", "Riskli"),
+    )
+    private val intelLevels = mapOf(
+        Difficulty.SCOUTED to v("exact", "точная", "exacta", "exata", "دقيقة", "akurat", "सटीक", "kesin"),
+        Difficulty.STANDARD to v("partial", "частичная", "parcial", "parcial", "جزئية", "sebagian", "आंशिक", "kısmi"),
+        Difficulty.RISKY to v("limited", "ограниченная", "limitada", "limitada", "محدودة", "terbatas", "सीमित", "sınırlı"),
+    )
+    private val battlefields = mapOf(
+        "Карпатский перевал" to v("Carpathian Pass", "Карпатский перевал", "Paso de los Cárpatos", "Passo dos Cárpatos", "ممر الكاربات", "Celah Karpatia", "कार्पेथियन दर्रा", "Karpat Geçidi"),
+        "Дунайская долина" to v("Danube Valley", "Дунайская долина", "Valle del Danubio", "Vale do Danúbio", "وادي الدانوب", "Lembah Donau", "डेन्यूब घाटी", "Tuna Vadisi"),
+        "Побережье Адриатики" to v("Adriatic Coast", "Побережье Адриатики", "Costa Adriática", "Costa Adriática", "ساحل الأدرياتيكي", "Pesisir Adriatik", "एड्रियाटिक तट", "Adriyatik Kıyısı"),
+        "Патагонийское плато" to v("Patagonian Plateau", "Патагонийское плато", "Meseta Patagónica", "Planalto Patagônico", "هضبة باتاغونيا", "Dataran Tinggi Patagonia", "पैटागोनियन पठार", "Patagonya Platosu"),
+        "Сахарский коридор" to v("Sahara Corridor", "Сахарский коридор", "Corredor del Sáhara", "Corredor do Saara", "ممر الصحراء", "Koridor Sahara", "सहारा गलियारा", "Sahra Koridoru"),
+        "Алтайский рубеж" to v("Altai Frontier", "Алтайский рубеж", "Frontera de Altái", "Fronteira de Altai", "جبهة ألتاي", "Garis Altai", "अल्ताई सीमा", "Altay Hattı"),
+        "Полесский рубеж" to v("Polesia Frontier", "Полесский рубеж", "Frontera de Polesia", "Fronteira da Polésia", "جبهة بوليسيا", "Garis Polesia", "पोलेसिया सीमा", "Polesya Hattı"),
+        "Северная тундра" to v("Northern Tundra", "Северная тундра", "Tundra Septentrional", "Tundra do Norte", "التندرا الشمالية", "Tundra Utara", "उत्तरी टुंड्रा", "Kuzey Tundrası"),
+    )
+    private val biomes = mapOf(
+        "горы" to v("mountains", "горы", "montañas", "montanhas", "جبال", "pegunungan", "पहाड़", "dağlar"),
+        "речная долина" to v("river valley", "речная долина", "valle fluvial", "vale fluvial", "وادي نهري", "lembah sungai", "नदी घाटी", "nehir vadisi"),
+        "побережье" to v("coast", "побережье", "costa", "costa", "ساحل", "pesisir", "तट", "kıyı"),
+        "холмистая местность" to v("hills", "холмистая местность", "colinas", "colinas", "تلال", "perbukitan", "पहाड़ियाँ", "tepeler"),
+        "пустыня" to v("desert", "пустыня", "desierto", "deserto", "صحراء", "gurun", "रेगिस्तान", "çöl"),
+        "степь" to v("steppe", "степь", "estepa", "estepe", "سهوب", "stepa", "मैदान", "bozkır"),
+        "лес" to v("forest", "лес", "bosque", "floresta", "غابة", "hutan", "जंगल", "orman"),
+        "тундра" to v("tundra", "тундра", "tundra", "tundra", "تندرا", "tundra", "टुंड्रा", "tundra"),
+    )
+}

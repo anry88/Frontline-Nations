@@ -15,10 +15,34 @@ curl --fail --silent --show-error \
   --data-urlencode 'name=Frontline Nations' \
   "$api_url/setMyName" >/dev/null
 
-curl --fail --silent --show-error \
-  --request POST \
-  --data-urlencode 'commands=[{"command":"start","description":"Начать игру и выбрать альянс"},{"command":"battle","description":"Выбрать операцию и тактику"},{"command":"profile","description":"Прогресс, статистика и ресурсы"},{"command":"front","description":"Матч недели, таймер и результат"},{"command":"contribute","description":"Передать Credits до воскресенья"},{"command":"help","description":"Справка по командам"}]' \
-  "$api_url/setMyCommands" >/dev/null
+set_commands() {
+  local language_code="$1"
+  local commands="$2"
+  local args=(--request POST --data-urlencode "commands=$commands")
+  if [[ -n "$language_code" ]]; then
+    args+=(--data-urlencode "language_code=$language_code")
+  fi
+  curl --fail --silent --show-error "${args[@]}" "$api_url/setMyCommands" >/dev/null
+}
+
+commands_en='[{"command":"start","description":"Start and choose a country"},{"command":"battle","description":"Choose an operation and tactic"},{"command":"profile","description":"Progress, record, and resources"},{"command":"front","description":"Weekly matchup, timer, and result"},{"command":"contribute","description":"Support the weekly front"},{"command":"country","description":"Browse or search countries"},{"command":"language","description":"Change language"},{"command":"nickname","description":"Choose or change nickname"},{"command":"settings","description":"Language and profile settings"},{"command":"help","description":"Command help"}]'
+commands_ru='[{"command":"start","description":"Начать игру и выбрать страну"},{"command":"battle","description":"Выбрать операцию и тактику"},{"command":"profile","description":"Прогресс, статистика и ресурсы"},{"command":"front","description":"Матч недели, таймер и результат"},{"command":"contribute","description":"Поддержать недельный фронт"},{"command":"country","description":"Каталог и поиск стран"},{"command":"language","description":"Сменить язык"},{"command":"nickname","description":"Выбрать или сменить ник"},{"command":"settings","description":"Язык и настройки профиля"},{"command":"help","description":"Справка по командам"}]'
+commands_es='[{"command":"start","description":"Iniciar y elegir país"},{"command":"battle","description":"Elegir operación y táctica"},{"command":"profile","description":"Progreso y recursos"},{"command":"front","description":"Batalla semanal"},{"command":"contribute","description":"Apoyar el frente"},{"command":"country","description":"Buscar países"},{"command":"language","description":"Cambiar idioma"},{"command":"nickname","description":"Cambiar apodo"},{"command":"settings","description":"Ajustes del perfil"},{"command":"help","description":"Ayuda"}]'
+commands_pt='[{"command":"start","description":"Iniciar e escolher país"},{"command":"battle","description":"Escolher operação e tática"},{"command":"profile","description":"Progresso e recursos"},{"command":"front","description":"Batalha semanal"},{"command":"contribute","description":"Apoiar a frente"},{"command":"country","description":"Buscar países"},{"command":"language","description":"Alterar idioma"},{"command":"nickname","description":"Alterar apelido"},{"command":"settings","description":"Ajustes do perfil"},{"command":"help","description":"Ajuda"}]'
+commands_ar='[{"command":"start","description":"البدء واختيار البلد"},{"command":"battle","description":"اختيار العملية والتكتيك"},{"command":"profile","description":"التقدم والموارد"},{"command":"front","description":"المعركة الأسبوعية"},{"command":"contribute","description":"دعم الجبهة"},{"command":"country","description":"البحث عن البلدان"},{"command":"language","description":"تغيير اللغة"},{"command":"nickname","description":"تغيير الاسم"},{"command":"settings","description":"إعدادات الملف"},{"command":"help","description":"المساعدة"}]'
+commands_id='[{"command":"start","description":"Mulai dan pilih negara"},{"command":"battle","description":"Pilih operasi dan taktik"},{"command":"profile","description":"Progres dan sumber daya"},{"command":"front","description":"Pertempuran mingguan"},{"command":"contribute","description":"Dukung front"},{"command":"country","description":"Cari negara"},{"command":"language","description":"Ganti bahasa"},{"command":"nickname","description":"Ganti nama"},{"command":"settings","description":"Pengaturan profil"},{"command":"help","description":"Bantuan"}]'
+commands_hi='[{"command":"start","description":"शुरू करें और देश चुनें"},{"command":"battle","description":"अभियान और रणनीति चुनें"},{"command":"profile","description":"प्रगति और संसाधन"},{"command":"front","description":"साप्ताहिक युद्ध"},{"command":"contribute","description":"मोर्चे का समर्थन"},{"command":"country","description":"देश खोजें"},{"command":"language","description":"भाषा बदलें"},{"command":"nickname","description":"नाम बदलें"},{"command":"settings","description":"प्रोफ़ाइल सेटिंग"},{"command":"help","description":"सहायता"}]'
+commands_tr='[{"command":"start","description":"Başla ve ülke seç"},{"command":"battle","description":"Operasyon ve taktik seç"},{"command":"profile","description":"İlerleme ve kaynaklar"},{"command":"front","description":"Haftalık savaş"},{"command":"contribute","description":"Cepheyi destekle"},{"command":"country","description":"Ülke ara"},{"command":"language","description":"Dili değiştir"},{"command":"nickname","description":"Adı değiştir"},{"command":"settings","description":"Profil ayarları"},{"command":"help","description":"Yardım"}]'
+
+set_commands '' "$commands_en"
+set_commands en "$commands_en"
+set_commands ru "$commands_ru"
+set_commands es "$commands_es"
+set_commands pt "$commands_pt"
+set_commands ar "$commands_ar"
+set_commands id "$commands_id"
+set_commands hi "$commands_hi"
+set_commands tr "$commands_tr"
 
 curl --fail --silent --show-error \
   --request POST \

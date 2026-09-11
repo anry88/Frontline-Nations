@@ -25,11 +25,13 @@ The campaign follows a weekly rhythm:
 - Saturday: publish an incomplete reconnaissance summary.
 - Sunday: lock contributions, resolve the aggregate battle, publish replay/highlights, and award results.
 
-The command-only MVP implements the scheduling and aggregate-result portion: weekly 1v1 matchups, Sunday 15:00 Belgrade resolution, capped contributions, limited NPC compensation, four battle phases, contributor rewards, and Telegram notifications. Campaign-asset classes, deficit-specific bonuses, and visual replay remain planned.
+The command-only MVP implements the scheduling and aggregate-result portion: dynamic weekly 1v1 matchups for selected alliances, Sunday 15:00 Belgrade resolution, capped contributions, limited NPC compensation, four battle phases, contributor rewards, and Telegram notifications. Campaign-asset classes, deficit-specific bonuses, and visual replay remain planned.
 
 The design supports many country- and territory-named alliances without allowing population alone to decide every campaign. Matchmaking, NPC garrisons, underdog factors, contribution caps, and dynamic shortage bonuses are planned balancing tools.
 
 Names, flags, and map locations are neutral fictional-game identifiers. They do not express a claim about recognition, sovereignty, or territorial ownership.
+
+The command interface is available in English, Russian, Spanish, Brazilian Portuguese, Arabic, Indonesian, Hindi, and Turkish. Telegram locale hints drive onboarding recommendations, while the player's explicit language remains authoritative. The selectable catalog is the versioned ISO country/territory list plus explicitly supported Kosovo; search works across localized names and codes.
 
 ## Replays
 

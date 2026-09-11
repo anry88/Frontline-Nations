@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.tggames.frontline.config.FrontlineProperties
 import com.tggames.frontline.game.AllianceCatalog
+import com.tggames.frontline.i18n.GameI18n
+import com.tggames.frontline.i18n.GameLanguage
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -61,7 +63,7 @@ class CampaignService(
     }
 
     @Transactional
-    fun contribute(playerId: Long, allianceCode: String, amount: Int): ContributionOutcome {
+    fun contribute(playerId: Long, allianceCode: String, amount: Int, language: GameLanguage = GameLanguage.RU): ContributionOutcome {
         val period = ensureCurrentWeek()
         val week = jdbc.sql(
             "SELECT status, scheduled_at FROM campaign_weeks WHERE week_key = :week FOR UPDATE",
@@ -69,7 +71,7 @@ class CampaignService(
             .query { rs, _ -> rs.getString("status") to rs.getTimestamp("scheduled_at").toInstant() }
             .single()
         if (week.first != "OPEN" || !clock.instant().isBefore(week.second)) {
-            return ContributionOutcome(false, "Вклады закрыты: недельное сражение уже началось. Итог появится в /front.")
+            return ContributionOutcome(false, campaignText(language, "Contributions are closed: the weekly battle has started. Results will appear in /front.", "Вклады закрыты: недельное сражение уже началось. Итог появится в /front."))
         }
 
         val debited = jdbc.sql(
@@ -82,7 +84,7 @@ class CampaignService(
                 .param("id", playerId)
                 .query(Long::class.java)
                 .single()
-            return ContributionOutcome(false, "Недостаточно Credits. Текущий баланс: $balance.")
+            return ContributionOutcome(false, campaignText(language, "Not enough Credits. Current balance: $balance.", "Недостаточно Credits. Текущий баланс: $balance."))
         }
 
         jdbc.sql(
@@ -104,31 +106,31 @@ class CampaignService(
         ).param("playerId", playerId)
             .param("delta", -amount.toLong())
             .update()
-        return ContributionOutcome(true, "Вклад принят: $amount Credits → $amount силы фронта.")
+        return ContributionOutcome(true, campaignText(language, "Contribution accepted: $amount Credits → $amount front power.", "Вклад принят: $amount Credits → $amount силы фронта."))
     }
 
     @Transactional
-    fun frontText(allianceCode: String?): String {
+    fun frontText(allianceCode: String?, language: GameLanguage = GameLanguage.RU): String {
         val period = ensureCurrentWeek()
         val matchups = matchupRows(period.weekKey)
         val ownMatchup = allianceCode?.let { code ->
             matchups.firstOrNull { it.allianceA == code || it.allianceB == code }
         }
         val header = buildString {
-            appendLine("🌍 НЕДЕЛЬНЫЙ ФРОНТ ${period.weekKey}")
-            appendLine("⚔️ Сражение: воскресенье, ${period.resolvesAt.format(DateTimeFormatter.ofPattern("dd.MM в HH:mm"))} · Belgrade")
-            append(scheduleStatus(period, matchups.firstOrNull()?.status))
+            appendLine(campaignText(language, "🌍 WEEKLY FRONT ${period.weekKey}", "🌍 НЕДЕЛЬНЫЙ ФРОНТ ${period.weekKey}"))
+            appendLine(campaignText(language, "⚔️ Battle: Sunday, ${period.resolvesAt.format(DateTimeFormatter.ofPattern("dd.MM HH:mm"))} · Belgrade", "⚔️ Сражение: воскресенье, ${period.resolvesAt.format(DateTimeFormatter.ofPattern("dd.MM в HH:mm"))} · Belgrade"))
+            append(scheduleStatus(period, matchups.firstOrNull()?.status, language))
         }
         if (ownMatchup == null) {
             val pairs = matchups.joinToString("\n") {
-                "${AllianceCatalog.name(it.allianceA)} — ${AllianceCatalog.name(it.allianceB)}"
+                "${AllianceCatalog.option(it.allianceA, language).label} — ${AllianceCatalog.option(it.allianceB, language).label}"
             }
-            return "$header\n\nПары недели:\n$pairs\n\nВыберите альянс через /start, чтобы участвовать."
+            return "$header\n\n${campaignText(language, "Weekly pairings", "Пары недели")}:\n$pairs\n\n${campaignText(language, "New alliances join the next available pairing.", "Новые альянсы попадут в ближайшую доступную пару.")}"
         }
         return if (ownMatchup.status == "RESOLVED") {
-            "$header\n\n${resolvedMatchupText(ownMatchup, allianceCode)}"
+            "$header\n\n${resolvedMatchupText(ownMatchup, allianceCode, language)}"
         } else {
-            "$header\n\n${openMatchupText(ownMatchup, allianceCode)}"
+            "$header\n\n${openMatchupText(ownMatchup, allianceCode, language)}"
         }
     }
 
@@ -176,11 +178,25 @@ class CampaignService(
     }
 
     private fun ensureMatchups(period: CampaignPeriod) {
-        val existing = jdbc.sql("SELECT COUNT(*) FROM campaign_matchups WHERE week_key = :week")
+        val existingPairs = jdbc.sql(
+            "SELECT pair_index, alliance_a, alliance_b FROM campaign_matchups WHERE week_key = :week ORDER BY pair_index",
+        )
             .param("week", period.weekKey)
-            .query(Int::class.java)
-            .single()
-        if (existing > 0) return
+            .query { rs, _ -> Triple(rs.getInt("pair_index"), rs.getString("alliance_a"), rs.getString("alliance_b")) }
+            .list()
+        val covered = existingPairs.flatMap { listOf(it.second, it.third) }.toSet()
+        val selected = jdbc.sql("SELECT DISTINCT alliance_code FROM players WHERE alliance_code IS NOT NULL")
+            .query(String::class.java).list()
+            .filter(AllianceCatalog::contains)
+        val candidates = selected.filterNot(covered::contains).toMutableList()
+        if (existingPairs.isEmpty() && candidates.size < 2) {
+            listOf("RS", "BR").filterNot(candidates::contains).forEach { candidates += it }
+        }
+        if (candidates.isEmpty()) return
+        if (candidates.size % 2 != 0) {
+            val npcOpponent = AllianceCatalog.codes.first { it !in covered && it !in candidates }
+            candidates += npcOpponent
+        }
 
         val previousWeek = calendar.periodAt(period.opensAt.toInstant().minus(Duration.ofDays(1))).weekKey
         val previousPower = jdbc.sql(
@@ -194,12 +210,14 @@ class CampaignService(
             .query { rs, _ -> rs.getString("alliance_code") to rs.getLong("total") }
             .list()
             .toMap()
-        val ranked = AllianceCatalog.all.keys.sortedWith(
+        val ranked = candidates.sortedWith(
             compareByDescending<String> { previousPower[it] ?: 0L }
                 .thenBy { UUID.nameUUIDFromBytes("${period.weekKey}:$it".toByteArray(StandardCharsets.UTF_8)).toString() },
         )
-        ranked.chunked(2).forEachIndexed { pairIndex, pair ->
+        val firstPairIndex = (existingPairs.maxOfOrNull { it.first } ?: -1) + 1
+        ranked.chunked(2).forEachIndexed { offset, pair ->
             if (pair.size < 2) return@forEachIndexed
+            val pairIndex = firstPairIndex + offset
             val matchupId = UUID.nameUUIDFromBytes(
                 "${period.weekKey}:$pairIndex:${pair[0]}:${pair[1]}".toByteArray(StandardCharsets.UTF_8),
             )
@@ -301,13 +319,13 @@ class CampaignService(
             participant.playerId to issueReward(weekKey, matchup.id, participant, result.winnerCode)
         }
         val players = jdbc.sql(
-            "SELECT telegram_id, alliance_code FROM players WHERE alliance_code IN (:allianceA, :allianceB)",
+            "SELECT telegram_id, alliance_code, language FROM players WHERE alliance_code IN (:allianceA, :allianceB)",
         ).param("allianceA", matchup.allianceA)
             .param("allianceB", matchup.allianceB)
-            .query { rs, _ -> rs.getLong("telegram_id") to rs.getString("alliance_code") }
+            .query { rs, _ -> Triple(rs.getLong("telegram_id"), rs.getString("alliance_code"), GameLanguage.fromStored(rs.getString("language"))) }
             .list()
-        players.forEach { (playerId, allianceCode) ->
-            val message = notificationText(matchup, result, allianceCode, rewardsByPlayer[playerId])
+        players.forEach { (playerId, allianceCode, language) ->
+            val message = notificationText(matchup, result, allianceCode, rewardsByPlayer[playerId], language)
             jdbc.sql(
                 """
                 INSERT INTO campaign_notifications(week_key, player_telegram_id, message)
@@ -440,43 +458,43 @@ class CampaignService(
             )
         }.list()
 
-    private fun openMatchupText(matchup: MatchupRow, allianceCode: String): String {
+    private fun openMatchupText(matchup: MatchupRow, allianceCode: String, language: GameLanguage): String {
         val ownIsA = matchup.allianceA == allianceCode
         val ownCode = if (ownIsA) matchup.allianceA else matchup.allianceB
         val enemyCode = if (ownIsA) matchup.allianceB else matchup.allianceA
         val ownPower = liveContribution(matchup, ownCode)
         val enemyPower = liveContribution(matchup, enemyCode)
         val signal = when {
-            ownPower == 0L && enemyPower == 0L -> "разведка пока не фиксирует перевеса"
-            ownPower * 10 < enemyPower * 8 -> "противник наращивает преимущество"
-            ownPower * 10 > enemyPower * 12 -> "ваш альянс удерживает инициативу"
-            else -> "силы сторон близки"
+            ownPower == 0L && enemyPower == 0L -> campaignText(language, "no advantage detected", "разведка пока не фиксирует перевеса")
+            ownPower * 10 < enemyPower * 8 -> campaignText(language, "the opponent is gaining an advantage", "противник наращивает преимущество")
+            ownPower * 10 > enemyPower * 12 -> campaignText(language, "your alliance holds the initiative", "ваш альянс удерживает инициативу")
+            else -> campaignText(language, "the sides are close", "силы сторон близки")
         }
         return buildString {
-            appendLine("🗺 ${matchup.battlefield}")
-            appendLine("${AllianceCatalog.name(ownCode)} против ${AllianceCatalog.name(enemyCode)}")
+            appendLine("🗺 ${GameI18n.battlefield(language, matchup.battlefield)}")
+            appendLine("${AllianceCatalog.option(ownCode, language).label} vs ${AllianceCatalog.option(enemyCode, language).label}")
             appendLine()
-            appendLine("Ваш подтверждённый вклад: $ownPower")
-            appendLine("Разведсводка: $signal.")
-            appendLine("Малой стороне будет добавлена ограниченная NPC-компенсация.")
+            appendLine(campaignText(language, "Your confirmed power: $ownPower", "Ваш подтверждённый вклад: $ownPower"))
+            appendLine("${GameI18n.t(language, "intel")}: $signal.")
+            appendLine(campaignText(language, "The smaller side receives limited NPC compensation.", "Малой стороне будет добавлена ограниченная NPC-компенсация."))
             appendLine()
-            append("Усилить сторону: /contribute 100")
+            append(campaignText(language, "Support your side: /contribute 100", "Усилить сторону: /contribute 100"))
         }
     }
 
-    private fun resolvedMatchupText(matchup: MatchupRow, allianceCode: String): String {
-        val winner = matchup.winnerCode ?: return "Результат ещё рассчитывается."
+    private fun resolvedMatchupText(matchup: MatchupRow, allianceCode: String, language: GameLanguage): String {
+        val winner = matchup.winnerCode ?: return campaignText(language, "Results are being calculated.", "Результат ещё рассчитывается.")
         val ownWon = allianceCode == winner
         val events: List<WeeklyBattleEvent> = objectMapper.readValue(
             matchup.eventsJson,
             object : TypeReference<List<WeeklyBattleEvent>>() {},
         )
-        val highlights = events.joinToString("\n") { "• ${it.phase}: ${replaceCodes(it.text, matchup)}" }
+        val highlights = events.joinToString("\n") { "• ${replaceCodes(it.text, matchup, language)}" }
         return buildString {
-            appendLine("🗺 ${matchup.battlefield}")
-            appendLine(if (ownWon) "🏆 ВАШ АЛЬЯНС ПОБЕДИЛ" else "🎖 НЕДЕЛЬНОЕ СРАЖЕНИЕ ЗАВЕРШЕНО")
-            appendLine("${AllianceCatalog.name(matchup.allianceA)} ${matchup.scoreA} : ${matchup.scoreB} ${AllianceCatalog.name(matchup.allianceB)}")
-            appendLine("NPC-компенсация: +${matchup.npcBonusA} / +${matchup.npcBonusB}")
+            appendLine("🗺 ${GameI18n.battlefield(language, matchup.battlefield)}")
+            appendLine(if (ownWon) campaignText(language, "🏆 YOUR ALLIANCE WON", "🏆 ВАШ АЛЬЯНС ПОБЕДИЛ") else campaignText(language, "🎖 WEEKLY BATTLE COMPLETE", "🎖 НЕДЕЛЬНОЕ СРАЖЕНИЕ ЗАВЕРШЕНО"))
+            appendLine("${AllianceCatalog.option(matchup.allianceA, language).label} ${matchup.scoreA} : ${matchup.scoreB} ${AllianceCatalog.option(matchup.allianceB, language).label}")
+            appendLine("NPC: +${matchup.npcBonusA} / +${matchup.npcBonusB}")
             appendLine()
             append(highlights)
         }
@@ -487,21 +505,22 @@ class CampaignService(
         result: WeeklyBattleResult,
         allianceCode: String,
         reward: CampaignReward?,
+        language: GameLanguage,
     ): String = buildString {
         val won = allianceCode == result.winnerCode
-        appendLine("🌍 НЕДЕЛЬНОЕ СРАЖЕНИЕ ЗАВЕРШЕНО")
-        appendLine("${matchup.battlefield}")
+        appendLine(campaignText(language, "🌍 WEEKLY BATTLE COMPLETE", "🌍 НЕДЕЛЬНОЕ СРАЖЕНИЕ ЗАВЕРШЕНО"))
+        appendLine(GameI18n.battlefield(language, matchup.battlefield))
         appendLine()
-        appendLine(if (won) "🏆 Ваш альянс победил!" else "🎖 Ваш альянс завершил кампанию.")
-        appendLine("${AllianceCatalog.name(matchup.allianceA)} ${result.scoreA} : ${result.scoreB} ${AllianceCatalog.name(matchup.allianceB)}")
+        appendLine(if (won) campaignText(language, "🏆 Your alliance won!", "🏆 Ваш альянс победил!") else campaignText(language, "🎖 Your alliance completed the campaign.", "🎖 Ваш альянс завершил кампанию."))
+        appendLine("${AllianceCatalog.option(matchup.allianceA, language).label} ${result.scoreA} : ${result.scoreB} ${AllianceCatalog.option(matchup.allianceB, language).label}")
         if (reward != null) {
             appendLine()
-            appendLine("Награда за вклад:")
+            appendLine(campaignText(language, "Contribution reward:", "Награда за вклад:"))
             appendLine("+${reward.xp} XP · +${reward.credits} Credits")
             append("+${reward.research} Research Points · +${reward.materials} Materials")
         } else {
             appendLine()
-            append("Награда выдаётся командирам, внесшим вклад до блокировки.")
+            append(campaignText(language, "Rewards go to commanders who contributed before the lock.", "Награда выдаётся командирам, внесшим вклад до блокировки."))
         }
     }
 
@@ -512,18 +531,21 @@ class CampaignService(
         .query(Long::class.java)
         .single()
 
-    private fun scheduleStatus(period: CampaignPeriod, status: String?): String {
-        if (status == "RESOLVED") return "Статус: результаты опубликованы"
+    private fun scheduleStatus(period: CampaignPeriod, status: String?, language: GameLanguage): String {
+        if (status == "RESOLVED") return campaignText(language, "Status: results published", "Статус: результаты опубликованы")
         val remaining = Duration.between(clock.instant(), period.resolvesAt.toInstant())
-        if (remaining.isNegative || remaining.isZero) return "Статус: идёт расчёт результатов"
+        if (remaining.isNegative || remaining.isZero) return campaignText(language, "Status: calculating results", "Статус: идёт расчёт результатов")
         val days = remaining.toDays()
         val hours = remaining.minusDays(days).toHours()
-        return "До блокировки вкладов: ${days}д ${hours}ч"
+        return campaignText(language, "Until contribution lock: ${days}d ${hours}h", "До блокировки вкладов: ${days}д ${hours}ч")
     }
 
-    private fun replaceCodes(text: String, matchup: MatchupRow): String = text
-        .replace(matchup.allianceA, AllianceCatalog.name(matchup.allianceA))
-        .replace(matchup.allianceB, AllianceCatalog.name(matchup.allianceB))
+    private fun replaceCodes(text: String, matchup: MatchupRow, language: GameLanguage): String = text
+        .replace(matchup.allianceA, AllianceCatalog.option(matchup.allianceA, language).label)
+        .replace(matchup.allianceB, AllianceCatalog.option(matchup.allianceB, language).label)
+
+    private fun campaignText(language: GameLanguage, english: String, russian: String): String =
+        if (language == GameLanguage.RU) russian else english
 
     private fun campaignBalance(): WeeklyBalance {
         val c = properties.campaign

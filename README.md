@@ -15,7 +15,13 @@ Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
 - `/profile` — inspect alliance, level progress, battle record, resources, and daily orders
 - `/front` — inspect the current matchup, intelligence, countdown, or published result
 - `/contribute 100` — transfer Credits before the Sunday contribution lock
+- `/country` or `/country Serbia` — browse 250 countries and territories or search by localized name/code
+- `/language` — choose English, Russian, Spanish, Brazilian Portuguese, Arabic, Indonesian, Hindi, or Turkish
+- `/nickname Commander` — choose a sanitized nickname after explicit confirmation
+- `/settings` — open language and profile settings
 - `/help` — show command help
+
+New accounts infer their initial language from Telegram and receive language-relevant country suggestions. The explicit language selection is retained even when Telegram later sends another interface locale. Existing accounts keep Russian until they choose another language.
 
 ## Product Principles
 
@@ -34,7 +40,7 @@ Players receive a limited number of Combat Orders, choose one of several operati
 
 ### Weekly campaigns
 
-The command-only MVP opens four alliance matchups each week. Contributions remain open until Sunday at 15:00 in the `Europe/Belgrade` timezone. At that time the server locks the campaign, applies capped contribution and bounded NPC compensation, resolves four deterministic phases, persists the results, grants idempotent rewards to contributors, and queues Telegram notifications. Campaign assets, richer formation composition, and visual replay remain planned.
+The command-only MVP pairs player-selected alliances each week. Contributions remain open until Sunday at 15:00 in the `Europe/Belgrade` timezone. At that time the server locks the campaign, applies capped contribution and bounded NPC compensation, resolves four deterministic phases, persists the results, grants idempotent rewards to contributors, and queues Telegram notifications. Campaign assets, richer formation composition, and visual replay remain planned.
 
 ### Progression
 
@@ -85,6 +91,7 @@ Mini App and replay-renderer directories will be added only when those milestone
 - [Product overview](docs/product-overview.md)
 - [Architecture](DOCUMENTATION.md)
 - [Architecture baseline decision](docs/decisions/0001-architecture-baseline.md)
+- [Localized identity and alliance catalog decision](docs/decisions/0004-localized-identity-and-alliance-catalog.md)
 - [Contributor guide](CONTRIBUTING.md)
 - [Agent guide](AGENTS.md)
 - [GitHub About metadata](docs/github-about.md)
@@ -94,7 +101,7 @@ Mini App and replay-renderer directories will be added only when those milestone
 
 Current phase: command-only MVP with interactive personal operations and scheduled weekly battles.
 
-The current implementation proves registration, alliance selection, daily orders, three deterministic operation offers, risk/reward and intelligence trade-offs, five tactical orders, multi-round battle logs, transactional rewards, commander levels and battle statistics, weekly pairings, scheduled aggregate resolution, NPC compensation, idempotent campaign rewards, and durable Telegram notifications. Combat-group composition, typed campaign assets, research spending, full replay UI, Mini App, and video rendering remain planned.
+The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog with recommendations, search, and pagination, moderated nicknames, daily operations, deterministic multi-round battles, transactional progression, weekly pairings, scheduled aggregate resolution, NPC compensation, idempotent campaign rewards, and durable Telegram notifications. Seasonal alliance switching, combat-group composition, typed campaign assets, research spending, full replay UI, Mini App, and video rendering remain planned.
 
 Run tests with `GRADLE_USER_HOME="$PWD/.gradle-home" ./gradlew test`. For a local Docker run, copy `.env.example` to an ignored `.env`, replace every secret, create the PostgreSQL data directory, and run `docker compose up --build`.
 

@@ -11,7 +11,15 @@ The deployed MVP has two runtime surfaces:
 - Telegram Bot commands, callback queries, and inline alliance-selection buttons
 - Spring Boot backend as the authority for gameplay and economy
 
-PostgreSQL stores players, processed Telegram updates, personal battles, ordered event JSON, campaign weeks and matchups, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs restore daily Combat Orders and drive the weekly campaign. Mini App, full replay visualization, combat-group composition, and typed campaign assets remain future milestones.
+PostgreSQL stores players and their explicit locale/nickname settings, processed Telegram updates, personal battles, ordered event JSON, campaign weeks and matchups, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs restore daily Combat Orders and drive the weekly campaign. Mini App, full replay visualization, combat-group composition, and typed campaign assets remain future milestones.
+
+### Identity, locale, and alliance selection
+
+1. A new account maps Telegram's optional IETF `language_code` to one of eight supported locales, falling back to English. Existing accounts migrated from the Russian-only build retain Russian.
+2. `/language` changes the persisted preference; later Telegram updates refresh only the locale hint and never overwrite that explicit choice.
+3. `/nickname` normalizes whitespace, removes bidi/control characters, masks configured profanity, limits the result to 30 Unicode code points, and stores it as pending until the same player confirms the callback.
+4. The versioned catalog contains all 249 ISO 3166-1 alpha-2 countries and territories plus explicit `XK`. Java CLDR provides localized display names, with explicit neutral names for Kosovo and Palestine.
+5. `/country` offers language-relevant suggestions, locale-aware pages of ten, and accent-insensitive search across every supported translation and the two-letter code. Alliance selection remains immutable until seasonal switching rules are implemented.
 
 ## Core Data Flow
 
@@ -26,7 +34,7 @@ PostgreSQL stores players, processed Telegram updates, personal battles, ordered
 
 ### Weekly campaign
 
-1. A Monday 00:05 Belgrade job creates four deterministic alliance matchups and selects named battlefields. Pairing uses the prior week's contribution power, with a weekly deterministic tie-break.
+1. A Monday 00:05 Belgrade job pairs the alliances currently selected by players and chooses named battlefields. Pairing uses the prior week's contribution power with a deterministic weekly tie-break; an unmatched side receives an unused NPC opponent. Newly selected, previously unmatched alliances can be appended without rewriting existing pairings.
 2. Players contribute Credits during the week. `/front` shows their matchup, own confirmed power, and a coarse comparison signal.
 3. Contributions lock at Sunday 15:00 in `Europe/Belgrade`.
 4. The aggregate engine applies a configurable contribution soft cap, diminishing overflow, baseline garrisons, and bounded NPC compensation for contributor-count imbalance.
