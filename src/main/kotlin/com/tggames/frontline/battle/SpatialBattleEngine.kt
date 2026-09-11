@@ -315,7 +315,7 @@ class SpatialBattleEngine(
             if (enemies.isEmpty()) return@forEach
             val allies = units.filter { it.side == unit.side && it.operational }
             val tactic = tacticFor(unit.side, playerTactic, enemyTactic)
-            if (shouldHold(unit, enemies, allies, controls, map, tactic)) return@forEach
+            if (shouldHold(step, unit, enemies, allies, controls, map, tactic)) return@forEach
 
             val primary = if (unit.side == BattleSide.PLAYER) playerPlan.objectiveId else enemyPrimaryObjective
             val objective = chooseObjective(unit, primary, controls, map)
@@ -339,6 +339,7 @@ class SpatialBattleEngine(
     }
 
     private fun shouldHold(
+        step: Int,
         unit: UnitState,
         enemies: List<UnitState>,
         allies: List<UnitState>,
@@ -349,7 +350,12 @@ class SpatialBattleEngine(
         if (availableTargets(unit, enemies, allies, map).isNotEmpty()) return true
         val onObjective = controls.values.firstOrNull { it.definition.position == unit.position }
         if (tactic == Tactic.DEFENSE && onObjective?.owner == unit.side && enemies.any { map.distanceBetween(unit.position, it.position) <= unit.snapshot.sightRange + 2 }) return true
-        if (tactic == Tactic.AMBUSH && map.terrainAt(unit.position).cover > 0 && enemies.any { map.distanceBetween(unit.position, it.position) <= unit.snapshot.weaponRange + 2 }) return true
+        if (
+            tactic == Tactic.AMBUSH &&
+            step % AMBUSH_ADVANCE_INTERVAL != 0 &&
+            map.terrainAt(unit.position).cover > 0 &&
+            enemies.any { map.distanceBetween(unit.position, it.position) <= unit.snapshot.weaponRange + 2 }
+        ) return true
         return false
     }
 
@@ -633,6 +639,7 @@ class SpatialBattleEngine(
 
     companion object {
         const val MAX_STEPS = 48
+        private const val AMBUSH_ADVANCE_INTERVAL = 3
         private const val SPATIAL_SEED_MASK = 0x5A17C0DE4B9L
     }
 }

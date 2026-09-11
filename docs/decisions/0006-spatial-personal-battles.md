@@ -23,6 +23,10 @@ Aircraft must not attack the entire battlefield merely because they are airborne
 - End a battle when one side controls every important objective or the opposing army has no combat-capable units. A 48-step safety boundary converts the losing force into a routed army using objective control and surviving strength, preventing an unrecoverable simulation loop.
 - Keep engine version 3 replay logic available for historical battles.
 
+## 2026-09-11 amendment
+
+Personal engine version 8 prevents mutual-ambush deadlocks: an ambush formation may wait in cover near an unseen enemy, but it resumes movement every third step while no target is available. The stored event `side` remains the acting side, including for destruction events; localized reports must therefore name it as the attacker. Turn-limit results explicitly say that the trailing army withdrew, and surviving routed equipment is not described as destroyed.
+
 ## Consequences
 
 The active group now has observable movement, range, reconnaissance, terrain, and target-selection behavior. A deployment route can win or lose an otherwise equal battle, and captured ground can change hands during the same operation.

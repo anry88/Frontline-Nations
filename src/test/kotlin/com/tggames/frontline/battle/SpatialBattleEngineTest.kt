@@ -139,6 +139,51 @@ class SpatialBattleEngineTest {
     }
 
     @Test
+    fun `ambush formations do not wait forever outside weapon range`() {
+        val map = maps.forBiome("лес")
+        val operation = OperationOffer(0, Battlefield("Полесский рубеж", "лес"), EnemyArchetype.AMBUSH, Difficulty.STANDARD)
+        val firstLightArmor = snapshot("LIGHT_ARMOR").copy(
+            id = UUID.fromString("0f68c47e-dd13-3a72-95c2-428b21206d6d"),
+        )
+        val upgradedLightArmorDefinition = equipment.require("LIGHT_ARMOR")
+        val upgradedLightArmorStats = upgradedLightArmorDefinition.stats.scaled(2)
+        val secondLightArmor = snapshot("LIGHT_ARMOR").copy(
+            id = UUID.fromString("afb09601-d21a-3cf3-85ad-ada4e7a280c1"),
+            level = 2,
+            attack = upgradedLightArmorStats.attack,
+            armor = upgradedLightArmorStats.armor,
+            mobility = upgradedLightArmorStats.mobility,
+            recon = upgradedLightArmorStats.recon,
+            support = upgradedLightArmorStats.support,
+        )
+        val tanks = snapshot("MBT").copy(
+            id = UUID.fromString("fd2af1f6-4082-3049-a60d-e24c5d509d1e"),
+            cpCost = 6,
+            quantity = 2,
+        )
+        val group = CombatGroupSnapshot(
+            UUID.fromString("57cdaa3a-6daf-4a57-b2d0-8badac6921ec"),
+            12,
+            10,
+            listOf(firstLightArmor, secondLightArmor, tanks),
+        )
+
+        val result = spatial.simulate(
+            seed = -5404220392128359389L,
+            commanderLevel = 1,
+            operation = operation,
+            tactic = Tactic.AMBUSH,
+            group = group,
+            plan = DeploymentPlan("W", "crossing"),
+            map = map,
+        )
+        assertThat(result.steps).isLessThan(SpatialBattleEngine.MAX_STEPS)
+        assertThat(result.events).anyMatch {
+            it.type == SpatialEventType.CAPTURE_PROGRESS && it.side == BattleSide.PLAYER
+        }
+    }
+
+    @Test
     fun `corps battle aggregates a thousand command points into bounded formations`() {
         val map = maps.forBiome("равнина")
         val operation = OperationOffer(0, Battlefield("Великие равнины", "равнина"), EnemyArchetype.ARMOR, Difficulty.STANDARD)

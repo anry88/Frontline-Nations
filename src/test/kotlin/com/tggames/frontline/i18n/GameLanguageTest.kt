@@ -24,4 +24,12 @@ class GameLanguageTest {
             keys.forEach { key -> assertThat(GameI18n.t(language, key)).isNotBlank() }
         }
     }
+
+    @Test
+    fun `russian destruction event identifies the attacking side`() {
+        assertThat(GameI18n.t(GameLanguage.RU, "event_unit_destroyed", "Ваша сторона", "Самоходная артиллерия"))
+            .isEqualTo("Ваша сторона уничтожила технику «Самоходная артиллерия»")
+        assertThat(GameI18n.t(GameLanguage.RU, "end_army_routed"))
+            .contains("лимит ходов")
+    }
 }
