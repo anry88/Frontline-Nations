@@ -10,11 +10,6 @@ avatar="$repo_root/assets/brand/frontline-nations-bot-avatar.jpg"
 
 api_url="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}"
 
-curl --fail --silent --show-error \
-  --request POST \
-  --data-urlencode 'name=Frontline Nations' \
-  "$api_url/setMyName" >/dev/null
-
 set_commands() {
   local language_code="$1"
   local commands="$2"
@@ -46,26 +41,39 @@ set_commands tr "$commands_tr"
 
 curl --fail --silent --show-error \
   --request POST \
-  --data-urlencode 'description=Асинхронная стратегия: короткие операции, развитие командира и общий недельный фронт альянсов.' \
-  "$api_url/setMyDescription" >/dev/null
-
-curl --fail --silent --show-error \
-  --request POST \
-  --data-urlencode 'short_description=Командуй армией и усиливай свой альянс.' \
-  "$api_url/setMyShortDescription" >/dev/null
-
-if [[ -f "$avatar" ]]; then
-  curl --fail --silent --show-error \
-    --request POST \
-    --form 'photo={"type":"static","photo":"attach://avatar"}' \
-    --form "avatar=@$avatar;type=image/jpeg" \
-    "$api_url/setMyProfilePhoto" >/dev/null
-fi
-
-curl --fail --silent --show-error \
-  --request POST \
   --data-urlencode "url=${public_base_url%/}/bot" \
   --data-urlencode "secret_token=${TELEGRAM_WEBHOOK_SECRET}" \
   --data-urlencode 'allowed_updates=["message","callback_query"]' \
   "$api_url/setWebhook"
 printf '\n'
+
+if ! curl --fail --silent --show-error \
+  --request POST \
+  --data-urlencode 'name=Frontline Nations' \
+  "$api_url/setMyName" >/dev/null; then
+  printf 'Warning: Telegram profile name update was rate-limited or rejected.\n' >&2
+fi
+
+if ! curl --fail --silent --show-error \
+  --request POST \
+  --data-urlencode 'description=Асинхронная стратегия: короткие операции, развитие командира и общий недельный фронт альянсов.' \
+  "$api_url/setMyDescription" >/dev/null; then
+  printf 'Warning: Telegram profile description update was rate-limited or rejected.\n' >&2
+fi
+
+if ! curl --fail --silent --show-error \
+  --request POST \
+  --data-urlencode 'short_description=Командуй армией и усиливай свой альянс.' \
+  "$api_url/setMyShortDescription" >/dev/null; then
+  printf 'Warning: Telegram short description update was rate-limited or rejected.\n' >&2
+fi
+
+if [[ -f "$avatar" ]]; then
+  if ! curl --fail --silent --show-error \
+    --request POST \
+    --form 'photo={"type":"static","photo":"attach://avatar"}' \
+    --form "avatar=@$avatar;type=image/jpeg" \
+    "$api_url/setMyProfilePhoto" >/dev/null; then
+    printf 'Warning: Telegram avatar update was rate-limited or rejected.\n' >&2
+  fi
+fi
