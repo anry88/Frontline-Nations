@@ -71,7 +71,7 @@ class EquipmentCatalog(objectMapper: ObjectMapper) {
         definitions.forEach {
             require(it.cpCost in 1..5 && it.unlockLevel in 1..50)
             require(it.buyCredits > 0 && it.craftCredits > 0 && it.craftMaterials > 0)
-            require(it.spatial.movementPoints in 1..8)
+            require(it.spatial.movementPoints in 1..4)
             require(it.spatial.weaponRange in 1..6)
             require(it.spatial.minimumRange in 1..it.spatial.weaponRange)
             require(it.spatial.sightRange in 1..6)

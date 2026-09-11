@@ -37,6 +37,15 @@ class GameUiPolicyTest {
     }
 
     @Test
+    fun `army equipment controls always retain minus and plus columns`() {
+        val empty = GameUiPolicy.equipmentActionCallbacks(EquipmentSelectionAvailability("MBT", selected = 0, available = 2))
+        val full = GameUiPolicy.equipmentActionCallbacks(EquipmentSelectionAvailability("MBT", selected = 2, available = 2))
+
+        assertThat(listOf(empty.remove, empty.add)).containsExactly("army:noop", "army:add:MBT")
+        assertThat(listOf(full.remove, full.add)).containsExactly("army:remove:MBT", "army:noop")
+    }
+
+    @Test
     fun `daily button is available only before todays claim`() {
         val today = LocalDate.of(2026, 9, 11)
 

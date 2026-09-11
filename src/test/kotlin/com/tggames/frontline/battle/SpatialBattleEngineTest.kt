@@ -184,6 +184,50 @@ class SpatialBattleEngineTest {
     }
 
     @Test
+    fun `defenders under indirect fire leave positions where they cannot reply`() {
+        val map = maps.forBiome("тундра")
+        val operation = OperationOffer(0, Battlefield("Северная тундра", "тундра"), EnemyArchetype.FORTIFIED, Difficulty.STANDARD)
+        val artillery = snapshot("ARTILLERY").copy(
+            id = UUID.fromString("43be0f1c-3ffe-3818-a9f4-7f8fe916e5a4"),
+            cpCost = 9,
+            quantity = 3,
+        )
+        val scouts = snapshot("RECON_VEHICLE").copy(
+            id = UUID.fromString("116e50e7-1b62-3a7a-b5b4-3a9dc76db790"),
+            cpCost = 2,
+            quantity = 2,
+        )
+        val group = CombatGroupSnapshot(
+            UUID.fromString("57cdaa3a-6daf-4a57-b2d0-8badac6921ec"),
+            21,
+            11,
+            listOf(artillery, scouts),
+        )
+
+        val result = spatial.simulate(
+            seed = -3014996747345208731L,
+            commanderLevel = 2,
+            operation = operation,
+            tactic = Tactic.DEFENSE,
+            group = group,
+            plan = DeploymentPlan("W", "signal"),
+            map = map,
+        )
+        val hitsOnEnemy = result.events.filter {
+            it.type == SpatialEventType.UNIT_HIT && it.side == BattleSide.PLAYER && it.unitCode == "ARTILLERY"
+        }
+
+        assertThat(hitsOnEnemy).anyMatch { hit ->
+            result.events.any {
+                it.type == SpatialEventType.UNIT_MOVED &&
+                    it.side == BattleSide.ENEMY &&
+                    it.unitId == hit.targetUnitId &&
+                    it.step > hit.step
+            }
+        }
+    }
+
+    @Test
     fun `corps battle aggregates a thousand command points into bounded formations`() {
         val map = maps.forBiome("равнина")
         val operation = OperationOffer(0, Battlefield("Великие равнины", "равнина"), EnemyArchetype.ARMOR, Difficulty.STANDARD)

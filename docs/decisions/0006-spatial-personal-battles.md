@@ -27,6 +27,8 @@ Aircraft must not attack the entire battlefield merely because they are airborne
 
 Personal engine version 8 prevents mutual-ambush deadlocks: an ambush formation may wait in cover near an unseen enemy, but it resumes movement every third step while no target is available. The stored event `side` remains the acting side, including for destruction events; localized reports must therefore name it as the attacker. Turn-limit results explicitly say that the trailing army withdrew, and surviving routed equipment is not described as destroyed.
 
+Personal engine version 9 caps catalog movement at four road hexes per step, while guaranteeing one-cell progress through any terrain the unit profile can traverse. A defensive formation no longer remains stationary on a controlled objective when an enemy can fire on it and it has no available target in return. Arsenal detail cards show the current wallet, and army equipment controls retain a fixed minus/plus column pair by using inert callbacks for unavailable actions.
+
 ## Consequences
 
 The active group now has observable movement, range, reconnaissance, terrain, and target-selection behavior. A deployment route can win or lose an otherwise equal battle, and captured ground can change hands during the same operation.

@@ -16,10 +16,18 @@ class EquipmentCatalogTest {
         assertThat(catalog.units.map { it.code }).contains("MBT", "ARTILLERY", "ATTACK_AIRCRAFT", "AIR_DEFENSE", "RECON_VEHICLE")
         assertThat(catalog.units).allSatisfy { definition ->
             assertThat(GameLanguage.entries.map(definition::name)).allSatisfy { assertThat(it).isNotBlank() }
-            assertThat(definition.spatial.movementPoints).isBetween(1, 8)
+            assertThat(definition.spatial.movementPoints).isBetween(1, 4)
             assertThat(definition.spatial.minimumRange).isBetween(1, definition.spatial.weaponRange)
             assertThat(definition.spatial.sightRange).isBetween(1, 6)
         }
+    }
+
+    @Test
+    fun `personal map movement stays proportional to a nine by twelve sector`() {
+        assertThat(catalog.require("RECON_VEHICLE").spatial.movementPoints).isEqualTo(4)
+        assertThat(catalog.require("LIGHT_ARMOR").spatial.movementPoints).isEqualTo(4)
+        assertThat(catalog.require("ARTILLERY").spatial.movementPoints).isEqualTo(2)
+        assertThat(catalog.units.maxOf { it.spatial.movementPoints }).isEqualTo(4)
     }
 
     @Test

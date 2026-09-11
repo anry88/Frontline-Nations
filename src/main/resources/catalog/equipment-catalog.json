@@ -11,7 +11,7 @@
     "upgradeCredits": 3,
     "upgradeMaterials": 35,
     "stats": { "attack": 30, "armor": 32, "mobility": 12, "recon": 5, "support": 4 },
-    "spatial": { "movementProfile": "TRACKED", "movementPoints": 4, "weaponRange": 2, "minimumRange": 1, "sightRange": 3, "fireMode": "DIRECT" },
+    "spatial": { "movementProfile": "TRACKED", "movementPoints": 3, "weaponRange": 2, "minimumRange": 1, "sightRange": 3, "fireMode": "DIRECT" },
     "roles": ["ARMOR", "FIREPOWER"],
     "names": { "en": "Main battle tank", "ru": "Основной танк", "es": "Tanque principal", "pt": "Tanque principal", "ar": "دبابة قتال رئيسية", "id": "Tank tempur utama", "hi": "मुख्य युद्धक टैंक", "tr": "Ana muharebe tankı" }
   },
@@ -27,7 +27,7 @@
     "upgradeCredits": 2,
     "upgradeMaterials": 28,
     "stats": { "attack": 18, "armor": 14, "mobility": 30, "recon": 15, "support": 5 },
-    "spatial": { "movementProfile": "WHEELED", "movementPoints": 6, "weaponRange": 2, "minimumRange": 1, "sightRange": 3, "fireMode": "DIRECT" },
+    "spatial": { "movementProfile": "WHEELED", "movementPoints": 4, "weaponRange": 2, "minimumRange": 1, "sightRange": 3, "fireMode": "DIRECT" },
     "roles": ["ARMOR", "MOBILE", "RECON"],
     "names": { "en": "Light armor", "ru": "Лёгкая броня", "es": "Blindado ligero", "pt": "Blindado leve", "ar": "مدرعة خفيفة", "id": "Lapis baja ringan", "hi": "हल्का बख़्तरबंद वाहन", "tr": "Hafif zırhlı" }
   },
@@ -43,7 +43,7 @@
     "upgradeCredits": 3,
     "upgradeMaterials": 40,
     "stats": { "attack": 38, "armor": 6, "mobility": 8, "recon": 4, "support": 7 },
-    "spatial": { "movementProfile": "TRACKED", "movementPoints": 3, "weaponRange": 5, "minimumRange": 2, "sightRange": 2, "fireMode": "INDIRECT" },
+    "spatial": { "movementProfile": "TRACKED", "movementPoints": 2, "weaponRange": 5, "minimumRange": 2, "sightRange": 2, "fireMode": "INDIRECT" },
     "roles": ["FIREPOWER", "SUPPORT"],
     "names": { "en": "Self-propelled artillery", "ru": "Самоходная артиллерия", "es": "Artillería autopropulsada", "pt": "Artilharia autopropulsada", "ar": "مدفعية ذاتية الحركة", "id": "Artileri gerak sendiri", "hi": "स्वचालित तोपखाना", "tr": "Kundağı motorlu topçu" }
   },
@@ -59,7 +59,7 @@
     "upgradeCredits": 4,
     "upgradeMaterials": 55,
     "stats": { "attack": 44, "armor": 8, "mobility": 34, "recon": 12, "support": 3 },
-    "spatial": { "movementProfile": "AIR", "movementPoints": 4, "weaponRange": 2, "minimumRange": 1, "sightRange": 3, "fireMode": "AIR_TO_GROUND" },
+    "spatial": { "movementProfile": "AIR", "movementPoints": 3, "weaponRange": 2, "minimumRange": 1, "sightRange": 3, "fireMode": "AIR_TO_GROUND" },
     "roles": ["AIR", "FIREPOWER", "MOBILE"],
     "names": { "en": "Attack aircraft", "ru": "Штурмовик", "es": "Avión de ataque", "pt": "Aeronave de ataque", "ar": "طائرة هجومية", "id": "Pesawat serang", "hi": "हमला विमान", "tr": "Taarruz uçağı" }
   },
@@ -75,7 +75,7 @@
     "upgradeCredits": 4,
     "upgradeMaterials": 48,
     "stats": { "attack": 25, "armor": 7, "mobility": 40, "recon": 17, "support": 12 },
-    "spatial": { "movementProfile": "AIR", "movementPoints": 5, "weaponRange": 2, "minimumRange": 1, "sightRange": 4, "fireMode": "AIR_INTERCEPT" },
+    "spatial": { "movementProfile": "AIR", "movementPoints": 4, "weaponRange": 2, "minimumRange": 1, "sightRange": 4, "fireMode": "AIR_INTERCEPT" },
     "roles": ["AIR", "AIR_DEFENSE", "MOBILE"],
     "names": { "en": "Fighter", "ru": "Истребитель", "es": "Caza", "pt": "Caça", "ar": "مقاتلة", "id": "Pesawat tempur", "hi": "लड़ाकू विमान", "tr": "Avcı uçağı" }
   },
@@ -91,7 +91,7 @@
     "upgradeCredits": 3,
     "upgradeMaterials": 34,
     "stats": { "attack": 12, "armor": 13, "mobility": 15, "recon": 17, "support": 32 },
-    "spatial": { "movementProfile": "TRACKED", "movementPoints": 4, "weaponRange": 3, "minimumRange": 1, "sightRange": 4, "fireMode": "AIR_DEFENSE" },
+    "spatial": { "movementProfile": "TRACKED", "movementPoints": 3, "weaponRange": 3, "minimumRange": 1, "sightRange": 4, "fireMode": "AIR_DEFENSE" },
     "roles": ["AIR_DEFENSE", "SUPPORT"],
     "names": { "en": "Mobile air defense", "ru": "Мобильная ПВО", "es": "Defensa aérea móvil", "pt": "Defesa aérea móvel", "ar": "دفاع جوي متنقل", "id": "Pertahanan udara bergerak", "hi": "मोबाइल वायु रक्षा", "tr": "Mobil hava savunma" }
   },
@@ -107,7 +107,7 @@
     "upgradeCredits": 1,
     "upgradeMaterials": 18,
     "stats": { "attack": 8, "armor": 6, "mobility": 36, "recon": 40, "support": 8 },
-    "spatial": { "movementProfile": "WHEELED", "movementPoints": 7, "weaponRange": 1, "minimumRange": 1, "sightRange": 5, "fireMode": "DIRECT" },
+    "spatial": { "movementProfile": "WHEELED", "movementPoints": 4, "weaponRange": 1, "minimumRange": 1, "sightRange": 5, "fireMode": "DIRECT" },
     "roles": ["RECON", "MOBILE"],
     "names": { "en": "Recon vehicle", "ru": "Разведмашина", "es": "Vehículo de reconocimiento", "pt": "Veículo de reconhecimento", "ar": "مركبة استطلاع", "id": "Kendaraan pengintai", "hi": "टोही वाहन", "tr": "Keşif aracı" }
   }

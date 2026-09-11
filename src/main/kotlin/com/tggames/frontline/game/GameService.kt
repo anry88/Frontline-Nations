@@ -143,6 +143,7 @@ class GameService(
             data.startsWith("army:add:") -> addUnitType(callback.from.id, chatId, data.substringAfterLast(':'))
             data.startsWith("army:remove:") -> removeUnitType(callback.from.id, chatId, data.substringAfterLast(':'))
             data.startsWith("army:preset:") -> activatePreset(callback.from.id, chatId, data.substringAfterLast(':'))
+            data == "army:noop" -> Unit
             else -> telegram.sendMessage(chatId, GameI18n.t(language, "stale"), actionKeyboard(callback.from.id, language))
         }
     }
@@ -451,7 +452,7 @@ class GameService(
             VALUES (
                 :id, :playerId, :victory, :playerPower, :enemyPower,
                 :xp, :credits, 0, :materials,
-                :battleSeed, :commanderLevel, :seedHash, 8, :location, :biome, :difficulty,
+                :battleSeed, :commanderLevel, :seedHash, 9, :location, :biome, :difficulty,
                 :enemy, :tactic, :rounds, CAST(:events AS jsonb),
                 :groupId, CAST(:groupSnapshot AS jsonb), :groupVersion, :compositionPower, 0, 0,
                 :mapId, :mapVersion, :deploymentEntry, :primaryObjective,
@@ -684,17 +685,14 @@ class GameService(
         val availability = GameUiPolicy.equipmentSelection(army)
         equipment.units.forEach { definition ->
             val state = availability[definition.code] ?: return@forEach
-            val actions = mutableListOf<InlineKeyboardButton>()
-            if (state.selected > 0 && army.activeGroup.units.size > 1) {
-                actions += InlineKeyboardButton("➖ ${definition.emoji} ×${state.selected}", "army:remove:${definition.code}")
-            }
-            if (state.selected < state.available) {
-                actions += InlineKeyboardButton(
+            val callbacks = GameUiPolicy.equipmentActionCallbacks(state)
+            rows += listOf(
+                InlineKeyboardButton("➖ ${definition.emoji} ×${state.selected}", callbacks.remove),
+                InlineKeyboardButton(
                     "➕ ${definition.name(language)} ${state.selected}/${state.available}",
-                    "army:add:${definition.code}",
-                )
-            }
-            if (actions.isNotEmpty()) rows += actions
+                    callbacks.add,
+                ),
+            )
         }
         rows += listOf(
             InlineKeyboardButton(GameI18n.t(language, "shop"), "nav:shop"),
@@ -731,6 +729,7 @@ class GameService(
         val state = if (player.commanderLevel >= definition.unlockLevel) "✅" else "🔒 ${GameI18n.t(language, "level")} ${definition.unlockLevel}"
         val text = """
             ${definition.emoji} ${definition.name(language)} · $state
+            Credits: ${player.credits} · Materials: ${player.materials}
 
             ⚔ ${GameI18n.t(language, "stat_attack")}: ${stats.attack}
             🛡 ${GameI18n.t(language, "stat_armor")}: ${stats.armor}

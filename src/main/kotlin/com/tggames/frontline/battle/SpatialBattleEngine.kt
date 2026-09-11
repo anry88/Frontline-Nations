@@ -349,7 +349,15 @@ class SpatialBattleEngine(
     ): Boolean {
         if (availableTargets(unit, enemies, allies, map).isNotEmpty()) return true
         val onObjective = controls.values.firstOrNull { it.definition.position == unit.position }
-        if (tactic == Tactic.DEFENSE && onObjective?.owner == unit.side && enemies.any { map.distanceBetween(unit.position, it.position) <= unit.snapshot.sightRange + 2 }) return true
+        val threatenedWithoutReply = enemies.any { enemy ->
+            unit in availableTargets(enemy, listOf(unit), enemies, map)
+        }
+        if (
+            tactic == Tactic.DEFENSE &&
+            onObjective?.owner == unit.side &&
+            !threatenedWithoutReply &&
+            enemies.any { map.distanceBetween(unit.position, it.position) <= unit.snapshot.sightRange + 2 }
+        ) return true
         if (
             tactic == Tactic.AMBUSH &&
             step % AMBUSH_ADVANCE_INTERVAL != 0 &&
@@ -406,7 +414,7 @@ class SpatialBattleEngine(
         var destination = unit.position
         path.drop(1).forEach { next ->
             val cost = movementCost(map.terrainAt(next), unit.snapshot.movementProfile, tactic, unit.snapshot.roles)
-            if (cost > remaining) return destination
+            if (cost > remaining) return if (destination == unit.position) next else destination
             remaining -= cost
             destination = next
         }

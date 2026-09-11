@@ -10,6 +10,11 @@ data class EquipmentSelectionAvailability(
     val available: Int,
 )
 
+data class EquipmentActionCallbacks(
+    val remove: String,
+    val add: String,
+)
+
 object GameUiPolicy {
     fun shopOrder(definitions: List<EquipmentDefinition>, commanderLevel: Int): List<EquipmentDefinition> =
         definitions.sortedBy { if (it.unlockLevel <= commanderLevel) 0 else 1 }
@@ -25,6 +30,11 @@ object GameUiPolicy {
             )
         }
     }
+
+    fun equipmentActionCallbacks(state: EquipmentSelectionAvailability) = EquipmentActionCallbacks(
+        remove = if (state.selected > 0) "army:remove:${state.code}" else "army:noop",
+        add = if (state.selected < state.available) "army:add:${state.code}" else "army:noop",
+    )
 
     fun dailyRewardAvailable(lastClaim: LocalDate?, today: LocalDate): Boolean = lastClaim != today
 }
