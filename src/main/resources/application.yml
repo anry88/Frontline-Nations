@@ -37,6 +37,7 @@ frontline:
     width: ${REPLAY_WIDTH:768}
     fps: ${REPLAY_FPS:3}
     retention-hours: ${REPLAY_RETENTION_HOURS:48}
+    weekly-retention-hours: ${REPLAY_WEEKLY_RETENTION_HOURS:168}
   campaign:
     resolve-cron: ${CAMPAIGN_RESOLVE_CRON:0 0 15 * * SUN}
     retry-cron: ${CAMPAIGN_RETRY_CRON:0 5/10 * * * *}

@@ -10,7 +10,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates ffmpeg tini wget \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system frontline \
-    && useradd --system --gid frontline --home-dir /app --shell /usr/sbin/nologin frontline
+    && useradd --system --gid frontline --home-dir /app --shell /usr/sbin/nologin frontline \
+    && mkdir -p /var/cache/frontline-replays \
+    && chown frontline:frontline /var/cache/frontline-replays
 WORKDIR /app
 COPY --from=build /workspace/build/libs/frontline-nations-0.1.0.jar app.jar
 USER frontline

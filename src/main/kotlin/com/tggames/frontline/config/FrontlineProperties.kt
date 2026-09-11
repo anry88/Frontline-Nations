@@ -47,5 +47,6 @@ data class FrontlineProperties(
         val width: Int = 768,
         val fps: Int = 3,
         val retentionHours: Long = 48,
+        val weeklyRetentionHours: Long = 168,
     )
 }

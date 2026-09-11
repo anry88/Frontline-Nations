@@ -38,10 +38,11 @@ services:
       BATTLE_SERVER_SALT: ${BATTLE_SERVER_SALT:?BATTLE_SERVER_SALT is required}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://frontline-nations.tg-games.com}
       GAME_TIMEZONE: ${GAME_TIMEZONE:-Europe/Belgrade}
-      REPLAY_CACHE_DIRECTORY: ${REPLAY_CACHE_DIRECTORY:-/tmp/frontline-replays}
+      REPLAY_CACHE_DIRECTORY: ${REPLAY_CACHE_DIRECTORY:-/var/cache/frontline-replays}
       REPLAY_WIDTH: ${REPLAY_WIDTH:-768}
       REPLAY_FPS: ${REPLAY_FPS:-3}
       REPLAY_RETENTION_HOURS: ${REPLAY_RETENTION_HOURS:-48}
+      REPLAY_WEEKLY_RETENTION_HOURS: ${REPLAY_WEEKLY_RETENTION_HOURS:-168}
       CAMPAIGN_MAX_TICKS: ${CAMPAIGN_MAX_TICKS:-96}
       CAMPAIGN_OBJECTIVE_BASE_POINTS: ${CAMPAIGN_OBJECTIVE_BASE_POINTS:-1000}
       CAMPAIGN_OBJECTIVE_DECAY_PER_TICK: ${CAMPAIGN_OBJECTIVE_DECAY_PER_TICK:-15}
@@ -75,8 +76,13 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+    volumes:
+      - replay-cache:/var/cache/frontline-replays
 
 networks:
   tunnel:
     external: true
     name: ${HDC_TUNNEL_NETWORK:-hdc-tunnel}
+
+volumes:
+  replay-cache:

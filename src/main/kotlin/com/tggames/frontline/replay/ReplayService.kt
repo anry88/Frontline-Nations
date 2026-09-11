@@ -122,18 +122,26 @@ class ReplayService(
     private fun cachePath(kind: ReplayKind, id: UUID): Path =
         Path.of(properties.replay.cacheDirectory).resolve("${kind.path}-$id-$PRESENTATION_VERSION.mp4")
 
-    private fun cleanupExpired() {
+    internal fun cleanupExpired(now: Instant = Instant.now()) {
         val directory = Path.of(properties.replay.cacheDirectory)
         if (!Files.isDirectory(directory)) return
-        val cutoff = Instant.now().minus(Duration.ofHours(properties.replay.retentionHours.coerceAtLeast(1)))
         Files.list(directory).use { files ->
-            files.filter { Files.isRegularFile(it) && Files.getLastModifiedTime(it).toInstant().isBefore(cutoff) }
+            files.filter { path ->
+                if (!Files.isRegularFile(path)) return@filter false
+                val retentionHours = when {
+                    path.fileName.toString().startsWith("${ReplayKind.WEEKLY.path}-") ->
+                        properties.replay.weeklyRetentionHours.coerceAtLeast(MIN_WEEKLY_RETENTION_HOURS)
+                    else -> properties.replay.retentionHours.coerceAtLeast(1)
+                }
+                Files.getLastModifiedTime(path).toInstant().isBefore(now.minus(Duration.ofHours(retentionHours)))
+            }
                 .forEach { runCatching { Files.deleteIfExists(it) } }
         }
     }
 
     companion object {
         private const val MAX_TELEGRAM_URL_BYTES = 19_000_000L
+        internal const val MIN_WEEKLY_RETENTION_HOURS = 168L
         internal const val PRESENTATION_VERSION = "v2"
     }
 }

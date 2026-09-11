@@ -1,11 +1,13 @@
 package com.tggames.frontline.campaign
 
 import com.tggames.frontline.i18n.GameI18n
+import com.tggames.frontline.replay.ReplayArtifact
 import com.tggames.frontline.replay.ReplayService
 import com.tggames.frontline.telegram.TelegramClient
 import com.tggames.frontline.telegram.TelegramDeliveryException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import java.util.UUID
 
 @Component
 class CampaignWorker(
@@ -19,22 +21,25 @@ class CampaignWorker(
         val resolved = campaigns.resolveDueCampaigns()
         if (resolved > 0) logger.info("Resolved {} due weekly campaign(s)", resolved)
 
+        val preparedReplays = mutableMapOf<UUID, ReplayArtifact>()
         var lastNotificationId = 0L
         while (true) {
             val notification = campaigns.nextPendingNotification(lastNotificationId) ?: break
             lastNotificationId = notification.id
-            deliver(notification)
+            deliver(notification, preparedReplays)
         }
     }
 
-    private fun deliver(notification: PendingCampaignNotification) {
+    private fun deliver(notification: PendingCampaignNotification, preparedReplays: MutableMap<UUID, ReplayArtifact>) {
         try {
             if (!notification.messageSent) {
                 telegram.sendMessage(notification.playerTelegramId, notification.message)
                 campaigns.markNotificationMessageSent(notification.id)
             }
             if (!notification.mediaSent) {
-                val replay = replays.prepareWeekly(notification.allianceCode, notification.matchupId)
+                val replay = preparedReplays.getOrPut(notification.matchupId) {
+                    replays.prepareWeekly(notification.allianceCode, notification.matchupId)
+                }
                 telegram.sendAnimation(
                     notification.playerTelegramId,
                     replay.url,

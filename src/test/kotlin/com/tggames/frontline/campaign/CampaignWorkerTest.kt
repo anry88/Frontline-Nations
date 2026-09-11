@@ -63,12 +63,36 @@ class CampaignWorkerTest {
         verify(campaigns, never()).markNotificationFailed(anyLong(), org.mockito.ArgumentMatchers.anyString())
     }
 
-    private fun notification(id: Long) = PendingCampaignNotification(
+    @Test
+    fun `prepares one shared replay for every recipient of a matchup`() {
+        val matchupId = UUID.randomUUID()
+        val first = notification(21, playerTelegramId = 101, matchupId = matchupId, allianceCode = "RS")
+        val second = notification(22, playerTelegramId = 202, matchupId = matchupId, allianceCode = "DE")
+        val replay = ReplayArtifact("https://example.test/shared-weekly.mp4", 768, 768, 64)
+        `when`(campaigns.nextPendingNotification(0)).thenReturn(first)
+        `when`(campaigns.nextPendingNotification(21)).thenReturn(second)
+        `when`(campaigns.nextPendingNotification(22)).thenReturn(null)
+        `when`(replays.prepareWeekly(first.allianceCode, matchupId)).thenReturn(replay)
+
+        worker.resolveAndDeliver()
+
+        verify(replays).prepareWeekly(first.allianceCode, matchupId)
+        verify(replays, never()).prepareWeekly(second.allianceCode, matchupId)
+        verify(telegram).sendAnimation(101, replay.url, GameI18n.t(first.language, "weekly_replay_caption"), 768, 768, 64, null)
+        verify(telegram).sendAnimation(202, replay.url, GameI18n.t(second.language, "weekly_replay_caption"), 768, 768, 64, null)
+    }
+
+    private fun notification(
+        id: Long,
+        playerTelegramId: Long = 42,
+        matchupId: UUID = UUID.randomUUID(),
+        allianceCode: String = "RS",
+    ) = PendingCampaignNotification(
         id = id,
-        playerTelegramId = 42,
+        playerTelegramId = playerTelegramId,
         message = "Weekly result",
-        matchupId = UUID.randomUUID(),
-        allianceCode = "RS",
+        matchupId = matchupId,
+        allianceCode = allianceCode,
         language = GameLanguage.EN,
         messageSent = false,
         mediaSent = false,
