@@ -224,17 +224,23 @@ class InventoryService(
             .query { rs, _ -> ReservedUnit(rs.getObject("id", UUID::class.java), rs.getLong("player_telegram_id"), rs.getString("unit_code"), rs.getInt("level")) }
             .list()
         val lostIds = mutableSetOf<UUID>()
-        formations.groupBy { it.unitCode to it.level }.forEach { (key, rows) ->
-            val formation = rows.single()
+        formations.forEach { formation ->
+            val key = formation.unitCode to formation.level
             val perUnitPower = (formation.initialPower / formation.quantity.coerceAtLeast(1)).coerceAtLeast(1)
             val survivingCount = ((formation.remainingPower + perUnitPower - 1) / perUnitPower).toInt().coerceIn(0, formation.quantity)
             val casualtyCount = formation.quantity - survivingCount
-            val realTokens = reserved.filter { it.code == key.first && it.level == key.second }
+            val realTokens = reserved.filter {
+                it.playerId == formation.contributorPlayerId && it.code == key.first && it.level == key.second
+            }
                 .map { CasualtyToken(it.id.toString(), it.id) }
-            val npcCount = npcUnits.filter { it.code == key.first && it.level == key.second }.sumOf { it.quantity }
+            val npcCount = if (formation.contributorPlayerId == null) {
+                npcUnits.filter { it.code == key.first && it.level == key.second }.sumOf { it.quantity }
+            } else {
+                0
+            }
             val npcTokens = (0 until npcCount).map { CasualtyToken("npc:${key.first}:${key.second}:$it", null) }
             require(realTokens.size + npcTokens.size == formation.quantity) {
-                "Weekly formation ${key.first}/L${key.second} does not match reserved and NPC units"
+                "Weekly formation ${key.first}/L${key.second}/${formation.contributorPlayerId ?: "NPC"} does not match reserved and NPC units"
             }
             (realTokens + npcTokens).sortedBy { casualtyOrder(seed, key, it.key) }.take(casualtyCount)
                 .mapNotNullTo(lostIds) { it.ownedId }

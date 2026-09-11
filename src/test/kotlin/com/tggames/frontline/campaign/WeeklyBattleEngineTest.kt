@@ -15,8 +15,8 @@ class WeeklyBattleEngineTest {
 
     @Test
     fun `same weekly inputs produce the same battle and events`() {
-        val a = AllianceForce("RS", listOf(WeeklyUnitContribution("MBT", 2, 4)), 1, 1_200)
-        val b = AllianceForce("BR", listOf(WeeklyUnitContribution("ARTILLERY", 1, 3)), 1, 900)
+        val a = AllianceForce("RS", listOf(WeeklyUnitContribution("MBT", 2, 4, 101)), 1, 1_200)
+        val b = AllianceForce("BR", listOf(WeeklyUnitContribution("ARTILLERY", 1, 3, 202)), 1, 900)
 
         val first = engine.resolve("secret", "2026-W37", 0, map, a, b, balance)
         val second = engine.resolve("secret", "2026-W37", 0, map, a, b, balance)
@@ -27,6 +27,20 @@ class WeeklyBattleEngineTest {
         assertThat(first.scoreA).isEqualTo(first.objectiveScoreA + first.destroyedScoreA + first.survivorScoreA)
         assertThat(first.seedHash).hasSize(64)
         assertThat(first.winnerCode).isIn("RS", "BR")
+        assertThat(first.contributionPerformance.map { it.playerId }).containsExactly(101, 202)
+        assertThat(first.formations.mapNotNull { it.contributorPlayerId }).contains(101, 202)
+        first.contributionPerformance.forEach { performance ->
+            assertThat(performance.destroyedPower).isEqualTo(
+                first.events.filter {
+                    it.type == WeeklyEventType.FORMATION_DESTROYED && performance.playerId in it.contributorPlayerIds
+                }.sumOf { it.destroyedPower },
+            )
+            assertThat(performance.capturedObjectives).isEqualTo(
+                first.events.count {
+                    it.type == WeeklyEventType.OBJECTIVE_CAPTURED && performance.playerId in it.contributorPlayerIds
+                },
+            )
+        }
     }
 
     @Test

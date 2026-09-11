@@ -22,6 +22,7 @@ import com.tggames.frontline.inventory.InventoryService
 import com.tggames.frontline.inventory.OwnedUnit
 import com.tggames.frontline.progression.ForceTier
 import com.tggames.frontline.progression.ForceTierCatalog
+import com.tggames.frontline.progression.CommanderProgression
 import com.tggames.frontline.telegram.InlineKeyboardButton
 import com.tggames.frontline.telegram.InlineKeyboardMarkup
 import com.tggames.frontline.telegram.TelegramCallbackQuery
@@ -251,7 +252,7 @@ class GameService(
         } + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "other_operations"), "nav:battle")))
         telegram.sendPhoto(
             chatId,
-            properties.publicBaseUrl.trimEnd('/') + "/assets/maps/personal/${map.id}.png",
+            properties.publicBaseUrl.trimEnd('/') + "/assets/maps/personal/${map.id}.png?v=${map.version}",
             text,
             InlineKeyboardMarkup(buttons),
         )
@@ -341,7 +342,7 @@ class GameService(
         val objectiveId = parts[4]
         val tactic = Tactic.fromCode(parts[5]) ?: return staleSelection(chatId)
         val expectedGroup = parseGroupBinding(parts[6]) ?: return staleSelection(chatId)
-        val player = player(telegramId)
+        val player = player(telegramId, lock = true)
         val language = GameLanguage.fromStored(player.language)
         if (player.allianceCode == null || player.battleOfferVersion != expectedOfferVersion) return staleSelection(chatId)
         val operation = offersFor(telegramId, expectedOfferVersion).getOrNull(slot) ?: return staleSelection(chatId)
@@ -354,7 +355,7 @@ class GameService(
         if (map.playerEntries.none { it.id == entryId } || map.objectives.none { it.id == objectiveId }) return staleSelection(chatId)
         val plan = DeploymentPlan(entryId, objectiveId)
         val battleId = UUID.randomUUID()
-        val battle = battleEngine.resolve(
+        val baseBattle = battleEngine.resolve(
             properties.battleServerSalt,
             "$telegramId:${todayKey()}:$expectedOfferVersion:$slot",
             player.commanderLevel,
@@ -363,7 +364,22 @@ class GameService(
             group,
             plan,
         )
+        val economyBonus = campaigns.activeEconomyBonus(player.allianceCode)
+        val outcomeCredits = EconomyPolicy.applyPercent(baseBattle.outcomeCredits, economyBonus?.creditsPercent ?: 100)
+        val destructionCredits = EconomyPolicy.applyPercent(baseBattle.destructionCredits, economyBonus?.creditsPercent ?: 100)
+        val outcomeXp = EconomyPolicy.applyPercent(baseBattle.outcomeXp, economyBonus?.xpPercent ?: 100)
+        val destructionXp = EconomyPolicy.applyPercent(baseBattle.destructionXp, economyBonus?.xpPercent ?: 100)
+        val battle = baseBattle.copy(
+            outcomeCredits = outcomeCredits,
+            destructionCredits = destructionCredits,
+            outcomeXp = outcomeXp,
+            destructionXp = destructionXp,
+            credits = outcomeCredits + destructionCredits,
+            xp = outcomeXp + destructionXp,
+        )
         val spatial = requireNotNull(battle.spatial)
+        val xpAfter = player.xp + battle.xp
+        val levelAfter = CommanderProgression.levelForXp(xpAfter)
 
         val updated = jdbc.sql(
             """
@@ -372,8 +388,8 @@ class GameService(
                    xp = xp + :xp,
                    credits = credits + :credits,
                    materials = materials + :materials,
-                   commander_level = 1 + CAST((xp + :xp) / 1000 AS INTEGER),
-                   command_capacity = LEAST(1000, 10 + CAST((xp + :xp) / 1000 AS INTEGER)),
+                   commander_level = :commanderLevel,
+                   command_capacity = :commandCapacity,
                    victories = victories + CASE WHEN :victory THEN 1 ELSE 0 END,
                    defeats = defeats + CASE WHEN :victory THEN 0 ELSE 1 END,
                    current_streak = CASE WHEN :victory THEN current_streak + 1 ELSE 0 END,
@@ -384,6 +400,8 @@ class GameService(
         ).param("xp", battle.xp)
             .param("credits", battle.credits)
             .param("materials", battle.materials)
+            .param("commanderLevel", levelAfter)
+            .param("commandCapacity", ForceTierCatalog.capacityForLevel(levelAfter))
             .param("victory", battle.victory)
             .param("id", telegramId)
             .param("expectedOfferVersion", expectedOfferVersion)
@@ -404,12 +422,13 @@ class GameService(
                 enemy_entry, enemy_objective, enemy_tactic, end_reason,
                 map_snapshot_json, enemy_group_snapshot_json, spatial_events_json, objective_state_json,
                 force_tier_id, player_deployed_cp, enemy_deployed_cp,
-                player_units_survived, player_units_lost
+                player_units_survived, player_units_lost,
+                outcome_credits, destruction_credits, outcome_xp, destruction_xp, enemy_units_destroyed
             )
             VALUES (
                 :id, :playerId, :victory, :playerPower, :enemyPower,
                 :xp, :credits, 0, :materials,
-                :battleSeed, :commanderLevel, :seedHash, 6, :location, :biome, :difficulty,
+                :battleSeed, :commanderLevel, :seedHash, 7, :location, :biome, :difficulty,
                 :enemy, :tactic, :rounds, CAST(:events AS jsonb),
                 :groupId, CAST(:groupSnapshot AS jsonb), :groupVersion, :compositionPower, 0, 0,
                 :mapId, :mapVersion, :deploymentEntry, :primaryObjective,
@@ -417,7 +436,8 @@ class GameService(
                 CAST(:mapSnapshot AS jsonb), CAST(:enemyGroupSnapshot AS jsonb),
                 CAST(:spatialEvents AS jsonb), CAST(:objectiveState AS jsonb),
                 :forceTier, :playerDeployedCp, :enemyDeployedCp,
-                :playerUnitsSurvived, :playerUnitsLost
+                :playerUnitsSurvived, :playerUnitsLost,
+                :outcomeCredits, :destructionCredits, :outcomeXp, :destructionXp, :enemyUnitsDestroyed
             )
             """.trimIndent(),
         ).param("id", battleId)
@@ -459,6 +479,11 @@ class GameService(
             .param("enemyDeployedCp", battle.enemyDeployedCp)
             .param("playerUnitsSurvived", casualties.survived)
             .param("playerUnitsLost", casualties.lost)
+            .param("outcomeCredits", battle.outcomeCredits)
+            .param("destructionCredits", battle.destructionCredits)
+            .param("outcomeXp", battle.outcomeXp)
+            .param("destructionXp", battle.destructionXp)
+            .param("enemyUnitsDestroyed", battle.destroyedEnemyUnits)
             .update()
 
         recordWalletChange(telegramId, "XP", battle.xp.toLong(), "BATTLE_REWARD", battleId)
@@ -507,6 +532,10 @@ class GameService(
             }
             appendLine("+${battle.xp} XP")
             appendLine("+${battle.credits} Credits")
+            appendLine(GameI18n.t(language, "destruction_reward", battle.destroyedEnemyUnits, battle.destructionCredits, battle.destructionXp))
+            economyBonus?.let {
+                appendLine(GameI18n.t(language, "weekly_victory_bonus_applied"))
+            }
             appendLine("+${battle.materials} Materials")
             appendLine(GameI18n.t(language, "equipment_returned_lost", casualties.survived, casualties.lost))
             appendLine("${GameI18n.t(language, "streak")}: ${fresh.currentStreak}$levelUp")
@@ -774,7 +803,9 @@ class GameService(
             telegram.sendMessage(chatId, GameI18n.t(language, "daily_already_claimed", before.dailyRewardStreak), actionKeyboard(language))
             return
         }
-        val reward = DailyRewardPolicy.reward(before.dailyRewardStreak, before.dailyRewardLastClaim, today)
+        val baseReward = DailyRewardPolicy.reward(before.dailyRewardStreak, before.dailyRewardLastClaim, today)
+        val economyBonus = campaigns.activeEconomyBonus(before.allianceCode)
+        val reward = baseReward.copy(credits = EconomyPolicy.applyPercent(baseReward.credits, economyBonus?.creditsPercent ?: 100))
         val referenceId = UUID.nameUUIDFromBytes("daily:$telegramId:$today".toByteArray(StandardCharsets.UTF_8))
         jdbc.sql(
             """
@@ -793,8 +824,9 @@ class GameService(
             val digest = MessageDigest.getInstance("SHA-256").digest("${properties.battleServerSalt}:$telegramId:$today".toByteArray(StandardCharsets.UTF_8))
             inventory.grantDailyUnit(telegramId, unlocked[Math.floorMod(digest.take(4).fold(0) { acc, byte -> acc * 31 + byte }, unlocked.size)])
         } else null
-        val bonus = bonusUnit?.let { "\n${GameI18n.t(language, "daily_bonus_unit", unitLabel(it, language))}" }.orEmpty()
-        telegram.sendMessage(chatId, GameI18n.t(language, "daily_claimed", reward.credits, reward.streak) + bonus, actionKeyboard(language))
+        val bonusUnitText = bonusUnit?.let { "\n${GameI18n.t(language, "daily_bonus_unit", unitLabel(it, language))}" }.orEmpty()
+        val economyBonusText = economyBonus?.let { "\n${GameI18n.t(language, "weekly_victory_bonus_applied")}" }.orEmpty()
+        telegram.sendMessage(chatId, GameI18n.t(language, "daily_claimed", reward.credits, reward.streak) + bonusUnitText + economyBonusText, actionKeyboard(language))
     }
 
     private fun contribute(telegramId: Long, firstName: String, chatId: Long) {
@@ -819,7 +851,13 @@ class GameService(
         val alliance = p.allianceCode?.let { AllianceCatalog.option(it, language).label } ?: GameI18n.t(language, "not_selected")
         val battles = p.victories + p.defeats
         val winRate = if (battles == 0) 0 else p.victories * 100 / battles
-        val levelProgress = "${p.xp % 1000}/1000 XP"
+        val progress = CommanderProgression.progress(p.xp)
+        val levelProgress = "${progress.earnedInLevel}/${progress.requiredForNextLevel} XP"
+        val economyBonus = campaigns.activeEconomyBonus(p.allianceCode)
+        val economyBonusText = economyBonus?.let {
+            val endDate = it.endsAt.atZone(ZoneId.of(properties.gameTimezone)).toLocalDate()
+            "\n${GameI18n.t(language, "weekly_victory_bonus_profile", endDate)}"
+        }.orEmpty()
         return """
             🪖 ${GameI18n.t(language, "commander")} ${p.displayName}
 
@@ -831,7 +869,7 @@ class GameService(
             Credits: ${p.credits}
             Materials: ${p.materials}
             ${GameI18n.t(language, "command_capacity")}: ${p.commandCapacity} CP
-            ${GameI18n.t(language, "daily_reward_streak")}: ${p.dailyRewardStreak}/100
+            ${GameI18n.t(language, "daily_reward_streak")}: ${p.dailyRewardStreak}/100$economyBonusText
         """.trimIndent()
     }
 

@@ -8,6 +8,8 @@ import com.tggames.frontline.game.AllianceCatalog
 import com.tggames.frontline.i18n.GameI18n
 import com.tggames.frontline.i18n.GameLanguage
 import com.tggames.frontline.inventory.InventoryService
+import com.tggames.frontline.progression.CommanderProgression
+import com.tggames.frontline.progression.ForceTierCatalog
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -26,6 +28,12 @@ data class PendingCampaignNotification(
     val id: Long,
     val playerTelegramId: Long,
     val message: String,
+)
+
+data class ActiveEconomyBonus(
+    val creditsPercent: Int,
+    val xpPercent: Int,
+    val endsAt: Instant,
 )
 
 @Service
@@ -131,9 +139,9 @@ class CampaignService(
     fun frontMapPath(allianceCode: String?): String? {
         if (allianceCode == null) return null
         val period = ensureCurrentWeek()
-        val mapId = jdbc.sql(
+        val map = jdbc.sql(
             """
-            SELECT COALESCE(map_id, battlefield)
+            SELECT COALESCE(map_id, battlefield) AS map_id, COALESCE(map_version, 1) AS map_version
               FROM campaign_matchups
              WHERE week_key = :week AND (alliance_a = :alliance OR alliance_b = :alliance)
              ORDER BY pair_index
@@ -141,10 +149,26 @@ class CampaignService(
             """.trimIndent(),
         ).param("week", period.weekKey)
             .param("alliance", allianceCode)
-            .query(String::class.java)
+            .query { rs, _ -> rs.getString("map_id") to rs.getInt("map_version") }
             .optional()
             .orElse(null)
-        return mapId?.takeIf { mapCatalog.find(it) != null }?.let { "/assets/maps/weekly/$it.png" }
+        return map?.takeIf { mapCatalog.find(it.first) != null }
+            ?.let { "/assets/maps/weekly/${it.first}.png?v=${it.second}" }
+    }
+
+    fun activeEconomyBonus(allianceCode: String?): ActiveEconomyBonus? {
+        if (allianceCode == null) return null
+        return jdbc.sql(
+            """
+            SELECT credits_percent, xp_percent, ends_at
+              FROM alliance_economy_bonuses
+             WHERE alliance_code = :alliance AND starts_at <= :now AND ends_at > :now
+            """.trimIndent(),
+        ).param("alliance", allianceCode)
+            .param("now", Timestamp.from(clock.instant()))
+            .query { rs, _ ->
+                ActiveEconomyBonus(rs.getInt("credits_percent"), rs.getInt("xp_percent"), rs.getTimestamp("ends_at").toInstant())
+            }.optional().orElse(null)
     }
 
     @Transactional
@@ -313,10 +337,11 @@ class CampaignService(
                        winner_code = :winner,
                        battle_seed = :seed,
                        seed_hash = :seedHash,
-                       engine_version = 3,
+                       engine_version = 4,
                        events_json = CAST(:events AS jsonb),
                        formations_json = CAST(:formations AS jsonb),
                        objective_state_json = CAST(:objectives AS jsonb),
+                       contribution_performance_json = CAST(:contributionPerformance AS jsonb),
                        npc_snapshot_a = CAST(:npcAUnits AS jsonb),
                        npc_snapshot_b = CAST(:npcBUnits AS jsonb),
                        resolved_at = CURRENT_TIMESTAMP
@@ -350,6 +375,7 @@ class CampaignService(
                 .param("events", objectMapper.writeValueAsString(result.events))
                 .param("formations", objectMapper.writeValueAsString(result.formations))
                 .param("objectives", objectMapper.writeValueAsString(result.objectives))
+                .param("contributionPerformance", objectMapper.writeValueAsString(result.contributionPerformance))
                 .param("npcAUnits", objectMapper.writeValueAsString(result.npcUnitsA))
                 .param("npcBUnits", objectMapper.writeValueAsString(result.npcUnitsB))
                 .param("id", matchup.id)
@@ -370,6 +396,7 @@ class CampaignService(
                     .param("week", weekKey).param("player", playerId).update()
             }
             issueRewardsAndNotifications(weekKey, matchup, result)
+            activateWinnerBonus(weekKey, result.winnerCode, matchup.allianceA, matchup.allianceB)
         }
         jdbc.sql(
             "UPDATE campaign_weeks SET status = 'RESOLVED', resolved_at = CURRENT_TIMESTAMP WHERE week_key = :week AND status = 'OPEN'",
@@ -423,8 +450,15 @@ class CampaignService(
                     rs.getInt("units_survived"), rs.getInt("units_lost"),
                 )
             }.list()
+        val performanceByPlayer = result.contributionPerformance.associateBy { it.playerId }
         val rewardsByPlayer = participants.associate { participant ->
-            participant.playerId to issueReward(weekKey, matchup.id, participant, result.winnerCode)
+            participant.playerId to issueReward(
+                weekKey,
+                matchup.id,
+                participant,
+                result.winnerCode,
+                performanceByPlayer[participant.playerId],
+            )
         }
         val players = jdbc.sql(
             "SELECT telegram_id, alliance_code, language FROM players WHERE alliance_code IN (:allianceA, :allianceB)",
@@ -452,26 +486,38 @@ class CampaignService(
         matchupId: UUID,
         participant: CampaignParticipant,
         winnerCode: String,
+        performance: WeeklyContributionPerformance?,
     ): CampaignReward {
         val won = participant.allianceCode == winnerCode
         val config = properties.campaign
+        val breakdown = WeeklyRewardPolicy.calculate(won, performance, config)
         val reward = CampaignReward(
             id = UUID.nameUUIDFromBytes("$weekKey:${participant.playerId}:reward".toByteArray(StandardCharsets.UTF_8)),
-            xp = if (won) config.winnerXp else config.loserXp,
-            credits = if (won) config.winnerCredits else config.loserCredits,
-            materials = if (won) config.winnerMaterials else config.loserMaterials,
+            xp = breakdown.xp,
+            credits = breakdown.credits,
+            materials = breakdown.materials,
             survived = participant.survived,
             lost = participant.lost,
+            destroyedPower = breakdown.destroyedPower,
+            capturedObjectives = breakdown.capturedObjectives,
+            destructionCredits = breakdown.destructionCredits,
+            captureCredits = breakdown.captureCredits,
+            destructionXp = breakdown.destructionXp,
+            captureXp = breakdown.captureXp,
         )
         val inserted = jdbc.sql(
             """
             INSERT INTO campaign_rewards(
                 id, week_key, matchup_id, player_telegram_id, alliance_code, victory,
-                contributed_power, xp_reward, credits_reward, research_reward, materials_reward
+                contributed_power, xp_reward, credits_reward, research_reward, materials_reward,
+                destroyed_power, captured_objectives, destruction_credits, capture_credits,
+                destruction_xp, capture_xp
             )
             VALUES (
                 :id, :week, :matchupId, :playerId, :alliance, :victory,
-                :power, :xp, :credits, 0, :materials
+                :power, :xp, :credits, 0, :materials,
+                :destroyedPower, :capturedObjectives, :destructionCredits, :captureCredits,
+                :destructionXp, :captureXp
             )
             ON CONFLICT (week_key, player_telegram_id) DO NOTHING
             """.trimIndent(),
@@ -485,23 +531,35 @@ class CampaignService(
             .param("xp", reward.xp)
             .param("credits", reward.credits)
             .param("materials", reward.materials)
+            .param("destroyedPower", reward.destroyedPower)
+            .param("capturedObjectives", reward.capturedObjectives)
+            .param("destructionCredits", reward.destructionCredits)
+            .param("captureCredits", reward.captureCredits)
+            .param("destructionXp", reward.destructionXp)
+            .param("captureXp", reward.captureXp)
             .update()
         if (inserted == 0) return reward
 
+        val xpBefore = jdbc.sql("SELECT xp FROM players WHERE telegram_id = :playerId FOR UPDATE")
+            .param("playerId", participant.playerId).query(Long::class.java).single()
+        val xpAfter = xpBefore + reward.xp
+        val levelAfter = CommanderProgression.levelForXp(xpAfter)
         jdbc.sql(
             """
             UPDATE players
                    SET xp = xp + :xp,
                    credits = credits + :credits,
                    materials = materials + :materials,
-                   commander_level = 1 + CAST((xp + :xp) / 1000 AS INTEGER),
-                   command_capacity = LEAST(1000, 10 + CAST((xp + :xp) / 1000 AS INTEGER)),
+                   commander_level = :commanderLevel,
+                   command_capacity = :commandCapacity,
                    updated_at = CURRENT_TIMESTAMP
              WHERE telegram_id = :playerId
             """.trimIndent(),
         ).param("xp", reward.xp)
             .param("credits", reward.credits)
             .param("materials", reward.materials)
+            .param("commanderLevel", levelAfter)
+            .param("commandCapacity", ForceTierCatalog.capacityForLevel(levelAfter))
             .param("playerId", participant.playerId)
             .update()
         listOf(
@@ -523,24 +581,63 @@ class CampaignService(
         return reward
     }
 
+    private fun activateWinnerBonus(weekKey: String, allianceCode: String, allianceA: String, allianceB: String) {
+        val startsAt = jdbc.sql("SELECT scheduled_at FROM campaign_weeks WHERE week_key = :week")
+            .param("week", weekKey).query { rs, _ -> rs.getTimestamp("scheduled_at").toInstant() }.single()
+        val endsAt = startsAt.plus(Duration.ofDays(properties.campaign.victoryBonusDays))
+        jdbc.sql("DELETE FROM alliance_economy_bonuses WHERE alliance_code IN (:allianceA, :allianceB)")
+            .param("allianceA", allianceA).param("allianceB", allianceB).update()
+        jdbc.sql(
+            """
+            INSERT INTO alliance_economy_bonuses(
+                alliance_code, source_week_key, starts_at, ends_at, credits_percent, xp_percent
+            ) VALUES (
+                :alliance, :week, :startsAt, :endsAt, :creditsPercent, :xpPercent
+            )
+            ON CONFLICT (alliance_code) DO UPDATE
+               SET source_week_key = EXCLUDED.source_week_key,
+                   starts_at = EXCLUDED.starts_at,
+                   ends_at = EXCLUDED.ends_at,
+                   credits_percent = EXCLUDED.credits_percent,
+                   xp_percent = EXCLUDED.xp_percent,
+                   updated_at = CURRENT_TIMESTAMP
+            """.trimIndent(),
+        ).param("alliance", allianceCode)
+            .param("week", weekKey)
+            .param("startsAt", Timestamp.from(startsAt))
+            .param("endsAt", Timestamp.from(endsAt))
+            .param("creditsPercent", properties.campaign.victoryBonusPercent)
+            .param("xpPercent", properties.campaign.victoryBonusPercent)
+            .update()
+    }
+
     private fun force(weekKey: String, allianceCode: String): AllianceForce = jdbc.sql(
         """
-        SELECT power, group_snapshot_json
+        SELECT player_telegram_id, power, group_snapshot_json
           FROM campaign_contributions
          WHERE week_key = :week AND alliance_code = :alliance
            AND contribution_type = 'EQUIPMENT_SNAPSHOT' AND voided_at IS NULL
         """.trimIndent(),
     ).param("week", weekKey)
         .param("alliance", allianceCode)
-        .query { rs, _ -> rs.getLong("power") to rs.getString("group_snapshot_json") }
+        .query { rs, _ ->
+            ContributionSnapshotRow(
+                rs.getLong("player_telegram_id"),
+                rs.getLong("power"),
+                rs.getString("group_snapshot_json"),
+            )
+        }
         .list()
         .let { rows ->
-            val snapshots = rows.map { objectMapper.readValue(it.second, CombatGroupSnapshot::class.java) }
             AllianceForce(
                 allianceCode,
-                snapshots.flatMap { snapshot -> snapshot.units.map { WeeklyUnitContribution(it.code, it.level, it.quantity) } },
-                snapshots.size,
-                rows.sumOf { it.first },
+                rows.flatMap { row ->
+                    objectMapper.readValue(row.snapshotJson, CombatGroupSnapshot::class.java).units.map {
+                        WeeklyUnitContribution(it.code, it.level, it.quantity, row.playerId)
+                    }
+                },
+                rows.size,
+                rows.sumOf { it.power },
             )
         }
 
@@ -663,7 +760,20 @@ class CampaignService(
             appendLine(campaignText(language, "Contribution reward:", "Награда за вклад:"))
             appendLine("+${reward.xp} XP · +${reward.credits} Credits")
             appendLine("+${reward.materials} Materials")
+            if (reward.destroyedPower > 0 || reward.capturedObjectives > 0) {
+                appendLine(
+                    campaignText(
+                        language,
+                        "Personal action: ${reward.destroyedPower} enemy power destroyed, ${reward.capturedObjectives} objectives captured (+${reward.destructionCredits + reward.captureCredits} Credits, +${reward.destructionXp + reward.captureXp} XP)",
+                        "Личный вклад: уничтожено ${reward.destroyedPower} силы противника, захвачено объектов: ${reward.capturedObjectives} (+${reward.destructionCredits + reward.captureCredits} Credits, +${reward.destructionXp + reward.captureXp} XP)",
+                    ),
+                )
+            }
             append(campaignText(language, "Equipment returned/lost: ${reward.survived}/${reward.lost}", "Техника вернулась/потеряна: ${reward.survived}/${reward.lost}"))
+            if (won) {
+                appendLine()
+                append(campaignText(language, "Victory bonus active for 7 days: ×1.2 Credits and XP.", "Бонус победителя на 7 дней: ×1,2 Credits и XP."))
+            }
         } else {
             appendLine()
             append(campaignText(language, "Rewards go to commanders who contributed before the lock.", "Награда выдаётся командирам, внесшим вклад до блокировки."))
@@ -759,6 +869,12 @@ private data class CampaignParticipant(
     val lost: Int,
 )
 
+private data class ContributionSnapshotRow(
+    val playerId: Long,
+    val power: Long,
+    val snapshotJson: String,
+)
+
 private data class CampaignReward(
     val id: UUID,
     val xp: Int,
@@ -766,4 +882,10 @@ private data class CampaignReward(
     val materials: Int,
     val survived: Int,
     val lost: Int,
+    val destroyedPower: Long,
+    val capturedObjectives: Int,
+    val destructionCredits: Int,
+    val captureCredits: Int,
+    val destructionXp: Int,
+    val captureXp: Int,
 )

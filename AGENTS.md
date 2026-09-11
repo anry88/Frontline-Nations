@@ -39,6 +39,8 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/main/resources/db/migration/V2__battle_choices_and_progression.sql`: battle metadata, research currency, and commander statistics.
 - `src/main/resources/db/migration/V3__weekly_campaign_battles.sql`: campaign weeks, matchups, results, rewards, and notification outbox.
 - `src/main/resources/db/migration/V10__destructive_equipment_and_daily_rewards.sql`: daily reward streaks, offer nonces, level-derived capacity migration, equipment reservation, and destruction audit state.
+- `src/main/resources/db/migration/V11__progressive_levels_and_campaign_economy.sql`: compact Credits rebase, progressive XP levels, contributor reward audit, and weekly country bonuses.
+- `src/main/kotlin/com/tggames/frontline/progression/CommanderProgression.kt`: authoritative cumulative XP curve and current-level progress.
 - `src/main/resources/db/migration/V4__player_locale_and_nickname.sql`: player locale, Telegram locale hint, nickname, and pending confirmation.
 - `src/main/kotlin/com/tggames/frontline/campaign/`: weekly schedule, pairing, aggregate battle, reward, and notification logic.
 - `src/main/kotlin/com/tggames/frontline/catalog/`: data-driven personal equipment definitions and balance validation.
@@ -53,7 +55,7 @@ If executable behavior intentionally departs from the specification, record the 
 - `scripts/render-battle-map-assets.py`: deterministic full-bleed tile normalization, terrain-transition, connected-road, unique edge-marker, objective-placement, blocked-rim, and upright square-image pipeline.
 - `src/main/resources/db/migration/V6__spatial_personal_battles.sql`: map/route/opponent snapshots, spatial events, final objective state, and end reason.
 - `src/main/kotlin/com/tggames/frontline/progression/`: command-capacity expansion and force-tier rules.
-- `src/main/resources/catalog/force-tiers.json`: level gates, capacity ceilings, costs, and reward multipliers through 1,000 CP.
+- `src/main/resources/catalog/force-tiers.json`: deployed-CP category boundaries and reward multipliers through 1,000 CP.
 - `src/main/resources/db/migration/V7__command_capacity_and_force_tiers.sql`: persisted capacity, upgrade audit, larger presets, and battle-tier metadata.
 - `src/main/resources/db/migration/V8__ranked_spatial_weekly_battles.sql`: weekly map/result snapshots, cumulative alliance ratings, and v2 pairing reset.
 - `src/main/resources/db/migration/V9__larger_graphical_battle_maps.sql`: larger open weekly snapshots and the 96-turn boundary.

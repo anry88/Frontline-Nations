@@ -15,8 +15,19 @@ import javax.crypto.spec.SecretKeySpec
 import kotlin.math.max
 import kotlin.random.Random
 
-data class WeeklyUnitContribution(val code: String, val level: Int, val quantity: Int)
+data class WeeklyUnitContribution(
+    val code: String,
+    val level: Int,
+    val quantity: Int,
+    val contributorPlayerId: Long? = null,
+)
 data class AllianceForce(val code: String, val units: List<WeeklyUnitContribution>, val contributors: Int, val contributedPower: Long)
+
+data class WeeklyContributionPerformance(
+    val playerId: Long,
+    val destroyedPower: Long,
+    val capturedObjectives: Int,
+)
 
 data class WeeklyBalance(
     val maxTicks: Int = 96,
@@ -44,6 +55,8 @@ data class WeeklyBattleEvent(
     val objectiveId: String? = null,
     val formationType: WeeklyFormationType? = null,
     val awardedPoints: Long = 0,
+    val contributorPlayerIds: List<Long> = emptyList(),
+    val destroyedPower: Long = 0,
 )
 
 data class WeeklyFormationResult(
@@ -56,6 +69,7 @@ data class WeeklyFormationResult(
     val weaponRange: Int,
     val initialPower: Long,
     val remainingPower: Long,
+    val contributorPlayerId: Long? = null,
 )
 data class WeeklyObjectiveResult(val id: String, val owner: WeeklySide?, val retainedPoints: Long, val capturedAtTick: Int?)
 
@@ -87,6 +101,7 @@ data class WeeklyBattleResult(
     val events: List<WeeklyBattleEvent>,
     val npcUnitsA: List<WeeklyUnitContribution>,
     val npcUnitsB: List<WeeklyUnitContribution>,
+    val contributionPerformance: List<WeeklyContributionPerformance> = emptyList(),
 )
 
 @Component
@@ -132,6 +147,18 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         val scoreA = objectiveA + destroyedA + survivorA
         val scoreB = objectiveB + destroyedB + survivorB
         val winnerSide = winner(endReason, remainingA, remainingB, objectiveA, objectiveB, scoreA, scoreB, random)
+        val contributorIds = (forceA.units + forceB.units).mapNotNull { it.contributorPlayerId }.distinct().sorted()
+        val contributionPerformance = contributorIds.map { playerId ->
+            WeeklyContributionPerformance(
+                playerId = playerId,
+                destroyedPower = events.filter {
+                    it.type == WeeklyEventType.FORMATION_DESTROYED && playerId in it.contributorPlayerIds
+                }.sumOf { it.destroyedPower },
+                capturedObjectives = events.count {
+                    it.type == WeeklyEventType.OBJECTIVE_CAPTURED && playerId in it.contributorPlayerIds
+                },
+            )
+        }
 
         return WeeklyBattleResult(
             allianceA = forceA.code, allianceB = forceB.code, map = map,
@@ -144,6 +171,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
             seedHash = MessageDigest.getInstance("SHA-256").digest(ByteBuffer.allocate(Long.SIZE_BYTES).putLong(seed).array()).toHex(),
             formations = formations.map { it.result() }, objectives = objectives.values.map { it.result() }, events = events,
             npcUnitsA = npcA.units, npcUnitsB = npcB.units,
+            contributionPerformance = contributionPerformance,
         )
     }
 
@@ -151,14 +179,17 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         max(balance.objectiveMinPoints, balance.objectiveBasePoints - tick * balance.objectiveDecayPerTick).toLong()
 
     private fun deploy(side: WeeklySide, units: List<WeeklyUnitContribution>, entries: List<HexCoord>): List<FormationState> =
-        units.groupBy { it.code to it.level }.entries.sortedWith(compareBy({ it.key.first }, { it.key.second })).mapIndexed { index, (key, members) ->
-            val (code, level) = key
+        units.groupBy { Triple(it.contributorPlayerId, it.code, it.level) }.entries
+            .sortedWith(compareBy({ it.key.first ?: Long.MIN_VALUE }, { it.key.second }, { it.key.third }))
+            .mapIndexed { index, (key, members) ->
+            val (contributorPlayerId, code, level) = key
             val definition = equipment.require(code)
             val quantity = members.sumOf { it.quantity }
-            val unit = WeeklyUnitContribution(code, level, quantity)
+            val unit = WeeklyUnitContribution(code, level, quantity, contributorPlayerId)
             val power = unitPower(unit)
             FormationState(
                 side = side,
+                contributorPlayerId = contributorPlayerId,
                 type = formationType(code),
                 unitCode = code,
                 level = level,
@@ -221,7 +252,14 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
             val damage = max(1L, base * random.nextInt(85, 116) / 100 * max(3, 10 - protection) / 10)
             val before = target.power
             target.power = (target.power - damage).coerceAtLeast(0)
-            if (before > 0 && target.power == 0L) events += WeeklyBattleEvent(tick = tick, type = WeeklyEventType.FORMATION_DESTROYED, side = side, formationType = target.type)
+            if (before > 0 && target.power == 0L) events += WeeklyBattleEvent(
+                tick = tick,
+                type = WeeklyEventType.FORMATION_DESTROYED,
+                side = side,
+                formationType = target.type,
+                contributorPlayerIds = listOfNotNull(shooter.contributorPlayerId),
+                destroyedPower = target.initialPower,
+            )
         }
     }
 
@@ -239,9 +277,10 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
 
     private fun capture(formations: List<FormationState>, objectives: Collection<ObjectiveState>, tick: Int, balance: WeeklyBalance, events: MutableList<WeeklyBattleEvent>) {
         objectives.forEach { objective ->
-            val occupiers = formations.filter { it.power > 0 && it.type != WeeklyFormationType.AIR && it.position == objective.position }.map { it.side }.distinct()
-            if (occupiers.size != 1) { objective.progressSide = null; objective.progress = 0; return@forEach }
-            val side = occupiers.single()
+            val occupiers = formations.filter { it.power > 0 && it.type != WeeklyFormationType.AIR && it.position == objective.position }
+            val occupyingSides = occupiers.map { it.side }.distinct()
+            if (occupyingSides.size != 1) { objective.progressSide = null; objective.progress = 0; return@forEach }
+            val side = occupyingSides.single()
             if (objective.owner == side) return@forEach
             if (objective.progressSide != side) { objective.progressSide = side; objective.progress = 0 }
             objective.progress++
@@ -252,7 +291,14 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
                 objective.capturedAtTick = tick
                 objective.progressSide = null
                 objective.progress = 0
-                events += WeeklyBattleEvent(tick = tick, type = WeeklyEventType.OBJECTIVE_CAPTURED, side = side, objectiveId = objective.id, awardedPoints = objective.points)
+                events += WeeklyBattleEvent(
+                    tick = tick,
+                    type = WeeklyEventType.OBJECTIVE_CAPTURED,
+                    side = side,
+                    objectiveId = objective.id,
+                    awardedPoints = objective.points,
+                    contributorPlayerIds = occupiers.filter { it.side == side }.mapNotNull { it.contributorPlayerId }.distinct().sorted(),
+                )
             }
         }
     }
@@ -297,6 +343,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
 
 private data class FormationState(
     val side: WeeklySide,
+    val contributorPlayerId: Long?,
     val type: WeeklyFormationType,
     val unitCode: String,
     val level: Int,
@@ -311,7 +358,7 @@ private data class FormationState(
     val profile: MovementProfile,
     val fireMode: FireMode,
 ) {
-    fun result() = WeeklyFormationResult(side, type, unitCode, level, quantity, position, weaponRange, initialPower, power)
+    fun result() = WeeklyFormationResult(side, type, unitCode, level, quantity, position, weaponRange, initialPower, power, contributorPlayerId)
 }
 
 private data class NpcSquad(val cp: Int, val units: List<WeeklyUnitContribution>)

@@ -94,6 +94,11 @@ data class BattleResult(
     val forceTierId: String? = null,
     val playerDeployedCp: Int? = null,
     val enemyDeployedCp: Int? = null,
+    val outcomeCredits: Int = 0,
+    val destructionCredits: Int = 0,
+    val outcomeXp: Int = 0,
+    val destructionXp: Int = 0,
+    val destroyedEnemyUnits: Int = 0,
 )
 
 @Component
@@ -158,6 +163,17 @@ class BattleEngine(
         val victory = spatial.winner == BattleSide.PLAYER
         val forceTier = forceTiers.forDeployedCp(group.usedCp)
         val multiplier = operation.difficulty.rewardPercent * forceTier.rewardPercent / 100
+        val enemySnapshots = spatial.enemyGroup.units.associateBy { it.id }
+        val destroyedEnemyUnits = spatial.enemyUnits.sumOf { (it.quantity - it.remainingQuantity).coerceAtLeast(0) }
+        val destroyedEnemyCp = spatial.enemyUnits.sumOf { result ->
+            val snapshot = enemySnapshots.getValue(result.id)
+            val lost = (result.quantity - result.remainingQuantity).coerceAtLeast(0)
+            snapshot.cpCost * lost / snapshot.quantity.coerceAtLeast(1)
+        }
+        val outcomeCredits = reward(if (victory) 20 else 2, multiplier)
+        val destructionCredits = reward(destroyedEnemyCp, multiplier)
+        val outcomeXp = reward(if (victory) 120 else 40, multiplier)
+        val destructionXp = reward(destroyedEnemyCp * 10, multiplier)
         return BattleResult(
             victory = victory,
             playerPower = playerPower,
@@ -167,8 +183,8 @@ class BattleEngine(
             tacticBonus = 0,
             counterBonus = 0,
             terrainBonus = 0,
-            xp = reward(if (victory) 150 + random.nextInt(0, 51) else 70 + random.nextInt(0, 31), multiplier),
-            credits = reward(if (victory) 165 + random.nextInt(0, 61) else 75 + random.nextInt(0, 31), multiplier),
+            xp = outcomeXp + destructionXp,
+            credits = outcomeCredits + destructionCredits,
             materials = reward(if (victory) 9 + random.nextInt(0, 7) else 3 + random.nextInt(0, 4), multiplier),
             seed = seed,
             seedHash = MessageDigest.getInstance("SHA-256").digest(ByteBuffer.allocate(Long.SIZE_BYTES).putLong(seed).array()).toHex(),
@@ -177,6 +193,11 @@ class BattleEngine(
             forceTierId = forceTier.id,
             playerDeployedCp = group.usedCp,
             enemyDeployedCp = spatial.enemyGroup.usedCp,
+            outcomeCredits = outcomeCredits,
+            destructionCredits = destructionCredits,
+            outcomeXp = outcomeXp,
+            destructionXp = destructionXp,
+            destroyedEnemyUnits = destroyedEnemyUnits,
         )
     }
 

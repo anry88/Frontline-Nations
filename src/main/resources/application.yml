@@ -42,9 +42,15 @@ frontline:
     survivor-score-percent: ${CAMPAIGN_SURVIVOR_SCORE_PERCENT:50}
     npc-min-cp: ${CAMPAIGN_NPC_MIN_CP:10}
     npc-max-cp: ${CAMPAIGN_NPC_MAX_CP:25}
-    winner-xp: ${CAMPAIGN_WINNER_XP:300}
-    loser-xp: ${CAMPAIGN_LOSER_XP:180}
-    winner-credits: ${CAMPAIGN_WINNER_CREDITS:250}
-    loser-credits: ${CAMPAIGN_LOSER_CREDITS:140}
+    winner-xp: ${CAMPAIGN_WINNER_XP:600}
+    loser-xp: ${CAMPAIGN_LOSER_XP:250}
+    winner-credits: ${CAMPAIGN_WINNER_CREDITS:90}
+    loser-credits: ${CAMPAIGN_LOSER_CREDITS:30}
     winner-materials: ${CAMPAIGN_WINNER_MATERIALS:30}
     loser-materials: ${CAMPAIGN_LOSER_MATERIALS:16}
+    destroyed-credits-per100-power: ${CAMPAIGN_DESTROYED_CREDITS_PER100_POWER:1}
+    destroyed-xp-per100-power: ${CAMPAIGN_DESTROYED_XP_PER100_POWER:50}
+    capture-credits: ${CAMPAIGN_CAPTURE_CREDITS:5}
+    capture-xp: ${CAMPAIGN_CAPTURE_XP:100}
+    victory-bonus-percent: ${CAMPAIGN_VICTORY_BONUS_PERCENT:120}
+    victory-bonus-days: ${CAMPAIGN_VICTORY_BONUS_DAYS:7}

@@ -1,6 +1,6 @@
 # ADR 0010: Destructive equipment and daily economy
 
-Status: Accepted — 2026-09-11
+Status: Accepted — 2026-09-11; economy values partially superseded by ADR 0012
 
 ## Context
 
@@ -13,7 +13,7 @@ Combat Orders limited play without making equipment ownership meaningful. Resear
 - `/contribute` reserves the concrete owned-unit IDs in the active group until the current Sunday battle resolves. Reserved equipment cannot enter a personal battle or be upgraded. The player may refresh the contribution before lock, which atomically replaces the reservation.
 - Weekly formation losses are converted to whole-unit casualties by remaining formation power. A seed-derived stable ordering distributes those losses across NPC units and reserved player units. Surviving player units are released back to the hangar.
 - Research Points and `/development` are retired. Capacity is calculated as `min(1000, commander level + 9)` and changes in the same transaction as XP.
-- `/daily` grants a rounded 9,000 Credits on streak day 1, approximately three current starter-group purchase costs. Consecutive Belgrade calendar claims grow by integer interpolation to exactly 18,000 Credits on day 100. Missing a day resets the streak. Day 100 and subsequent uninterrupted claims also grant one deterministic random unit from the commander's unlocked catalog.
+- `/daily` originally granted 9,000–18,000 Credits. ADR 0012 redenominates those values to 90–180 without changing the intended purchasing power.
 - Existing open contributions created before concrete unit reservation are voided by migration and must be submitted again.
 
 ## Consequences

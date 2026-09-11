@@ -2,6 +2,7 @@ package com.tggames.frontline.battle
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.tggames.frontline.catalog.EquipmentCatalog
+import com.tggames.frontline.game.DailyRewardPolicy
 import com.tggames.frontline.progression.ForceTierCatalog
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -80,6 +81,10 @@ class BattleEngineTest {
         assertThat(result.enemyPower).isPositive()
         assertThat(result.xp).isPositive()
         assertThat(result.credits).isPositive()
+        assertThat(result.credits).isEqualTo(result.outcomeCredits + result.destructionCredits)
+        assertThat(result.xp).isEqualTo(result.outcomeXp + result.destructionXp)
+        assertThat(result.destructionCredits).isGreaterThanOrEqualTo(0)
+        assertThat(result.destroyedEnemyUnits).isGreaterThanOrEqualTo(0)
         assertThat(result.materials).isPositive()
         assertThat(result.seedHash).hasSize(64)
         assertThat(result.spatial).isNotNull
@@ -89,6 +94,23 @@ class BattleEngineTest {
         assertThat(result.forceTierId).isEqualTo("detachment")
         assertThat(result.playerDeployedCp).isEqualTo(10)
         assertThat(result.enemyDeployedCp).isBetween(10, 25)
+    }
+
+    @Test
+    fun `equal standard battles support five-fight daily economy`() {
+        val outcomes = (1..30).map {
+            engine.resolve("secret", "economy-$it", 1, operation, Tactic.MANEUVER, balancedGroup)
+        }
+        val victories = outcomes.filter { it.victory }
+        val averageReplacementCost = outcomes.map { result ->
+            requireNotNull(result.spatial).playerUnits.sumOf { unit ->
+                (unit.quantity - unit.remainingQuantity) * equipment.require(unit.code).buyCredits
+            }
+        }.average()
+        assertThat(victories).hasSizeGreaterThan(5)
+        assertThat(victories.map { it.credits }.average()).isBetween(25.0, 32.0)
+        assertThat(outcomes.map { it.credits }.average() + DailyRewardPolicy.BASE_CREDITS / 5.0)
+            .isGreaterThanOrEqualTo(averageReplacementCost)
     }
 
     private fun group(vararg units: UnitBattleSnapshot) = CombatGroupSnapshot(UUID.randomUUID(), 1, 10, units.toList())
