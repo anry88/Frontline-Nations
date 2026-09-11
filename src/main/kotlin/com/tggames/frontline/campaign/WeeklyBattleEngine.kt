@@ -1,7 +1,9 @@
 package com.tggames.frontline.campaign
 
 import com.tggames.frontline.battle.BattleMapDefinition
+import com.tggames.frontline.battle.DeploymentEntry
 import com.tggames.frontline.battle.HexCoord
+import com.tggames.frontline.battle.Tactic
 import com.tggames.frontline.catalog.MovementProfile
 import com.tggames.frontline.catalog.EquipmentCatalog
 import com.tggames.frontline.catalog.FireMode
@@ -20,6 +22,9 @@ data class WeeklyUnitContribution(
     val level: Int,
     val quantity: Int,
     val contributorPlayerId: Long? = null,
+    val sourceContributionId: Long? = null,
+    val entryId: String? = null,
+    val tactic: Tactic = Tactic.MANEUVER,
 )
 data class AllianceForce(val code: String, val units: List<WeeklyUnitContribution>, val contributors: Int, val contributedPower: Long)
 
@@ -79,6 +84,7 @@ data class WeeklyFormationResult(
     val contributorPlayerId: Long? = null,
     val id: String = "",
     val initialPosition: HexCoord? = null,
+    val sourceContributionId: Long? = null,
 )
 data class WeeklyObjectiveResult(val id: String, val owner: WeeklySide?, val retainedPoints: Long, val capturedAtTick: Int?)
 
@@ -126,7 +132,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         val unitsB = forceB.units + npcB.units
         val effectiveA = unitsA.sumOf(::unitPower)
         val effectiveB = unitsB.sumOf(::unitPower)
-        val formations = (deploy(WeeklySide.A, unitsA, map.playerEntries.map { it.position }) + deploy(WeeklySide.B, unitsB, map.enemyEntries.map { it.position })).toMutableList()
+        val formations = (deploy(WeeklySide.A, unitsA, map.playerEntries) + deploy(WeeklySide.B, unitsB, map.enemyEntries)).toMutableList()
         val objectives = map.objectives.associate { it.id to ObjectiveState(it.id, it.position, it.captureSteps) }.toMutableMap()
         val events = mutableListOf<WeeklyBattleEvent>()
         var completedTicks = 0
@@ -187,25 +193,29 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
     internal fun capturePoints(tick: Int, balance: WeeklyBalance): Long =
         max(balance.objectiveMinPoints, balance.objectiveBasePoints - tick * balance.objectiveDecayPerTick).toLong()
 
-    private fun deploy(side: WeeklySide, units: List<WeeklyUnitContribution>, entries: List<HexCoord>): List<FormationState> =
-        units.groupBy { Triple(it.contributorPlayerId, it.code, it.level) }.entries
-            .sortedWith(compareBy({ it.key.first ?: Long.MIN_VALUE }, { it.key.second }, { it.key.third }))
+    private fun deploy(side: WeeklySide, units: List<WeeklyUnitContribution>, entries: List<DeploymentEntry>): List<FormationState> =
+        units.groupBy { FormationKey(it.sourceContributionId, it.contributorPlayerId, it.code, it.level, it.entryId, it.tactic) }.entries
+            .sortedWith(compareBy({ it.key.contributorPlayerId ?: Long.MIN_VALUE }, { it.key.sourceContributionId ?: Long.MIN_VALUE }, { it.key.code }, { it.key.level }))
             .mapIndexed { index, (key, members) ->
-            val (contributorPlayerId, code, level) = key
+            val contributorPlayerId = key.contributorPlayerId
+            val code = key.code
+            val level = key.level
             val definition = equipment.require(code)
             val quantity = members.sumOf { it.quantity }
-            val unit = WeeklyUnitContribution(code, level, quantity, contributorPlayerId)
+            val unit = WeeklyUnitContribution(code, level, quantity, contributorPlayerId, key.sourceContributionId, key.entryId, key.tactic)
             val power = unitPower(unit)
+            val entry = entries.firstOrNull { it.id == key.entryId } ?: entries[index % entries.size]
             FormationState(
-                id = "${side.name.lowercase()}:$index:${contributorPlayerId ?: "npc"}:$code:$level",
+                id = "${side.name.lowercase()}:$index:${key.sourceContributionId ?: contributorPlayerId ?: "npc"}:$code:$level",
                 side = side,
                 contributorPlayerId = contributorPlayerId,
+                sourceContributionId = key.sourceContributionId,
                 type = formationType(code),
                 unitCode = code,
                 level = level,
                 quantity = quantity,
-                position = entries[index % entries.size],
-                initialPosition = entries[index % entries.size],
+                position = entry.position,
+                initialPosition = entry.position,
                 initialPower = power,
                 power = power,
                 movement = max(1, definition.spatial.movementPoints / 2),
@@ -214,6 +224,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
                 armor = definition.stats.scaled(level).armor,
                 profile = definition.spatial.movementProfile,
                 fireMode = definition.spatial.fireMode,
+                tactic = key.tactic,
             )
         }
 
@@ -254,10 +265,17 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         events: MutableList<WeeklyBattleEvent>,
     ) {
         formations.filter { it.power > 0 }.forEach { unit ->
+            if (unit.tactic == Tactic.DEFENSE && objectives.any { it.owner == unit.side && it.position == unit.position }) return@forEach
             val candidates = objectives.filter { it.owner != unit.side }.ifEmpty { objectives }
-            val goal = candidates.minWithOrNull(compareBy<ObjectiveState> { map.distanceBetween(unit.position, it.position) }.thenBy { it.id }) ?: return@forEach
+            val goal = when (unit.tactic) {
+                Tactic.ASSAULT -> candidates.minWithOrNull(compareBy<ObjectiveState> { map.distanceBetween(unit.position, it.position) }.thenBy { it.id })
+                Tactic.DEFENSE -> candidates.minWithOrNull(compareBy<ObjectiveState> { map.distanceBetween(unit.position, it.position) }.thenByDescending { it.captureSteps })
+                Tactic.AMBUSH -> candidates.maxWithOrNull(compareBy<ObjectiveState> { map.terrainAt(it.position).cover }.thenByDescending { -map.distanceBetween(unit.position, it.position) })
+                Tactic.MANEUVER -> candidates.minWithOrNull(compareBy<ObjectiveState> { routeCost(unit.position, it.position, unit.profile, map, Tactic.MANEUVER) }.thenBy { it.id })
+                Tactic.RECON -> candidates.minWithOrNull(compareBy<ObjectiveState> { map.distanceBetween(unit.position, it.position) }.thenBy { it.captureSteps })
+            } ?: return@forEach
             val from = unit.position
-            repeat(unit.movement) { shortestNextStep(unit.position, goal.position, unit.profile, map)?.let { unit.position = it } }
+            repeat(unit.movement) { shortestNextStep(unit.position, goal.position, unit.profile, map, unit.tactic)?.let { unit.position = it } }
             if (unit.position != from) {
                 events += WeeklyBattleEvent(
                     tick = tick,
@@ -275,8 +293,15 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
 
     private fun fire(side: WeeklySide, formations: List<FormationState>, map: BattleMapDefinition, random: Random, tick: Int, events: MutableList<WeeklyBattleEvent>) {
         formations.filter { it.side == side && it.power > 0 }.sortedBy { it.type.ordinal }.forEach { shooter ->
+            val targetComparator = when (shooter.tactic) {
+                Tactic.ASSAULT -> compareBy<FormationState> { it.power * 100 / it.initialPower.coerceAtLeast(1) }.thenBy { map.distanceBetween(shooter.position, it.position) }
+                Tactic.DEFENSE -> compareBy<FormationState> { map.distanceBetween(shooter.position, it.position) }.thenByDescending { it.power }
+                Tactic.AMBUSH -> compareByDescending<FormationState> { it.initialPower }.thenBy { map.distanceBetween(shooter.position, it.position) }
+                Tactic.MANEUVER -> compareBy<FormationState> { if (it.type in setOf(WeeklyFormationType.ARTILLERY, WeeklyFormationType.SUPPORT)) 0 else 1 }.thenBy { map.distanceBetween(shooter.position, it.position) }
+                Tactic.RECON -> compareBy<FormationState> { if (it.type == WeeklyFormationType.RECON) 0 else 1 }.thenBy { map.distanceBetween(shooter.position, it.position) }
+            }
             val target = formations.filter { it.side != side && it.power > 0 && canAttack(shooter, it, map) }
-                .minWithOrNull(compareBy<FormationState> { map.distanceBetween(shooter.position, it.position) }.thenByDescending { it.power }) ?: return@forEach
+                .minWithOrNull(targetComparator) ?: return@forEach
             val base = max(1L, shooter.power * shooter.attackPercent / 1000)
             val protection = map.terrainAt(target.position).cover + target.armor / 12
             val damage = max(1L, base * random.nextInt(85, 116) / 100 * max(3, 10 - protection) / 10)
@@ -359,7 +384,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         }
     }
 
-    private fun shortestNextStep(start: HexCoord, goal: HexCoord, profile: MovementProfile, map: BattleMapDefinition): HexCoord? {
+    private fun shortestNextStep(start: HexCoord, goal: HexCoord, profile: MovementProfile, map: BattleMapDefinition, tactic: Tactic): HexCoord? {
         if (start == goal) return null
         val queue = PriorityQueue(compareBy<Pair<HexCoord, Int>> { it.second }.thenBy { it.first.q }.thenBy { it.first.r })
         val costs = mutableMapOf(start to 0)
@@ -370,7 +395,13 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
             if (current == goal) break
             if (currentCost != costs[current]) continue
             map.neighbors(current).forEach { next ->
-                val step = map.terrainAt(next).movementCost(profile) ?: return@forEach
+                val terrain = map.terrainAt(next)
+                val baseStep = terrain.movementCost(profile) ?: return@forEach
+                val step = when (tactic) {
+                    Tactic.AMBUSH -> (baseStep - terrain.cover).coerceAtLeast(1)
+                    Tactic.MANEUVER -> baseStep + if (terrain.name == "ROAD") 0 else 1
+                    else -> baseStep
+                }
                 val candidate = currentCost + step
                 if (candidate < (costs[next] ?: Int.MAX_VALUE)) { costs[next] = candidate; previous[next] = current; queue += next to candidate }
             }
@@ -379,6 +410,18 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         var cursor = goal
         while (previous[cursor] != start) cursor = previous[cursor] ?: return null
         return cursor
+    }
+
+    private fun routeCost(start: HexCoord, goal: HexCoord, profile: MovementProfile, map: BattleMapDefinition, tactic: Tactic): Int {
+        var current = start
+        var cost = 0
+        repeat(map.width * map.height) {
+            val next = shortestNextStep(current, goal, profile, map, tactic) ?: return if (current == goal) cost else Int.MAX_VALUE
+            cost += map.terrainAt(next).movementCost(profile) ?: return Int.MAX_VALUE
+            current = next
+            if (current == goal) return cost
+        }
+        return Int.MAX_VALUE
     }
 
     private fun winner(reason: WeeklyEndReason, remainingA: Long, remainingB: Long, objectiveA: Long, objectiveB: Long, scoreA: Long, scoreB: Long, random: Random): WeeklySide {
@@ -401,6 +444,7 @@ private data class FormationState(
     val id: String,
     val side: WeeklySide,
     val contributorPlayerId: Long?,
+    val sourceContributionId: Long?,
     val type: WeeklyFormationType,
     val unitCode: String,
     val level: Int,
@@ -415,6 +459,7 @@ private data class FormationState(
     val armor: Int,
     val profile: MovementProfile,
     val fireMode: FireMode,
+    val tactic: Tactic,
 ) {
     fun result() = WeeklyFormationResult(
         side = side,
@@ -429,8 +474,18 @@ private data class FormationState(
         contributorPlayerId = contributorPlayerId,
         id = id,
         initialPosition = initialPosition,
+        sourceContributionId = sourceContributionId,
     )
 }
+
+private data class FormationKey(
+    val sourceContributionId: Long?,
+    val contributorPlayerId: Long?,
+    val code: String,
+    val level: Int,
+    val entryId: String?,
+    val tactic: Tactic,
+)
 
 private data class NpcSquad(val cp: Int, val units: List<WeeklyUnitContribution>)
 

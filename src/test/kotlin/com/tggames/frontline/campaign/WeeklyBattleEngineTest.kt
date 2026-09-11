@@ -2,6 +2,7 @@ package com.tggames.frontline.campaign
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.tggames.frontline.catalog.EquipmentCatalog
+import com.tggames.frontline.battle.Tactic
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
@@ -68,6 +69,28 @@ class WeeklyBattleEngineTest {
     fun `late capture is worth less but never below floor`() {
         assertThat(engine.capturePoints(1, balance)).isGreaterThan(engine.capturePoints(20, balance))
         assertThat(engine.capturePoints(10_000, balance)).isEqualTo(balance.objectiveMinPoints.toLong())
+    }
+
+    @Test
+    fun `each contributed preset keeps its selected entry and formation identity`() {
+        val firstEntry = map.playerEntries.first()
+        val lastEntry = map.playerEntries.last()
+        val forceA = AllianceForce(
+            "RS",
+            listOf(
+                WeeklyUnitContribution("MBT", 1, 1, 101, 501, firstEntry.id, Tactic.DEFENSE),
+                WeeklyUnitContribution("MBT", 1, 1, 101, 502, lastEntry.id, Tactic.ASSAULT),
+            ),
+            1,
+            600,
+        )
+        val result = engine.resolve("secret", "2026-W37", 7, map, forceA, AllianceForce("BR", emptyList(), 0, 0), balance)
+        val playerFormations = result.formations.filter { it.contributorPlayerId == 101L }
+
+        assertThat(playerFormations).hasSize(2)
+        assertThat(playerFormations.map { it.sourceContributionId }).containsExactlyInAnyOrder(501, 502)
+        assertThat(playerFormations.single { it.sourceContributionId == 501L }.initialPosition).isEqualTo(firstEntry.position)
+        assertThat(playerFormations.single { it.sourceContributionId == 502L }.initialPosition).isEqualTo(lastEntry.position)
     }
 
     @Test

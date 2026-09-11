@@ -44,6 +44,7 @@ data class Army(
 enum class EquipmentActionStatus { SUCCESS, LOCKED, RESERVED, NOT_FOUND, NO_AVAILABLE_UNIT, INSUFFICIENT_RESOURCES, MAX_LEVEL, GROUP_FULL, LAST_UNIT }
 
 data class EquipmentCasualties(val survived: Int, val lost: Int)
+data class WeeklyContributionCasualties(val contributionId: Long, val playerId: Long, val survived: Int, val lost: Int)
 
 data class EquipmentAction(
     val status: EquipmentActionStatus,
@@ -118,8 +119,9 @@ class InventoryService(
         return Army(player.first, player.second, groups, units)
     }
 
-    fun battleSnapshot(army: Army): CombatGroupSnapshot {
-        val group = army.activeGroup
+    fun battleSnapshot(army: Army): CombatGroupSnapshot = battleSnapshot(army, army.activeGroup)
+
+    fun battleSnapshot(army: Army, group: BattleGroup): CombatGroupSnapshot {
         return CombatGroupSnapshot(
             id = group.id,
             version = group.version,
@@ -184,18 +186,35 @@ class InventoryService(
     }
 
     @Transactional
-    fun reserveForWeeklyBattle(telegramId: Long, weekKey: String, unitIds: List<UUID>): Boolean {
+    fun reserveForWeeklyBattle(telegramId: Long, weekKey: String, unitIds: List<UUID>): Boolean =
+        replaceWeeklyReservation(telegramId, weekKey, emptyList(), unitIds)
+
+    @Transactional
+    fun replaceWeeklyReservation(telegramId: Long, weekKey: String, previousUnitIds: List<UUID>, unitIds: List<UUID>): Boolean {
         if (unitIds.isEmpty()) return false
+        val lockedIds = (previousUnitIds + unitIds).distinct()
         val rows = jdbc.sql(
             "SELECT id, reserved_week_key FROM player_units WHERE player_telegram_id = :player AND id IN (:ids) AND destroyed_at IS NULL FOR UPDATE",
-        ).param("player", telegramId).param("ids", unitIds)
+        ).param("player", telegramId).param("ids", lockedIds)
             .query { rs, _ -> rs.getObject("id", UUID::class.java) to rs.getString("reserved_week_key") }.list()
-        if (rows.size != unitIds.distinct().size || rows.any { it.second != null && it.second != weekKey }) return false
-        jdbc.sql("UPDATE player_units SET reserved_week_key = NULL, updated_at = CURRENT_TIMESTAMP WHERE player_telegram_id = :player AND reserved_week_key = :week")
-            .param("player", telegramId).param("week", weekKey).update()
+        val rowsById = rows.toMap()
+        if (unitIds.distinct().any { it !in rowsById }) return false
+        if (unitIds.distinct().any { rowsById[it] != null && it !in previousUnitIds }) return false
+        if (previousUnitIds.isNotEmpty()) {
+            jdbc.sql("UPDATE player_units SET reserved_week_key = NULL, updated_at = CURRENT_TIMESTAMP WHERE player_telegram_id = :player AND reserved_week_key = :week AND id IN (:ids)")
+                .param("player", telegramId).param("week", weekKey).param("ids", previousUnitIds).update()
+        }
         jdbc.sql("UPDATE player_units SET reserved_week_key = :week, updated_at = CURRENT_TIMESTAMP WHERE player_telegram_id = :player AND id IN (:ids) AND destroyed_at IS NULL")
             .param("week", weekKey).param("player", telegramId).param("ids", unitIds).update()
         return true
+    }
+
+    @Transactional
+    fun releaseWeeklyReservation(telegramId: Long, weekKey: String, unitIds: List<UUID>) {
+        if (unitIds.isEmpty()) return
+        jdbc.sql(
+            "UPDATE player_units SET reserved_week_key = NULL, updated_at = CURRENT_TIMESTAMP WHERE player_telegram_id = :player AND reserved_week_key = :week AND id IN (:ids)",
+        ).param("player", telegramId).param("week", weekKey).param("ids", unitIds).update()
     }
 
     @Transactional
@@ -206,14 +225,15 @@ class InventoryService(
         formations: List<WeeklyFormationResult>,
         npcUnits: List<WeeklyUnitContribution>,
         seed: Long,
-    ): Map<Long, EquipmentCasualties> {
+    ): List<WeeklyContributionCasualties> {
         val reserved = jdbc.sql(
             """
-            SELECT unit.id, unit.player_telegram_id, unit.unit_code, unit.level
+            SELECT unit.id, unit.player_telegram_id, unit.unit_code, unit.level, contribution.id AS contribution_id
               FROM player_units unit
               JOIN campaign_contributions contribution
                 ON contribution.week_key = unit.reserved_week_key
                AND contribution.player_telegram_id = unit.player_telegram_id
+               AND unit.id = ANY(contribution.unit_ids)
                AND contribution.contribution_type = 'EQUIPMENT_SNAPSHOT'
                AND contribution.voided_at IS NULL
              WHERE unit.reserved_week_key = :week AND contribution.alliance_code = :alliance
@@ -221,7 +241,7 @@ class InventoryService(
              FOR UPDATE OF unit
             """.trimIndent(),
         ).param("week", weekKey).param("alliance", allianceCode)
-            .query { rs, _ -> ReservedUnit(rs.getObject("id", UUID::class.java), rs.getLong("player_telegram_id"), rs.getString("unit_code"), rs.getInt("level")) }
+            .query { rs, _ -> ReservedUnit(rs.getObject("id", UUID::class.java), rs.getLong("player_telegram_id"), rs.getString("unit_code"), rs.getInt("level"), rs.getLong("contribution_id")) }
             .list()
         val lostIds = mutableSetOf<UUID>()
         formations.forEach { formation ->
@@ -230,7 +250,9 @@ class InventoryService(
             val survivingCount = ((formation.remainingPower + perUnitPower - 1) / perUnitPower).toInt().coerceIn(0, formation.quantity)
             val casualtyCount = formation.quantity - survivingCount
             val realTokens = reserved.filter {
-                it.playerId == formation.contributorPlayerId && it.code == key.first && it.level == key.second
+                it.playerId == formation.contributorPlayerId &&
+                    (formation.sourceContributionId == null || it.contributionId == formation.sourceContributionId) &&
+                    it.code == key.first && it.level == key.second
             }
                 .map { CasualtyToken(it.id.toString(), it.id) }
             val npcCount = if (formation.contributorPlayerId == null) {
@@ -248,9 +270,9 @@ class InventoryService(
         markDestroyed(0, lostIds.toList(), "WEEKLY", "CAMPAIGN_LOSS", matchupId)
         jdbc.sql("UPDATE player_units SET reserved_week_key = NULL, updated_at = CURRENT_TIMESTAMP WHERE reserved_week_key = :week AND player_telegram_id IN (SELECT telegram_id FROM players WHERE alliance_code = :alliance)")
             .param("week", weekKey).param("alliance", allianceCode).update()
-        return reserved.groupBy { it.playerId }.mapValues { (_, units) ->
+        return reserved.groupBy { it.contributionId }.map { (contributionId, units) ->
             val lost = units.count { it.id in lostIds }
-            EquipmentCasualties(units.size - lost, lost)
+            WeeklyContributionCasualties(contributionId, units.first().playerId, units.size - lost, lost)
         }
     }
 
@@ -555,6 +577,6 @@ class InventoryService(
         const val MAX_PURCHASE_QUANTITY = 25
     }
 
-    private data class ReservedUnit(val id: UUID, val playerId: Long, val code: String, val level: Int)
+    private data class ReservedUnit(val id: UUID, val playerId: Long, val code: String, val level: Int, val contributionId: Long)
     private data class CasualtyToken(val key: String, val ownedId: UUID?)
 }
