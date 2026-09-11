@@ -42,6 +42,11 @@ data class PendingCampaignNotification(
     val id: Long,
     val playerTelegramId: Long,
     val message: String,
+    val matchupId: UUID,
+    val allianceCode: String,
+    val language: GameLanguage,
+    val messageSent: Boolean,
+    val mediaSent: Boolean,
 )
 
 data class ActiveEconomyBonus(
@@ -281,26 +286,56 @@ class CampaignService(
         return due.size
     }
 
-    fun pendingNotifications(limit: Int = 50): List<PendingCampaignNotification> = jdbc.sql(
+    fun nextPendingNotification(afterId: Long = 0): PendingCampaignNotification? = jdbc.sql(
         """
-        SELECT id, player_telegram_id, message
-          FROM campaign_notifications
-         WHERE sent_at IS NULL AND attempts < 10
-         ORDER BY created_at, id
-         LIMIT :limit
+        SELECT notification.id, notification.player_telegram_id, notification.message,
+               notification.matchup_id, notification.alliance_code, player.language,
+               notification.message_sent_at IS NOT NULL AS message_sent,
+               notification.media_sent_at IS NOT NULL AS media_sent
+          FROM campaign_notifications notification
+          JOIN players player ON player.telegram_id = notification.player_telegram_id
+         WHERE notification.sent_at IS NULL
+           AND notification.abandoned_at IS NULL
+           AND notification.attempts < 10
+           AND player.telegram_unavailable_at IS NULL
+           AND notification.id > :afterId
+         ORDER BY notification.id
+         LIMIT 1
         """.trimIndent(),
-    ).param("limit", limit)
-        .query { rs, _ ->
+    ).param("afterId", afterId).query { rs, _ ->
             PendingCampaignNotification(
                 rs.getLong("id"),
                 rs.getLong("player_telegram_id"),
                 rs.getString("message"),
+                rs.getObject("matchup_id", UUID::class.java),
+                rs.getString("alliance_code"),
+                GameLanguage.fromStored(rs.getString("language")),
+                rs.getBoolean("message_sent"),
+                rs.getBoolean("media_sent"),
             )
-        }.list()
+        }.optional().orElse(null)
 
-    fun markNotificationSent(id: Long) {
+    fun markNotificationMessageSent(id: Long) {
         jdbc.sql(
-            "UPDATE campaign_notifications SET sent_at = CURRENT_TIMESTAMP, attempts = attempts + 1, last_error = NULL WHERE id = :id AND sent_at IS NULL",
+            """
+            UPDATE campaign_notifications
+               SET message_sent_at = COALESCE(message_sent_at, CURRENT_TIMESTAMP),
+                   sent_at = CASE WHEN media_sent_at IS NOT NULL THEN CURRENT_TIMESTAMP ELSE sent_at END,
+                   last_error = NULL
+             WHERE id = :id AND sent_at IS NULL AND abandoned_at IS NULL
+            """.trimIndent(),
+        ).param("id", id).update()
+    }
+
+    fun markNotificationMediaSent(id: Long) {
+        jdbc.sql(
+            """
+            UPDATE campaign_notifications
+               SET media_sent_at = COALESCE(media_sent_at, CURRENT_TIMESTAMP),
+                   sent_at = CASE WHEN message_sent_at IS NOT NULL THEN CURRENT_TIMESTAMP ELSE sent_at END,
+                   last_error = NULL
+             WHERE id = :id AND sent_at IS NULL AND abandoned_at IS NULL
+            """.trimIndent(),
         ).param("id", id).update()
     }
 
@@ -310,6 +345,27 @@ class CampaignService(
         ).param("id", id)
             .param("error", error.take(256))
             .update()
+    }
+
+    @Transactional
+    fun markPlayerUnavailable(playerId: Long, reason: String) {
+        jdbc.sql(
+            """
+            UPDATE players
+               SET telegram_unavailable_at = COALESCE(telegram_unavailable_at, CURRENT_TIMESTAMP),
+                   telegram_unavailable_reason = :reason,
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE telegram_id = :player
+            """.trimIndent(),
+        ).param("player", playerId).param("reason", reason.take(64)).update()
+        jdbc.sql(
+            """
+            UPDATE campaign_notifications
+               SET abandoned_at = CURRENT_TIMESTAMP,
+                   last_error = :reason
+             WHERE player_telegram_id = :player AND sent_at IS NULL AND abandoned_at IS NULL
+            """.trimIndent(),
+        ).param("player", playerId).param("reason", reason.take(256)).update()
     }
 
     private fun ensureMatchups(period: CampaignPeriod) {
@@ -559,7 +615,7 @@ class CampaignService(
             )
         }
         val players = jdbc.sql(
-            "SELECT telegram_id, alliance_code, language FROM players WHERE alliance_code IN (:allianceA, :allianceB)",
+            "SELECT telegram_id, alliance_code, language FROM players WHERE alliance_code IN (:allianceA, :allianceB) AND telegram_unavailable_at IS NULL",
         ).param("allianceA", matchup.allianceA)
             .param("allianceB", matchup.allianceB)
             .query { rs, _ -> Triple(rs.getLong("telegram_id"), rs.getString("alliance_code"), GameLanguage.fromStored(rs.getString("language"))) }
@@ -568,13 +624,15 @@ class CampaignService(
             val message = notificationText(matchup, result, allianceCode, rewardsByPlayer[playerId], language)
             jdbc.sql(
                 """
-                INSERT INTO campaign_notifications(week_key, player_telegram_id, message)
-                VALUES (:week, :playerId, :message)
+                INSERT INTO campaign_notifications(week_key, player_telegram_id, message, matchup_id, alliance_code)
+                VALUES (:week, :playerId, :message, :matchupId, :alliance)
                 ON CONFLICT (week_key, player_telegram_id) DO NOTHING
                 """.trimIndent(),
             ).param("week", weekKey)
                 .param("playerId", playerId)
                 .param("message", message)
+                .param("matchupId", matchup.id)
+                .param("alliance", allianceCode)
                 .update()
         }
     }

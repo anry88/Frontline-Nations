@@ -45,7 +45,7 @@ data class FrontlineProperties(
         val ffmpegPath: String = "ffmpeg",
         val cacheDirectory: String = "/tmp/frontline-replays",
         val width: Int = 768,
-        val fps: Int = 6,
+        val fps: Int = 3,
         val retentionHours: Long = 48,
     )
 }

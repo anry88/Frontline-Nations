@@ -29,7 +29,7 @@ class ReplayServiceTest {
             mock(ReplayVideoEncoder::class.java),
         )
         val id = UUID.randomUUID()
-        val path = directory.resolve("personal-$id-v1.mp4")
+        val path = directory.resolve("personal-$id-${ReplayService.PRESENTATION_VERSION}.mp4")
         Files.write(path, byteArrayOf(1, 2, 3, 4))
 
         assertThat(service.open(ReplayKind.PERSONAL, id, "invalid")).isNull()

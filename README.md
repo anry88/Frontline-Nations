@@ -12,8 +12,8 @@ Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
 
 - `/start` — register and choose an alliance with inline buttons
 - `/battle` — choose an operation, map entry, first objective, and behavior doctrine for the active group
-- `/army` or `/hangar` — switch between three presets and select equipment within the CP limit
-- `/shop` — inspect illustrated equipment cards and buy or craft a unit
+- `/army` or `/hangar` — switch between three presets and select currently available equipment within the CP limit
+- `/shop` — inspect illustrated equipment cards and buy or craft a unit without leaving the arsenal flow
 - `/upgrade` — improve an owned unit from level 1 to 5
 - `/daily` — claim 90–180 Credits, grow a 100-day streak, and receive a random unlocked unit at the maximum streak
 - `/profile` — inspect alliance, level progress, battle record, resources, capacity, and reward streak
@@ -27,7 +27,7 @@ Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
 - `/settings` — open language and profile settings
 - `/help` — show command help
 
-Every newly completed personal battle includes a `▶️ Battle replay` button. The bot renders a square MP4 directly from the saved event log, showing formation movement, fire, losses, and objective control. Resolved weekly matchups expose the same button in `/front`.
+Every newly completed personal battle includes a `▶️ Battle replay` button. The bot renders a deliberately paced square MP4 directly from the saved event log, showing formation movement, fire, losses, and objective control. Resolved weekly matchups expose the same button in `/front`.
 
 New accounts infer their initial language from Telegram and receive language-relevant country suggestions. The explicit language selection is retained even when Telegram later sends another interface locale. Existing accounts keep Russian until they choose another language.
 
@@ -53,6 +53,8 @@ Players may launch unlimited operations. The bot sends a pre-rendered 1,536×1,5
 All 250 countries and territories enter 125 weekly pairings. With an empty table they are sorted by English name and paired adjacently; later rounds sort by cumulative battle rating, with English name as the stable tie-break. Contributions remain open until Sunday at 15:00 in the `Europe/Belgrade` timezone.
 
 Each country receives a deterministic random NPC group whose actual equipment fits the first 10–25 CP category. Players may reinforce their country with any or all three personal presets, provided a concrete owned unit is not reused between them. Each contribution keeps its own edge entry and behavior doctrine; the weekly engine preserves the preset as a distinct formation source so those orders remain effective. Committed machines are reserved until withdrawal or resolution and cannot simultaneously enter a personal battle; surviving units return and destroyed units are removed. Each matchup uses one of ten individually composed, versioned 15×21 rectangular hex maps with three distinct edge entries per side, multiple terrain regions, a connected road network, and five illustrated capture points. Formations move across exactly the grid shown in the image and use finite weapon ranges; artillery can fire indirectly, while aircraft still cannot strike across the whole map. A captured point grants more score when secured early. Losing it removes its retained score, and a later recapture is worth less. Destroyed enemy power and surviving allied power also score. Capturing all five points or destroying the opposing army ends the battle early; at the 96-turn limit, remaining force decides the winner first. Rating accumulates each side's battle score instead of replacing it. `/rankings` exposes that table in pages of ten and also shows the global commander XP top 10 plus the requesting player's place. A contributing winner receives a 90-Credit/600-XP base reward—about three ordinary equal-force victories—plus personal bonuses for formations destroyed and objectives captured. The winning country then earns ×1.2 Credits and XP from personal battles and `/daily` for seven days.
+
+After resolution, every reachable commander in either participating country receives that country's result and the generated battle replay, even without a personal contribution. Resolution, replay rendering, and one-at-a-time outbox delivery run on a dedicated worker so bot commands remain responsive. Permanent Telegram delivery rejection marks the account unreachable and suppresses later broadcasts until a new inbound update proves the player reachable again.
 
 ### Progression
 
@@ -117,6 +119,7 @@ Mini App and a separately deployed replay-renderer directory will be added only 
 - [Destructive equipment and daily economy decision](docs/decisions/0010-destructive-equipment-and-daily-economy.md)
 - [Progressive XP and compact campaign economy decision](docs/decisions/0012-progressive-xp-and-compact-campaign-economy.md)
 - [Event-log video replay decision](docs/decisions/0013-event-log-video-replays.md)
+- [Asynchronous campaign delivery decision](docs/decisions/0015-asynchronous-campaign-delivery.md)
 - [Contributor guide](CONTRIBUTING.md)
 - [Agent guide](AGENTS.md)
 - [GitHub About metadata](docs/github-about.md)
@@ -126,7 +129,7 @@ Mini App and a separately deployed replay-renderer directory will be added only 
 
 Current phase: command-only MVP with persistent equipment progression, spatial personal operations, and ranked spatial weekly battles.
 
-The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog, moderated nicknames, a seven-class equipment catalog, transactional bulk purchase/crafting/upgrades, three CP-limited presets, level-derived command capacity, six battle categories up to 1,000 CP, unlimited spatial personal battles with permanent equipment casualties, a ledger-backed 100-day daily reward loop, five operation offers drawn from 24 battlefields with 24 mapped variants, 125 rating-seeded weekly pairings on ten larger maps, a random 10–25 CP NPC equipment group for every country, reserved and destructible player reinforcement, timed aggregate spatial resolution, capture/destruction/survival scoring, idempotent campaign rewards, durable Telegram notifications, and on-demand MP4 playback for personal and weekly battles. Seasonal alliance switching, modules, typed campaign assets, branching technologies, and the Mini App remain planned.
+The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog, moderated nicknames, a seven-class equipment catalog, transactional bulk purchase/crafting/upgrades, three CP-limited presets, level-derived command capacity, six battle categories up to 1,000 CP, unlimited spatial personal battles with permanent equipment casualties, a ledger-backed 100-day daily reward loop, five operation offers drawn from 24 battlefields with 24 mapped variants, 125 rating-seeded weekly pairings on ten larger maps, a random 10–25 CP NPC equipment group for every country, reserved and destructible player reinforcement, timed aggregate spatial resolution, capture/destruction/survival scoring, idempotent campaign rewards, staged country-wide Telegram result/replay delivery, and on-demand MP4 playback for personal and weekly battles. Seasonal alliance switching, modules, typed campaign assets, branching technologies, and the Mini App remain planned.
 
 Run tests with `GRADLE_USER_HOME="$PWD/.gradle-home" ./gradlew test`. For a local Docker run, copy `.env.example` to an ignored `.env`, replace every secret, create the PostgreSQL data directory, and run `docker compose up --build`.
 

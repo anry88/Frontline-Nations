@@ -96,7 +96,7 @@ class ReplayService(
     internal fun token(kind: ReplayKind, id: UUID): String {
         val mac = Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(properties.battleServerSalt.toByteArray(StandardCharsets.UTF_8), "HmacSHA256"))
-        return mac.doFinal("replay:${kind.path}:$id:v1".toByteArray(StandardCharsets.UTF_8))
+        return mac.doFinal("replay:${kind.path}:$id:$PRESENTATION_VERSION".toByteArray(StandardCharsets.UTF_8))
             .take(16)
             .joinToString("") { "%02x".format(it) }
     }
@@ -120,7 +120,7 @@ class ReplayService(
     }
 
     private fun cachePath(kind: ReplayKind, id: UUID): Path =
-        Path.of(properties.replay.cacheDirectory).resolve("${kind.path}-$id-v1.mp4")
+        Path.of(properties.replay.cacheDirectory).resolve("${kind.path}-$id-$PRESENTATION_VERSION.mp4")
 
     private fun cleanupExpired() {
         val directory = Path.of(properties.replay.cacheDirectory)
@@ -134,5 +134,6 @@ class ReplayService(
 
     companion object {
         private const val MAX_TELEGRAM_URL_BYTES = 19_000_000L
+        internal const val PRESENTATION_VERSION = "v2"
     }
 }

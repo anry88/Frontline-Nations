@@ -1,18 +1,22 @@
 package com.tggames.frontline.campaign
 
-import com.tggames.frontline.telegram.TelegramClient
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
+import org.springframework.core.task.TaskExecutor
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import java.util.concurrent.atomic.AtomicBoolean
 
 @Component
 class CampaignScheduler(
     private val campaigns: CampaignService,
-    private val telegram: TelegramClient,
+    private val worker: CampaignWorker,
+    @param:Qualifier("campaignWorkerExecutor") private val executor: TaskExecutor,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
+    private val workerRunning = AtomicBoolean(false)
 
     @Scheduled(cron = "\${frontline.campaign.open-cron}", zone = "\${frontline.game-timezone}")
     fun openWeek() {
@@ -25,34 +29,34 @@ class CampaignScheduler(
 
     @Scheduled(cron = "\${frontline.campaign.resolve-cron}", zone = "\${frontline.game-timezone}")
     fun resolveAtScheduledTime() {
-        resolveAndNotify()
+        scheduleWorker()
     }
 
     @Scheduled(cron = "\${frontline.campaign.retry-cron}", zone = "\${frontline.game-timezone}")
     fun recoverMissedRunAndDeliverNotifications() {
-        resolveAndNotify()
+        scheduleWorker()
     }
 
     @EventListener(ApplicationReadyEvent::class)
     fun recoverAfterRestart() {
-        resolveAndNotify()
+        scheduleWorker()
     }
 
-    private fun resolveAndNotify() {
+    private fun scheduleWorker() {
+        if (!workerRunning.compareAndSet(false, true)) return
         try {
-            val resolved = campaigns.resolveDueCampaigns()
-            if (resolved > 0) logger.info("Resolved {} due weekly campaign(s)", resolved)
-            campaigns.pendingNotifications().forEach { notification ->
+            executor.execute {
                 try {
-                    telegram.sendMessage(notification.playerTelegramId, notification.message)
-                    campaigns.markNotificationSent(notification.id)
+                    worker.resolveAndDeliver()
                 } catch (error: Exception) {
-                    logger.warn("Campaign notification {} delivery failed: {}", notification.id, error.javaClass.simpleName)
-                    campaigns.markNotificationFailed(notification.id, error.javaClass.simpleName)
+                    logger.error("Weekly campaign worker failed", error)
+                } finally {
+                    workerRunning.set(false)
                 }
             }
         } catch (error: Exception) {
-            logger.error("Weekly campaign recovery failed", error)
+            workerRunning.set(false)
+            logger.error("Could not schedule weekly campaign worker", error)
         }
     }
 }

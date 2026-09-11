@@ -83,7 +83,7 @@ class GameService(
             "/shop" -> shopMenu(user.id, message.chat.id)
             "/upgrade" -> upgradeMenu(user.id, message.chat.id)
             "/daily" -> claimDailyReward(user.id, message.chat.id)
-            "/profile" -> telegram.sendMessage(message.chat.id, profileText(user.id), actionKeyboard(language(user.id)))
+            "/profile" -> telegram.sendMessage(message.chat.id, profileText(user.id), actionKeyboard(user.id, language(user.id)))
             "/front" -> front(user.id, user.firstName, message.chat.id)
             "/contribute" -> contribute(user.id, user.firstName, message.chat.id)
             "/rankings", "/rating", "/ratings" -> rankingMenu(user.id, message.chat.id)
@@ -92,8 +92,8 @@ class GameService(
             "/nickname" -> nickname(user.id, message.chat.id, argument)
             "/country" -> countryMenu(user.id, message.chat.id, argument)
             "/settings" -> settings(user.id, message.chat.id)
-            "/help", "" -> telegram.sendMessage(message.chat.id, helpText(language(user.id)), actionKeyboard(language(user.id)))
-            else -> telegram.sendMessage(message.chat.id, "${GameI18n.t(language(user.id), "unknown")}\n\n${helpText(language(user.id))}", actionKeyboard(language(user.id)))
+            "/help", "" -> telegram.sendMessage(message.chat.id, helpText(language(user.id)), actionKeyboard(user.id, language(user.id)))
+            else -> telegram.sendMessage(message.chat.id, "${GameI18n.t(language(user.id), "unknown")}\n\n${helpText(language(user.id))}", actionKeyboard(user.id, language(user.id)))
         }
     }
 
@@ -113,8 +113,9 @@ class GameService(
             data == "nav:battle" -> battleMenu(callback.from.id, callback.from.firstName, chatId)
             data == "nav:army" -> armyMenu(callback.from.id, chatId)
             data == "nav:shop" -> shopMenu(callback.from.id, chatId)
+            data == "nav:upgrade" -> upgradeMenu(callback.from.id, chatId)
             data == "nav:daily" -> claimDailyReward(callback.from.id, chatId)
-            data == "nav:profile" -> telegram.sendMessage(chatId, profileText(callback.from.id), actionKeyboard(language))
+            data == "nav:profile" -> telegram.sendMessage(chatId, profileText(callback.from.id), actionKeyboard(callback.from.id, language))
             data == "nav:front" -> front(callback.from.id, callback.from.firstName, chatId)
             data == "nav:rankings" -> rankingMenu(callback.from.id, chatId)
             data == "nav:guide" -> guide(callback.from.id, chatId, 0)
@@ -142,7 +143,7 @@ class GameService(
             data.startsWith("army:add:") -> addUnitType(callback.from.id, chatId, data.substringAfterLast(':'))
             data.startsWith("army:remove:") -> removeUnitType(callback.from.id, chatId, data.substringAfterLast(':'))
             data.startsWith("army:preset:") -> activatePreset(callback.from.id, chatId, data.substringAfterLast(':'))
-            else -> telegram.sendMessage(chatId, GameI18n.t(language, "stale"), actionKeyboard(language))
+            else -> telegram.sendMessage(chatId, GameI18n.t(language, "stale"), actionKeyboard(callback.from.id, language))
         }
     }
 
@@ -159,7 +160,7 @@ class GameService(
         val current = player(telegramId)
         val language = GameLanguage.fromStored(current.language)
         if (current.allianceCode != null) {
-            telegram.sendMessage(chatId, "${GameI18n.t(language, "welcome_back", current.displayName)}\n\n${profileText(telegramId)}", actionKeyboard(language))
+            telegram.sendMessage(chatId, "${GameI18n.t(language, "welcome_back", current.displayName)}\n\n${profileText(telegramId)}", actionKeyboard(telegramId, language))
             return
         }
         telegram.sendMessage(
@@ -179,10 +180,10 @@ class GameService(
         val selected = AllianceCatalog.option(code, language).label
         if (updated == 0) {
             val current = player(telegramId).allianceCode?.let { AllianceCatalog.option(it, language).label } ?: selected
-            telegram.sendMessage(chatId, GameI18n.t(language, "country_locked", current), actionKeyboard(language))
+            telegram.sendMessage(chatId, GameI18n.t(language, "country_locked", current), actionKeyboard(telegramId, language))
         } else {
             campaigns.ensureCurrentWeek()
-            telegram.sendMessage(chatId, "${GameI18n.t(language, "country_selected", selected)}\n\n${profileText(telegramId)}", actionKeyboard(language))
+            telegram.sendMessage(chatId, "${GameI18n.t(language, "country_selected", selected)}\n\n${profileText(telegramId)}", actionKeyboard(telegramId, language))
         }
     }
 
@@ -562,13 +563,13 @@ class GameService(
             appendLine(GameI18n.t(language, "equipment_returned_lost", casualties.survived, casualties.lost))
             appendLine("${GameI18n.t(language, "streak")}: ${fresh.currentStreak}$levelUp")
         }
-        telegram.sendMessage(chatId, report.trim(), replayKeyboard(language, "replay:b:$battleId"))
+        telegram.sendMessage(chatId, report.trim(), replayKeyboard(telegramId, language, "replay:b:$battleId"))
     }
 
     private fun sendPersonalReplay(telegramId: Long, chatId: Long, rawBattleId: String) {
         val language = language(telegramId)
         val battleId = runCatching { UUID.fromString(rawBattleId) }.getOrNull()
-            ?: return telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(language))
+            ?: return telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(telegramId, language))
         telegram.sendMessage(chatId, GameI18n.t(language, "replay_rendering"))
         runCatching { replays.preparePersonal(telegramId, battleId) }
             .onSuccess { replay ->
@@ -579,19 +580,19 @@ class GameService(
                     replay.width,
                     replay.height,
                     replay.durationSeconds,
-                    actionKeyboard(language),
+                    actionKeyboard(telegramId, language),
                 )
             }
             .onFailure { error ->
                 logger.warn("Could not render personal replay {} for player {}", battleId, telegramId, error)
-                telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(language))
+                telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(telegramId, language))
             }
     }
 
     private fun sendWeeklyReplay(telegramId: Long, chatId: Long, rawMatchupId: String) {
         val language = language(telegramId)
         val matchupId = runCatching { UUID.fromString(rawMatchupId) }.getOrNull()
-            ?: return telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(language))
+            ?: return telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(telegramId, language))
         telegram.sendMessage(chatId, GameI18n.t(language, "replay_rendering"))
         runCatching { replays.prepareWeekly(player(telegramId).allianceCode, matchupId) }
             .onSuccess { replay ->
@@ -602,18 +603,18 @@ class GameService(
                     replay.width,
                     replay.height,
                     replay.durationSeconds,
-                    actionKeyboard(language),
+                    actionKeyboard(telegramId, language),
                 )
             }
             .onFailure { error ->
                 logger.warn("Could not render weekly replay {} for player {}", matchupId, telegramId, error)
-                telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(language))
+                telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(telegramId, language))
             }
     }
 
     private fun staleSelection(chatId: Long) {
         val language = languageByChat(chatId)
-        telegram.sendMessage(chatId, GameI18n.t(language, "stale"), actionKeyboard(language))
+        telegram.sendMessage(chatId, GameI18n.t(language, "stale"), actionKeyboard(chatId, language))
     }
 
     private fun weeklyUnitsReserved(chatId: Long, army: Army, language: GameLanguage) {
@@ -680,19 +681,26 @@ class GameService(
             val mark = if (group.active) "✅ " else ""
             InlineKeyboardButton("$mark${group.presetNo}. ${group.name}", "army:preset:${group.presetNo}")
         }
+        val availability = GameUiPolicy.equipmentSelection(army)
         equipment.units.forEach { definition ->
-            val owned = army.inventory.count { it.code == definition.code }
-            if (owned == 0) return@forEach
-            val selected = army.activeGroup.units.count { it.code == definition.code }
-            rows += listOf(
-                InlineKeyboardButton("➖ ${definition.emoji} ×$selected", "army:remove:${definition.code}"),
-                InlineKeyboardButton("➕ ${definition.name(language)} $selected/$owned", "army:add:${definition.code}"),
-            )
+            val state = availability[definition.code] ?: return@forEach
+            val actions = mutableListOf<InlineKeyboardButton>()
+            if (state.selected > 0 && army.activeGroup.units.size > 1) {
+                actions += InlineKeyboardButton("➖ ${definition.emoji} ×${state.selected}", "army:remove:${definition.code}")
+            }
+            if (state.selected < state.available) {
+                actions += InlineKeyboardButton(
+                    "➕ ${definition.name(language)} ${state.selected}/${state.available}",
+                    "army:add:${definition.code}",
+                )
+            }
+            if (actions.isNotEmpty()) rows += actions
         }
         rows += listOf(
             InlineKeyboardButton(GameI18n.t(language, "shop"), "nav:shop"),
-            InlineKeyboardButton(GameI18n.t(language, "battle"), "nav:battle"),
+            InlineKeyboardButton(GameI18n.t(language, "upgrade"), "nav:upgrade"),
         )
+        rows += listOf(InlineKeyboardButton(GameI18n.t(language, "battle"), "nav:battle"))
         return InlineKeyboardMarkup(rows)
     }
 
@@ -705,10 +713,13 @@ class GameService(
             appendLine()
             append(GameI18n.t(language, "shop_hint"))
         }
-        val rows = equipment.units.map { definition ->
+        val rows = GameUiPolicy.shopOrder(equipment.units, player.commanderLevel).map { definition ->
             val lock = if (player.commanderLevel < definition.unlockLevel) "🔒 L${definition.unlockLevel}" else "${definition.cpCost} CP"
             listOf(InlineKeyboardButton("${definition.emoji} ${definition.name(language)} · $lock", "shop:view:${definition.code}"))
-        } + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "army"), "nav:army")))
+        } + listOf(listOf(
+            InlineKeyboardButton(GameI18n.t(language, "upgrade"), "nav:upgrade"),
+            InlineKeyboardButton(GameI18n.t(language, "army"), "nav:army"),
+        ))
         telegram.sendMessage(chatId, text, InlineKeyboardMarkup(rows))
     }
 
@@ -721,9 +732,15 @@ class GameService(
         val text = """
             ${definition.emoji} ${definition.name(language)} · $state
 
-            ${GameI18n.t(language, "unit_stats")}: ⚔ ${stats.attack} · 🛡 ${stats.armor} · 🏎 ${stats.mobility} · 🔭 ${stats.recon} · 📡 ${stats.support}
-            ${GameI18n.t(language, "spatial_stats")}: 🛞 ${definition.spatial.movementPoints} · 🎯 ${definition.spatial.minimumRange}–${definition.spatial.weaponRange} · 👁 ${definition.spatial.sightRange}
-            ${GameI18n.fireMode(language, definition.spatial.fireMode)}
+            ⚔ ${GameI18n.t(language, "stat_attack")}: ${stats.attack}
+            🛡 ${GameI18n.t(language, "stat_armor")}: ${stats.armor}
+            🏎 ${GameI18n.t(language, "stat_mobility")}: ${stats.mobility}
+            🔭 ${GameI18n.t(language, "stat_recon")}: ${stats.recon}
+            📡 ${GameI18n.t(language, "stat_support")}: ${stats.support}
+            🛞 ${GameI18n.t(language, "stat_map_movement")}: ${definition.spatial.movementPoints}
+            🎯 ${GameI18n.t(language, "stat_weapon_range")}: ${definition.spatial.minimumRange}–${definition.spatial.weaponRange}
+            👁 ${GameI18n.t(language, "stat_sight")}: ${definition.spatial.sightRange}
+            🔥 ${GameI18n.t(language, "stat_fire_mode")}: ${GameI18n.fireMode(language, definition.spatial.fireMode)}
             CP: ${definition.cpCost}
 
             ${GameI18n.t(language, "buy")}: ${definition.buyCredits} Credits
@@ -752,15 +769,15 @@ class GameService(
         val code = parts.firstOrNull().orEmpty()
         val quantity = parts.getOrNull(1)?.toIntOrNull() ?: 1
         val action = inventory.acquire(telegramId, code, craft, quantity)
-        telegram.sendMessage(chatId, actionMessage(action, language), actionKeyboard(language))
-        if (action.status == EquipmentActionStatus.SUCCESS) armyMenu(telegramId, chatId)
+        telegram.sendMessage(chatId, actionMessage(action, language))
+        shopDetails(telegramId, chatId, code)
     }
 
     private fun upgradeMenu(telegramId: Long, chatId: Long) {
         val language = language(telegramId)
         val army = inventory.army(telegramId)
         val player = player(telegramId)
-        val upgradeGroups = army.inventory.filter { it.level < 5 }
+        val upgradeGroups = army.inventory.filter { it.level < 5 && it.reservedWeekKey == null }
             .groupBy { it.code to it.level }
             .toSortedMap(compareBy<Pair<String, Int>> { it.first }.thenBy { it.second })
         val details = upgradeGroups.entries.joinToString("\n") { (key, units) ->
@@ -868,7 +885,7 @@ class GameService(
         val language = GameLanguage.fromStored(before.language)
         val today = LocalDate.now(ZoneId.of(properties.gameTimezone))
         if (before.dailyRewardLastClaim == today) {
-            telegram.sendMessage(chatId, GameI18n.t(language, "daily_already_claimed", before.dailyRewardStreak), actionKeyboard(language))
+            telegram.sendMessage(chatId, GameI18n.t(language, "daily_already_claimed", before.dailyRewardStreak), actionKeyboard(telegramId, language))
             return
         }
         val baseReward = DailyRewardPolicy.reward(before.dailyRewardStreak, before.dailyRewardLastClaim, today)
@@ -894,7 +911,7 @@ class GameService(
         } else null
         val bonusUnitText = bonusUnit?.let { "\n${GameI18n.t(language, "daily_bonus_unit", unitLabel(it, language))}" }.orEmpty()
         val economyBonusText = economyBonus?.let { "\n${GameI18n.t(language, "weekly_victory_bonus_applied")}" }.orEmpty()
-        telegram.sendMessage(chatId, GameI18n.t(language, "daily_claimed", reward.credits, reward.streak) + bonusUnitText + economyBonusText, actionKeyboard(language))
+        telegram.sendMessage(chatId, GameI18n.t(language, "daily_claimed", reward.credits, reward.streak) + bonusUnitText + economyBonusText, actionKeyboard(telegramId, language))
     }
 
     private fun contribute(telegramId: Long, firstName: String, chatId: Long) {
@@ -951,9 +968,9 @@ class GameService(
         val army = inventory.army(telegramId)
         val group = army.groups.firstOrNull { it.presetNo == expected.presetNo && it.version == expected.version }
             ?: return staleSelection(chatId)
-        if (group.units.isEmpty()) return telegram.sendMessage(chatId, GameI18n.t(language, "army_empty"), actionKeyboard(language))
+        if (group.units.isEmpty()) return telegram.sendMessage(chatId, GameI18n.t(language, "army_empty"), actionKeyboard(telegramId, language))
         val deployment = campaigns.frontDeployment(alliance)
-            ?: return telegram.sendMessage(chatId, frontLocalized(language, "No open weekly battle was found.", "Открытый недельный бой не найден."), actionKeyboard(language))
+            ?: return telegram.sendMessage(chatId, frontLocalized(language, "No open weekly battle was found.", "Открытый недельный бой не найден."), actionKeyboard(telegramId, language))
         val text = buildString {
             appendLine("🚩 ${group.name}")
             appendLine(frontLocalized(language, "Choose an edge entry for this group:", "Выберите край карты для входа этого отряда:"))
@@ -1127,12 +1144,12 @@ class GameService(
         val rows = mutableListOf<List<InlineKeyboardButton>>()
         campaigns.frontReplayId(allianceCode)?.let { rows += listOf(InlineKeyboardButton(GameI18n.t(language, "replay_button"), "replay:w:$it")) }
         if (allianceCode != null) rows += listOf(InlineKeyboardButton(frontLocalized(language, "🚩 Front groups", "🚩 Отряды на фронте"), "front:manage"))
-        rows += actionKeyboard(language).inlineKeyboard
+        rows += actionKeyboard(telegramId, language).inlineKeyboard
         telegram.sendMessage(chatId, campaigns.frontText(telegramId, allianceCode, language), InlineKeyboardMarkup(rows))
     }
 
-    private fun replayKeyboard(language: GameLanguage, callbackData: String): InlineKeyboardMarkup = InlineKeyboardMarkup(
-        listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "replay_button"), callbackData))) + actionKeyboard(language).inlineKeyboard,
+    private fun replayKeyboard(telegramId: Long, language: GameLanguage, callbackData: String): InlineKeyboardMarkup = InlineKeyboardMarkup(
+        listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "replay_button"), callbackData))) + actionKeyboard(telegramId, language).inlineKeyboard,
     )
 
     private fun ensurePlayer(telegramId: Long, firstName: String, telegramLanguage: String? = null) {
@@ -1144,6 +1161,8 @@ class GameService(
             ON CONFLICT (telegram_id) DO UPDATE
                SET first_name = EXCLUDED.first_name,
                    telegram_language = COALESCE(EXCLUDED.telegram_language, players.telegram_language),
+                   telegram_unavailable_at = NULL,
+                   telegram_unavailable_reason = NULL,
                    updated_at = CURRENT_TIMESTAMP
             """.trimIndent(),
         ).param("id", telegramId)
@@ -1196,17 +1215,21 @@ class GameService(
             listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "all_options"), "country:all"))),
     )
 
-    private fun actionKeyboard(language: GameLanguage): InlineKeyboardMarkup {
+    private fun actionKeyboard(telegramId: Long, language: GameLanguage): InlineKeyboardMarkup {
         val rows = mutableListOf<List<InlineKeyboardButton>>()
-        rows += listOf(
-            InlineKeyboardButton(GameI18n.t(language, "battle"), "nav:battle"),
-            InlineKeyboardButton(GameI18n.t(language, "daily"), "nav:daily"),
+        val primary = mutableListOf(InlineKeyboardButton(GameI18n.t(language, "battle"), "nav:battle"))
+        val rewardAvailable = GameUiPolicy.dailyRewardAvailable(
+            player(telegramId).dailyRewardLastClaim,
+            LocalDate.now(ZoneId.of(properties.gameTimezone)),
         )
+        if (rewardAvailable) primary += InlineKeyboardButton(GameI18n.t(language, "daily"), "nav:daily")
+        rows += primary
         rows += listOf(
             InlineKeyboardButton(GameI18n.t(language, "army"), "nav:army"),
             InlineKeyboardButton(GameI18n.t(language, "shop"), "nav:shop"),
         )
         rows += listOf(
+            InlineKeyboardButton(GameI18n.t(language, "upgrade"), "nav:upgrade"),
             InlineKeyboardButton(GameI18n.t(language, "profile"), "nav:profile"),
         )
         rows += listOf(InlineKeyboardButton(GameI18n.t(language, "front"), "nav:front"))
@@ -1220,7 +1243,7 @@ class GameService(
 
     private fun settings(telegramId: Long, chatId: Long) {
         val language = language(telegramId)
-        telegram.sendMessage(chatId, GameI18n.t(language, "settings_text"), actionKeyboard(language))
+        telegram.sendMessage(chatId, GameI18n.t(language, "settings_text"), actionKeyboard(telegramId, language))
     }
 
     private fun languageMenu(telegramId: Long, chatId: Long, prefix: String? = null) {
@@ -1284,21 +1307,21 @@ class GameService(
         val updated = jdbc.sql(
             "UPDATE players SET nickname = :nickname, pending_nickname = NULL, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = :id AND pending_nickname = :pending",
         ).param("nickname", validated.value).param("pending", pending).param("id", telegramId).update()
-        if (updated > 0) telegram.sendMessage(chatId, GameI18n.t(language, "nickname_changed", validated.value), actionKeyboard(language))
+        if (updated > 0) telegram.sendMessage(chatId, GameI18n.t(language, "nickname_changed", validated.value), actionKeyboard(telegramId, language))
     }
 
     private fun cancelNickname(telegramId: Long, chatId: Long) {
         val language = language(telegramId)
         jdbc.sql("UPDATE players SET pending_nickname = NULL, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = :id")
             .param("id", telegramId).update()
-        telegram.sendMessage(chatId, GameI18n.t(language, "nickname_cancelled"), actionKeyboard(language))
+        telegram.sendMessage(chatId, GameI18n.t(language, "nickname_cancelled"), actionKeyboard(telegramId, language))
     }
 
     private fun countryMenu(telegramId: Long, chatId: Long, query: String) {
         val player = player(telegramId)
         val language = GameLanguage.fromStored(player.language)
         player.allianceCode?.let {
-            telegram.sendMessage(chatId, GameI18n.t(language, "country_locked", AllianceCatalog.option(it, language).label), actionKeyboard(language))
+            telegram.sendMessage(chatId, GameI18n.t(language, "country_locked", AllianceCatalog.option(it, language).label), actionKeyboard(telegramId, language))
             return
         }
         if (query.isBlank()) {

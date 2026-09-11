@@ -8,7 +8,7 @@ A player opens the bot, reviews the state of the current campaign, and chooses f
 
 The command-only MVP now implements this strategic slice: five operation offers drawn from 24 named battlefields expose different intelligence and reward multipliers. Each operation uses an individually composed, upright rectangular 9×12 offset-hex sector with coherent terrain regions, three distinct edge entries, connected roads, and three illustrated important objectives. The bot sends a pre-rendered square map rather than a text diagram. The player assigns the active group an entry, a first objective, and a behavior doctrine. Units then move, spot, fire at finite ranges, capture objectives over consecutive steps, and can contest or retake them. The completed result offers an on-demand MP4 replay of those saved events.
 
-Between battles, players can buy or craft seven personal equipment classes in batches, select them into one of three CP-limited presets, and upgrade individual units through five levels. Every commander level automatically adds 1 CP, from 10 CP at level 1 to the supported 1,000 CP ceiling. Reaching the next commander level costs `1,000 × current level` XP instead of a flat amount. Research Points and manual capacity purchases are retired. Credits and Credit prices use a compact 1:100 denomination. Destroyed equipment is permanently removed from usable inventory, while survivors return after personal and weekly battles. Modules, branching technologies, repairs, and doctrine perks remain planned.
+Between battles, players can buy or craft seven personal equipment classes in batches, select available equipment into one of three CP-limited presets, and upgrade individual units through five levels. The arsenal keeps unlocked classes above locked ones and retains the shop context after a purchase; front-reserved machines are omitted from unavailable selection and upgrade actions. Every commander level automatically adds 1 CP, from 10 CP at level 1 to the supported 1,000 CP ceiling. Reaching the next commander level costs `1,000 × current level` XP instead of a flat amount. Research Points and manual capacity purchases are retired. Credits and Credit prices use a compact 1:100 denomination. Destroyed equipment is permanently removed from usable inventory, while survivors return after personal and weekly battles. Modules, branching technologies, repairs, and doctrine perks remain planned.
 
 ## Strategic Depth
 
@@ -25,7 +25,7 @@ The campaign follows a weekly rhythm:
 - Saturday: publish an incomplete reconnaissance summary.
 - Sunday: lock contributions, resolve the aggregate battle, publish replay/highlights, and award results.
 
-The command-only MVP implements a 250-country ranked weekly front: 125 adjacent pairings, Sunday 15:00 Belgrade resolution, a random 10–25 CP NPC equipment group for every country, up to three independently ordered player presets with entry/tactic selection and pre-lock withdrawal, concrete equipment reservation with deterministic casualties, ten individually composed pre-rendered 15×21 offset-hex maps, five illustrated capture points, base and individual contributor rewards, a seven-day ×1.2 Credits/XP bonus for the winning country, Telegram notifications, and an event-accurate aggregate replay in `/front`. `/rankings` publishes the paginated country table plus the commander XP top 10 and personal place; `/guide` keeps the essential rules in five localized sections.
+The command-only MVP implements a 250-country ranked weekly front: 125 adjacent pairings, Sunday 15:00 Belgrade resolution, a random 10–25 CP NPC equipment group for every country, up to three independently ordered player presets with entry/tactic selection and pre-lock withdrawal, concrete equipment reservation with deterministic casualties, ten individually composed pre-rendered 15×21 offset-hex maps, five illustrated capture points, base and individual contributor rewards, a seven-day ×1.2 Credits/XP bonus for the winning country, and an event-accurate aggregate replay in `/front`. A background worker sends the relevant result and shared replay to every reachable player in both matched countries, including non-contributors. `/rankings` publishes the paginated country table plus the commander XP top 10 and personal place; `/guide` keeps the essential rules in five localized sections.
 
 The design supports many country- and territory-named alliances without allowing population alone to decide every campaign. Matchmaking, NPC garrisons, underdog factors, contribution caps, and dynamic shortage bonuses are planned balancing tools.
 
@@ -35,7 +35,7 @@ The command interface is available in English, Russian, Spanish, Brazilian Portu
 
 ## Replays
 
-The server first produces a result and ordered battle-event stream. The command MVP projects that immutable stream onto the authored map, composites top-down frames, encodes H.264 MP4, and lets Telegram play it as an animation. A later Mini App may consume the same events interactively, and the renderer may be extracted into a separate worker if load requires it.
+The server first produces a result and ordered battle-event stream. The command MVP projects that immutable stream onto the authored map, composites top-down frames, encodes a paced H.264 MP4, and lets Telegram play it as an animation. Weekly artifacts are generated in the campaign worker and reused across country recipients. A later Mini App may consume the same events interactively, and the renderer may be extracted into a separate service if load requires it.
 
 This separation keeps the simulation authoritative and testable while allowing clients to improve animation independently.
 
@@ -53,7 +53,7 @@ The intended monetization boundary is convenience and cosmetics. Direct sale of 
 
 The recommended first release includes Telegram registration, alliance selection, onboarding, a compact unit catalog, several terrain types, three combat-group presets, deterministic personal operations, basic modules and research, campaign-asset production, one-versus-one weekly alliance battles, bot results, Mini App replays, PostgreSQL persistence, Docker deployment, basic admin controls, metrics, and audit logging.
 
-Advanced diplomacy, a continuous global map, multi-alliance theaters, deep social systems, and automated weekly video can follow after the daily and weekly loops demonstrate retention.
+Advanced diplomacy, a continuous global map, multi-alliance theaters, and deep social systems can follow after the daily and weekly loops demonstrate retention.
 
 ## Success Criteria
 

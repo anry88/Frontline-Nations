@@ -2,6 +2,7 @@ package com.tggames.frontline.replay
 
 import com.tggames.frontline.config.FrontlineProperties
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.data.Offset.offset
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -36,5 +37,13 @@ class ReplayVideoEncoderTest {
         assertThat(count).isEqualTo(6)
         assertThat(Files.size(destination)).isGreaterThan(100)
         assertThat(Files.readAllBytes(destination).decodeToString(4, 8)).isEqualTo("ftyp")
+        val probe = ProcessBuilder(
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", destination.toString(),
+        ).redirectErrorStream(true).start()
+        val duration = probe.inputStream.bufferedReader().readText().trim().toDouble()
+        assertThat(probe.waitFor()).isZero()
+        assertThat(duration).isCloseTo(2.0, offset(0.1))
+        assertThat(FrontlineProperties.Replay().fps).isEqualTo(3)
     }
 }
