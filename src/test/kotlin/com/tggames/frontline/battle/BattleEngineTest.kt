@@ -2,52 +2,71 @@ package com.tggames.frontline.battle
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import java.util.UUID
 
 class BattleEngineTest {
     private val engine = BattleEngine()
-    private val operation = OperationOffer(
-        slot = 0,
-        battlefield = Battlefield("Дунайская долина", "речная долина"),
-        enemy = EnemyArchetype.ARTILLERY,
-        difficulty = Difficulty.STANDARD,
+    private val operation = OperationOffer(0, Battlefield("Дунайская долина", "речная долина"), EnemyArchetype.ARTILLERY, Difficulty.STANDARD)
+    private val balancedGroup = group(
+        unit("MBT", 3, 30, 32, 12, 5, 4, "ARMOR", "FIREPOWER"),
+        unit("MBT", 3, 30, 32, 12, 5, 4, "ARMOR", "FIREPOWER"),
+        unit("ARTILLERY", 3, 38, 6, 8, 4, 7, "FIREPOWER", "SUPPORT"),
+        unit("RECON_VEHICLE", 1, 8, 6, 36, 40, 8, "RECON", "MOBILE"),
     )
 
     @Test
-    fun `same inputs produce exactly the same offers and result`() {
-        assertThat(engine.offers("secret", "player:date:5"))
-            .isEqualTo(engine.offers("secret", "player:date:5"))
-
-        val first = engine.resolve("secret", "player:battle:5", 3, operation, Tactic.MANEUVER)
-        val second = engine.resolve("secret", "player:battle:5", 3, operation, Tactic.MANEUVER)
-
+    fun `same snapshots produce exactly the same offers result and replay`() {
+        assertThat(engine.offers("secret", "player:date:5")).isEqualTo(engine.offers("secret", "player:date:5"))
+        val first = engine.resolve("secret", "player:battle:5", 3, operation, Tactic.MANEUVER, balancedGroup)
+        val second = engine.resolve("secret", "player:battle:5", 3, operation, Tactic.MANEUVER, balancedGroup)
         assertThat(second).isEqualTo(first)
-        assertThat(engine.replay(first.seed, 3, operation, Tactic.MANEUVER)).isEqualTo(first)
+        assertThat(engine.replay(first.seed, 3, operation, Tactic.MANEUVER, balancedGroup)).isEqualTo(first)
     }
 
     @Test
-    fun `operation board always contains three distinct risk reward choices`() {
+    fun `operation board contains five choices drawn from a larger world catalog`() {
         val offers = engine.offers("secret", "player:date:4")
-
-        assertThat(offers).hasSize(3)
-        assertThat(offers.map { it.difficulty }).containsExactlyInAnyOrderElementsOf(Difficulty.entries)
+        assertThat(engine.battlefields).hasSize(24)
+        assertThat(offers).hasSize(5)
+        assertThat(offers.map { it.difficulty }).containsAll(Difficulty.entries)
         assertThat(offers.map { it.battlefield.location }).doesNotHaveDuplicates()
     }
 
     @Test
-    fun `counter tactic materially improves power against artillery`() {
-        val counter = engine.resolve("secret", "same-rolls", 2, operation, Tactic.MANEUVER)
-        val poorChoice = engine.resolve("secret", "same-rolls", 2, operation, Tactic.DEFENSE)
-
-        assertThat(counter.tacticBonus).isGreaterThan(poorChoice.tacticBonus)
-        assertThat(counter.playerPower).isGreaterThan(poorChoice.playerPower)
-        assertThat(counter.playerPower - poorChoice.playerPower)
-            .isGreaterThanOrEqualTo(counter.tacticBonus - poorChoice.tacticBonus)
+    fun `tactic effectiveness depends on selected equipment`() {
+        val armored = group(
+            unit("MBT", 3, 32, 36, 12, 4, 3, "ARMOR", "FIREPOWER"),
+            unit("ARTILLERY", 3, 40, 6, 8, 4, 8, "FIREPOWER", "SUPPORT"),
+        )
+        val scouts = group(
+            unit("RECON_VEHICLE", 1, 8, 6, 38, 42, 8, "RECON", "MOBILE"),
+            unit("LIGHT_ARMOR", 2, 18, 14, 32, 18, 5, "ARMOR", "MOBILE", "RECON"),
+        )
+        assertThat(engine.assess(Tactic.ASSAULT, armored).fit).isGreaterThan(engine.assess(Tactic.RECON, armored).fit)
+        assertThat(engine.assess(Tactic.RECON, scouts).fit).isGreaterThan(engine.assess(Tactic.ASSAULT, scouts).fit)
     }
 
     @Test
-    fun `battle produces bounded multi-round report and all rewards`() {
-        val result = engine.resolve("secret", "another-battle", 1, operation, Tactic.RECON)
+    fun `missing required equipment applies a real tactic penalty`() {
+        val artilleryOnly = group(unit("ARTILLERY", 3, 40, 5, 7, 3, 6, "FIREPOWER", "SUPPORT"))
+        val ambush = engine.assess(Tactic.AMBUSH, artilleryOnly)
+        assertThat(ambush.requirementsMet).isFalse()
+        assertThat(ambush.missingRoles).contains("RECON")
+        assertThat(ambush.bonus).isNegative()
+    }
 
+    @Test
+    fun `unit upgrades increase composition power without changing command cost`() {
+        val upgraded = balancedGroup.copy(units = balancedGroup.units.map {
+            it.copy(level = 2, attack = it.attack * 112 / 100, armor = it.armor * 112 / 100, mobility = it.mobility * 112 / 100, recon = it.recon * 112 / 100, support = it.support * 112 / 100)
+        })
+        assertThat(engine.compositionPower(upgraded)).isGreaterThan(engine.compositionPower(balancedGroup))
+        assertThat(upgraded.usedCp).isEqualTo(balancedGroup.usedCp)
+    }
+
+    @Test
+    fun `battle produces bounded report and all rewards`() {
+        val result = engine.resolve("secret", "another-battle", 1, operation, Tactic.RECON, balancedGroup)
         assertThat(result.events).hasSizeBetween(8, 12)
         assertThat(result.playerPower).isPositive()
         assertThat(result.enemyPower).isPositive()
@@ -57,4 +76,9 @@ class BattleEngineTest {
         assertThat(result.materials).isPositive()
         assertThat(result.seedHash).hasSize(64)
     }
+
+    private fun group(vararg units: UnitBattleSnapshot) = CombatGroupSnapshot(UUID.randomUUID(), 1, 10, units.toList())
+
+    private fun unit(code: String, cp: Int, attack: Int, armor: Int, mobility: Int, recon: Int, support: Int, vararg roles: String) =
+        UnitBattleSnapshot(UUID.randomUUID(), code, 1, cp, attack, armor, mobility, recon, support, roles.toSet())
 }

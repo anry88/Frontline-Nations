@@ -6,9 +6,9 @@ Frontline Nations is a planned asynchronous multiplayer strategy game designed a
 
 A player opens the bot, reviews the state of the current campaign, and chooses from several operations tied to named real-world landscapes. Before battle, the player selects a saved combat group and one tactic. The server resolves the encounter immediately and returns rewards and an optional replay.
 
-The command-only MVP now implements the first strategic slice of this loop: three operation offers expose different intelligence and reward multipliers, then five inline tactical orders interact with enemy archetype and terrain. Combat-group selection and full replay playback remain planned.
+The command-only MVP now implements this strategic slice: five operation offers drawn from 24 named battlefields expose different intelligence and reward multipliers. The active equipment preset determines the actual fitness of all five tactical orders, while enemy archetype and terrain create additional counters. Full replay playback remains planned.
 
-Between battles, players spend credits, research points, and materials on modules, research, repairs, production, and doctrines. They may also manufacture expendable campaign assets and contribute them to their alliance's weekly theater.
+Between battles, players can buy or craft seven personal equipment classes, select them into one of three CP-limited presets, and upgrade individual units through five levels. Modules, research spending, repairs, and doctrines remain planned. Expendable campaign assets will be manufactured separately and will not consume personal equipment.
 
 ## Strategic Depth
 

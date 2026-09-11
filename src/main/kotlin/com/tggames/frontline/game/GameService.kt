@@ -5,9 +5,15 @@ import com.tggames.frontline.battle.BattleEngine
 import com.tggames.frontline.battle.OperationOffer
 import com.tggames.frontline.battle.Tactic
 import com.tggames.frontline.campaign.CampaignService
+import com.tggames.frontline.catalog.EquipmentCatalog
 import com.tggames.frontline.config.FrontlineProperties
 import com.tggames.frontline.i18n.GameI18n
 import com.tggames.frontline.i18n.GameLanguage
+import com.tggames.frontline.inventory.Army
+import com.tggames.frontline.inventory.EquipmentAction
+import com.tggames.frontline.inventory.EquipmentActionStatus
+import com.tggames.frontline.inventory.InventoryService
+import com.tggames.frontline.inventory.OwnedUnit
 import com.tggames.frontline.telegram.InlineKeyboardButton
 import com.tggames.frontline.telegram.InlineKeyboardMarkup
 import com.tggames.frontline.telegram.TelegramCallbackQuery
@@ -31,6 +37,8 @@ class GameService(
     private val objectMapper: ObjectMapper,
     private val campaigns: CampaignService,
     private val nicknamePolicy: NicknamePolicy,
+    private val inventory: InventoryService,
+    private val equipment: EquipmentCatalog,
 ) {
     @Transactional
     fun handle(update: TelegramUpdate) {
@@ -52,6 +60,9 @@ class GameService(
         when (command) {
             "/start" -> start(user.id, user.firstName, message.chat.id)
             "/battle" -> battleMenu(user.id, user.firstName, message.chat.id)
+            "/army", "/hangar" -> armyMenu(user.id, message.chat.id)
+            "/shop" -> shopMenu(user.id, message.chat.id)
+            "/upgrade" -> upgradeMenu(user.id, message.chat.id)
             "/profile" -> telegram.sendMessage(message.chat.id, profileText(user.id), actionKeyboard(language(user.id)))
             "/front" -> front(user.id, user.firstName, message.chat.id)
             "/contribute" -> contribute(user.id, user.firstName, message.chat.id, argument)
@@ -78,11 +89,19 @@ class GameService(
             data == "nickname:confirm" -> confirmNickname(callback.from.id, chatId)
             data == "nickname:cancel" -> cancelNickname(callback.from.id, chatId)
             data == "nav:battle" -> battleMenu(callback.from.id, callback.from.firstName, chatId)
+            data == "nav:army" -> armyMenu(callback.from.id, chatId)
+            data == "nav:shop" -> shopMenu(callback.from.id, chatId)
             data == "nav:profile" -> telegram.sendMessage(chatId, profileText(callback.from.id), actionKeyboard(language))
             data == "nav:front" -> front(callback.from.id, callback.from.firstName, chatId)
             data == "nav:settings" -> settings(callback.from.id, chatId)
             data.startsWith("op:") -> showTactics(callback.from.id, callback.from.firstName, chatId, data)
             data.startsWith("fight:") -> resolveBattle(callback.from.id, callback.from.firstName, chatId, data)
+            data.startsWith("shop:view:") -> shopDetails(callback.from.id, chatId, data.substringAfterLast(':'))
+            data.startsWith("shop:buy:") -> acquireUnit(callback.from.id, chatId, data.substringAfterLast(':'), false)
+            data.startsWith("shop:craft:") -> acquireUnit(callback.from.id, chatId, data.substringAfterLast(':'), true)
+            data.startsWith("unit:upgrade:") -> upgradeUnit(callback.from.id, chatId, data.substringAfterLast(':'))
+            data.startsWith("army:toggle:") -> toggleUnit(callback.from.id, chatId, data.substringAfterLast(':'))
+            data.startsWith("army:preset:") -> activatePreset(callback.from.id, chatId, data.substringAfterLast(':'))
             else -> telegram.sendMessage(chatId, GameI18n.t(language, "stale"), actionKeyboard(language))
         }
     }
@@ -143,10 +162,16 @@ class GameService(
             )
             return
         }
+        val army = inventory.army(telegramId)
+        if (army.activeGroup.units.isEmpty()) {
+            telegram.sendMessage(chatId, GameI18n.t(language, "army_empty"), armyKeyboard(army, language))
+            return
+        }
 
         val offers = offersFor(telegramId, player.combatOrders)
         val text = buildString {
             appendLine(GameI18n.t(language, "operations"))
+            appendLine("${GameI18n.t(language, "active_group")}: ${army.activeGroup.name} · ${groupCp(army)}/${army.cpLimit} CP")
             appendLine()
             offers.forEachIndexed { index, offer ->
                 appendLine("${index + 1}. ${offer.difficulty.icon} ${GameI18n.battlefield(language, offer.battlefield.location)}")
@@ -171,6 +196,9 @@ class GameService(
         val language = GameLanguage.fromStored(player.language)
         if (player.allianceCode == null || player.combatOrders != parsed.expectedOrders) return staleSelection(chatId)
         val operation = offersFor(telegramId, parsed.expectedOrders).getOrNull(parsed.slot) ?: return staleSelection(chatId)
+        val army = inventory.army(telegramId)
+        val group = inventory.battleSnapshot(army)
+        if (group.units.isEmpty()) return armyMenu(telegramId, chatId)
 
         val text = buildString {
             appendLine("🎯 ${GameI18n.battlefield(language, operation.battlefield.location)}")
@@ -179,14 +207,20 @@ class GameService(
             appendLine("${GameI18n.t(language, "risk")}: ${GameI18n.difficulty(language, operation.difficulty)}")
             appendLine("${GameI18n.t(language, "reward")}: ${operation.difficulty.rewardPercent}%")
             appendLine("${GameI18n.t(language, "intel")} (${GameI18n.intelLevel(language, operation.difficulty)}): ${localizedIntel(language, operation)}")
+            appendLine("${GameI18n.t(language, "active_group")}: ${army.activeGroup.name} · ${group.usedCp}/${group.cpLimit} CP")
+            appendLine(group.units.joinToString(" · ") { unitLabel(it.code, it.level, language) })
             appendLine()
             appendLine(GameI18n.t(language, "choose_tactic"))
-            Tactic.entries.forEach { appendLine("${it.icon} ${GameI18n.tactic(language, it)} — ${GameI18n.tacticHint(language, it)}") }
+            Tactic.entries.forEach {
+                val assessment = battleEngine.assess(it, group)
+                val warning = if (assessment.requirementsMet) "✅" else "⚠️"
+                appendLine("${it.icon} ${GameI18n.tactic(language, it)} — $warning ${assessment.fit}% (${signed(assessment.bonus)}) · ${GameI18n.tacticHint(language, it)}")
+            }
         }
         val buttons = Tactic.entries.map { tactic ->
             InlineKeyboardButton(
                 "${tactic.icon} ${GameI18n.tactic(language, tactic)}",
-                "fight:${parsed.expectedOrders}:${parsed.slot}:${tactic.code}",
+                "fight:${parsed.expectedOrders}:${parsed.slot}:${tactic.code}:${group.version}",
             )
         }.chunked(2) + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "other_operations"), "nav:battle")))
         telegram.sendMessage(chatId, text.trim(), InlineKeyboardMarkup(buttons))
@@ -195,14 +229,18 @@ class GameService(
     private fun resolveBattle(telegramId: Long, firstName: String, chatId: Long, callbackData: String) {
         ensurePlayer(telegramId, firstName)
         val parts = callbackData.split(':')
-        if (parts.size != 4 || parts[0] != "fight") return staleSelection(chatId)
+        if (parts.size != 5 || parts[0] != "fight") return staleSelection(chatId)
         val expectedOrders = parts[1].toIntOrNull() ?: return staleSelection(chatId)
         val slot = parts[2].toIntOrNull() ?: return staleSelection(chatId)
         val tactic = Tactic.fromCode(parts[3]) ?: return staleSelection(chatId)
+        val expectedGroupVersion = parts[4].toIntOrNull() ?: return staleSelection(chatId)
         val player = player(telegramId)
         val language = GameLanguage.fromStored(player.language)
         if (player.allianceCode == null || player.combatOrders != expectedOrders) return staleSelection(chatId)
         val operation = offersFor(telegramId, expectedOrders).getOrNull(slot) ?: return staleSelection(chatId)
+        val army = inventory.army(telegramId)
+        if (army.activeGroup.version != expectedGroupVersion || army.activeGroup.units.isEmpty()) return staleSelection(chatId)
+        val group = inventory.battleSnapshot(army)
         val battleId = UUID.randomUUID()
         val battle = battleEngine.resolve(
             properties.battleServerSalt,
@@ -210,6 +248,7 @@ class GameService(
             player.commanderLevel,
             operation,
             tactic,
+            group,
         )
 
         val updated = jdbc.sql(
@@ -245,13 +284,15 @@ class GameService(
                 id, player_telegram_id, victory, player_power, enemy_power,
                 xp_reward, credits_reward, research_points_reward, materials_reward,
                 battle_seed, commander_level_snapshot, seed_hash, engine_version, location, biome, difficulty,
-                enemy_archetype, tactic, rounds, events_json
+                enemy_archetype, tactic, rounds, events_json,
+                battle_group_id, group_snapshot_json, battle_group_version, composition_power, tactic_fit, counter_bonus
             )
             VALUES (
                 :id, :playerId, :victory, :playerPower, :enemyPower,
                 :xp, :credits, :research, :materials,
-                :battleSeed, :commanderLevel, :seedHash, 2, :location, :biome, :difficulty,
-                :enemy, :tactic, :rounds, CAST(:events AS jsonb)
+                :battleSeed, :commanderLevel, :seedHash, 3, :location, :biome, :difficulty,
+                :enemy, :tactic, :rounds, CAST(:events AS jsonb),
+                :groupId, CAST(:groupSnapshot AS jsonb), :groupVersion, :compositionPower, :tacticFit, :counterBonus
             )
             """.trimIndent(),
         ).param("id", battleId)
@@ -273,6 +314,12 @@ class GameService(
             .param("tactic", tactic.name)
             .param("rounds", battle.events.size)
             .param("events", objectMapper.writeValueAsString(battle.events))
+            .param("groupSnapshot", objectMapper.writeValueAsString(group))
+            .param("groupId", group.id)
+            .param("groupVersion", group.version)
+            .param("compositionPower", battle.compositionPower)
+            .param("tacticFit", battle.tacticFit)
+            .param("counterBonus", battle.counterBonus)
             .update()
 
         recordWalletChange(telegramId, "XP", battle.xp.toLong(), "BATTLE_REWARD", battleId)
@@ -294,11 +341,13 @@ class GameService(
             appendLine(GameI18n.t(language, "battle_complete"))
             appendLine("${GameI18n.battlefield(language, operation.battlefield.location)} · ${GameI18n.biome(language, operation.battlefield.biome)}")
             appendLine("${tactic.icon} ${GameI18n.tactic(language, tactic)}")
+            appendLine("${GameI18n.t(language, "active_group")}: ${army.activeGroup.name} · ${group.usedCp}/${group.cpLimit} CP")
             appendLine("${GameI18n.t(language, "enemy_label")}: ${GameI18n.enemy(language, operation.enemy)}")
             appendLine()
             appendLine(outcome)
             appendLine("${GameI18n.t(language, "final_power")}: ${battle.playerPower} : ${battle.enemyPower}")
-            appendLine("${GameI18n.t(language, "counter_order")}: $tacticImpact · ${GameI18n.t(language, "terrain")}: $terrainImpact")
+            appendLine("${GameI18n.t(language, "composition_power")}: ${battle.compositionPower}")
+            appendLine("${GameI18n.t(language, "tactic_fit")}: ${battle.tacticFit}% ($tacticImpact) · ${GameI18n.t(language, "counter_order")}: ${signed(battle.counterBonus)} · ${GameI18n.t(language, "terrain")}: $terrainImpact")
             appendLine()
             appendLine(highlights)
             appendLine()
@@ -326,6 +375,161 @@ class GameService(
         if (parts.size != 3 || parts[0] != prefix) return null
         return Selection(parts[1].toIntOrNull() ?: return null, parts[2].toIntOrNull() ?: return null)
     }
+
+    private fun armyMenu(telegramId: Long, chatId: Long) {
+        val language = language(telegramId)
+        val army = inventory.army(telegramId)
+        val active = army.activeGroup
+        val snapshot = active.units.takeIf { it.isNotEmpty() }?.let { inventory.battleSnapshot(army) }
+        val text = buildString {
+            appendLine(GameI18n.t(language, "army_title"))
+            appendLine("${GameI18n.t(language, "cp_limit")}: ${groupCp(army)}/${army.cpLimit} CP")
+            appendLine()
+            army.groups.forEach { group ->
+                val mark = if (group.active) "✅" else "▫️"
+                val cp = group.units.sumOf { equipment.require(it.code).cpCost }
+                appendLine("$mark ${group.presetNo}. ${group.name} · $cp/${army.cpLimit} CP · ${group.units.size}")
+            }
+            appendLine()
+            appendLine(GameI18n.t(language, "active_group") + ": " + active.name)
+            if (active.units.isEmpty()) appendLine(GameI18n.t(language, "army_empty"))
+            else active.units.forEach { appendLine("• ${unitLabel(it, language)}") }
+            snapshot?.let {
+                appendLine()
+                appendLine("${GameI18n.t(language, "composition_power")}: ${battleEngine.compositionPower(it)}")
+            }
+            appendLine()
+            append(GameI18n.t(language, "army_hint"))
+        }
+        telegram.sendMessage(chatId, text, armyKeyboard(army, language))
+    }
+
+    private fun armyKeyboard(army: Army, language: GameLanguage): InlineKeyboardMarkup {
+        val activeIds = army.activeGroup.units.map { it.id }.toSet()
+        val rows = mutableListOf<List<InlineKeyboardButton>>()
+        rows += army.groups.map { group ->
+            val mark = if (group.active) "✅ " else ""
+            InlineKeyboardButton("$mark${group.presetNo}. ${group.name}", "army:preset:${group.presetNo}")
+        }
+        army.inventory.take(30).forEach { unit ->
+            val definition = equipment.require(unit.code)
+            val selected = if (unit.id in activeIds) "✅" else "➕"
+            rows += listOf(InlineKeyboardButton("$selected ${definition.emoji} ${definition.name(language)} · L${unit.level} · ${definition.cpCost}CP", "army:toggle:${unit.id}"))
+        }
+        rows += listOf(
+            InlineKeyboardButton(GameI18n.t(language, "shop"), "nav:shop"),
+            InlineKeyboardButton(GameI18n.t(language, "battle"), "nav:battle"),
+        )
+        return InlineKeyboardMarkup(rows)
+    }
+
+    private fun shopMenu(telegramId: Long, chatId: Long) {
+        val player = player(telegramId)
+        val language = GameLanguage.fromStored(player.language)
+        val text = buildString {
+            appendLine(GameI18n.t(language, "shop_title"))
+            appendLine("Credits: ${player.credits} · Materials: ${player.materials}")
+            appendLine()
+            append(GameI18n.t(language, "shop_hint"))
+        }
+        val rows = equipment.units.map { definition ->
+            val lock = if (player.commanderLevel < definition.unlockLevel) "🔒 L${definition.unlockLevel}" else "${definition.cpCost} CP"
+            listOf(InlineKeyboardButton("${definition.emoji} ${definition.name(language)} · $lock", "shop:view:${definition.code}"))
+        } + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "army"), "nav:army")))
+        telegram.sendMessage(chatId, text, InlineKeyboardMarkup(rows))
+    }
+
+    private fun shopDetails(telegramId: Long, chatId: Long, code: String) {
+        val player = player(telegramId)
+        val language = GameLanguage.fromStored(player.language)
+        val definition = equipment.get(code) ?: return shopMenu(telegramId, chatId)
+        val stats = definition.stats
+        val state = if (player.commanderLevel >= definition.unlockLevel) "✅" else "🔒 ${GameI18n.t(language, "level")} ${definition.unlockLevel}"
+        val text = """
+            ${definition.emoji} ${definition.name(language)} · $state
+
+            ${GameI18n.t(language, "unit_stats")}: ⚔ ${stats.attack} · 🛡 ${stats.armor} · 🏎 ${stats.mobility} · 🔭 ${stats.recon} · 📡 ${stats.support}
+            CP: ${definition.cpCost}
+
+            ${GameI18n.t(language, "buy")}: ${definition.buyCredits} Credits
+            ${GameI18n.t(language, "craft")}: ${definition.craftCredits} Credits + ${definition.craftMaterials} Materials
+            ${GameI18n.t(language, "upgrade_growth")}
+        """.trimIndent()
+        val keyboard = InlineKeyboardMarkup(listOf(
+            listOf(
+                InlineKeyboardButton("💳 ${GameI18n.t(language, "buy")}", "shop:buy:${definition.code}"),
+                InlineKeyboardButton("🛠 ${GameI18n.t(language, "craft")}", "shop:craft:${definition.code}"),
+            ),
+            listOf(InlineKeyboardButton("↩️ ${GameI18n.t(language, "shop")}", "nav:shop")),
+        ))
+        telegram.sendPhoto(chatId, properties.publicBaseUrl.trimEnd('/') + definition.iconPath, text, keyboard)
+    }
+
+    private fun acquireUnit(telegramId: Long, chatId: Long, code: String, craft: Boolean) {
+        val language = language(telegramId)
+        val action = inventory.acquire(telegramId, code, craft)
+        telegram.sendMessage(chatId, actionMessage(action, language), actionKeyboard(language))
+        if (action.status == EquipmentActionStatus.SUCCESS) armyMenu(telegramId, chatId)
+    }
+
+    private fun upgradeMenu(telegramId: Long, chatId: Long) {
+        val language = language(telegramId)
+        val army = inventory.army(telegramId)
+        val player = player(telegramId)
+        val rows = army.inventory.take(30).map { unit ->
+            val definition = equipment.require(unit.code)
+            val suffix = if (unit.level >= 5) "MAX" else "${definition.upgradeCredits(unit.level)}C + ${definition.upgradeMaterials(unit.level)}M"
+            listOf(InlineKeyboardButton("⬆️ ${definition.emoji} ${definition.name(language)} L${unit.level} · $suffix", "unit:upgrade:${unit.id}"))
+        } + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "army"), "nav:army")))
+        telegram.sendMessage(
+            chatId,
+            "${GameI18n.t(language, "upgrade_title")}\nCredits: ${player.credits} · Materials: ${player.materials}\n\n${GameI18n.t(language, "upgrade_growth")}",
+            InlineKeyboardMarkup(rows),
+        )
+    }
+
+    private fun upgradeUnit(telegramId: Long, chatId: Long, rawId: String) {
+        val language = language(telegramId)
+        val unitId = runCatching { UUID.fromString(rawId) }.getOrNull() ?: return upgradeMenu(telegramId, chatId)
+        val action = inventory.upgrade(telegramId, unitId)
+        telegram.sendMessage(chatId, actionMessage(action, language))
+        upgradeMenu(telegramId, chatId)
+    }
+
+    private fun toggleUnit(telegramId: Long, chatId: Long, rawId: String) {
+        val language = language(telegramId)
+        val unitId = runCatching { UUID.fromString(rawId) }.getOrNull() ?: return armyMenu(telegramId, chatId)
+        val action = inventory.toggleInActiveGroup(telegramId, unitId)
+        if (action.status != EquipmentActionStatus.SUCCESS) telegram.sendMessage(chatId, actionMessage(action, language))
+        armyMenu(telegramId, chatId)
+    }
+
+    private fun activatePreset(telegramId: Long, chatId: Long, rawPreset: String) {
+        inventory.activatePreset(telegramId, rawPreset.toIntOrNull() ?: 0)
+        armyMenu(telegramId, chatId)
+    }
+
+    private fun actionMessage(action: EquipmentAction, language: GameLanguage): String {
+        val name = action.definition?.name(language).orEmpty()
+        return when (action.status) {
+            EquipmentActionStatus.SUCCESS -> GameI18n.t(language, "equipment_success", name, action.unit?.level ?: 1)
+            EquipmentActionStatus.LOCKED -> GameI18n.t(language, "equipment_locked", action.definition?.unlockLevel ?: 1)
+            EquipmentActionStatus.INSUFFICIENT_RESOURCES -> GameI18n.t(language, "insufficient_resources")
+            EquipmentActionStatus.MAX_LEVEL -> GameI18n.t(language, "max_level")
+            EquipmentActionStatus.GROUP_FULL -> GameI18n.t(language, "group_full")
+            EquipmentActionStatus.LAST_UNIT -> GameI18n.t(language, "last_unit")
+            EquipmentActionStatus.NOT_FOUND -> GameI18n.t(language, "stale")
+        }
+    }
+
+    private fun unitLabel(unit: OwnedUnit, language: GameLanguage): String = unitLabel(unit.code, unit.level, language)
+
+    private fun unitLabel(code: String, level: Int, language: GameLanguage): String {
+        val definition = equipment.require(code)
+        return "${definition.emoji} ${definition.name(language)} L$level · ${definition.cpCost}CP"
+    }
+
+    private fun groupCp(army: Army): Int = army.activeGroup.units.sumOf { equipment.require(it.code).cpCost }
 
     private fun contribute(telegramId: Long, firstName: String, chatId: Long, argument: String) {
         ensurePlayer(telegramId, firstName)
@@ -391,6 +595,7 @@ class GameService(
             .param("language", inferred)
             .param("telegramLanguage", telegramLanguage?.take(16))
             .update()
+        inventory.ensureStarter(telegramId)
     }
 
     private fun player(telegramId: Long): Player = jdbc.sql(
@@ -437,6 +642,10 @@ class GameService(
     private fun actionKeyboard(language: GameLanguage, includeBattle: Boolean = true): InlineKeyboardMarkup {
         val rows = mutableListOf<List<InlineKeyboardButton>>()
         if (includeBattle) rows += listOf(InlineKeyboardButton(GameI18n.t(language, "battle"), "nav:battle"))
+        rows += listOf(
+            InlineKeyboardButton(GameI18n.t(language, "army"), "nav:army"),
+            InlineKeyboardButton(GameI18n.t(language, "shop"), "nav:shop"),
+        )
         rows += listOf(
             InlineKeyboardButton(GameI18n.t(language, "profile"), "nav:profile"),
             InlineKeyboardButton(GameI18n.t(language, "front"), "nav:front"),
@@ -602,7 +811,12 @@ class GameService(
 
     private fun signed(value: Int): String = if (value >= 0) "+$value" else value.toString()
 
-    private fun helpText(language: GameLanguage) = GameI18n.t(language, "help")
+    private fun helpText(language: GameLanguage) = buildString {
+        appendLine(GameI18n.t(language, "help"))
+        appendLine("/army — ${GameI18n.t(language, "army_title")}")
+        appendLine("/shop — ${GameI18n.t(language, "shop_title")}")
+        append("/upgrade — ${GameI18n.t(language, "upgrade_title")}")
+    }
 
     companion object {
         private const val COUNTRY_PAGE_SIZE = 10

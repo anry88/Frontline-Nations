@@ -11,7 +11,10 @@ The repository contains a command-only MVP bot backed by Kotlin, Spring Boot, an
 Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
 
 - `/start` — register and choose an alliance with inline buttons
-- `/battle` — choose one of three operations, inspect intelligence, and select a tactic
+- `/battle` — choose one of five operations and a composition-dependent tactic
+- `/army` or `/hangar` — switch between three presets and select equipment within the CP limit
+- `/shop` — inspect illustrated equipment cards and buy or craft a unit
+- `/upgrade` — improve an owned unit from level 1 to 5
 - `/profile` — inspect alliance, level progress, battle record, resources, and daily orders
 - `/front` — inspect the current matchup, intelligence, countdown, or published result
 - `/contribute 100` — transfer Credits before the Sunday contribution lock
@@ -44,7 +47,9 @@ The command-only MVP pairs player-selected alliances each week. Contributions re
 
 ### Progression
 
-The planned progression model combines commander levels, a branching research tree, configurable unit modules, active doctrine perks, reusable combat-group presets, and seasonal prestige that does not create unlimited combat power.
+The command MVP now includes seven configurable equipment classes, individual owned units, three reusable combat-group presets, commander-level unlocks, purchase and lower-credit crafting recipes, and five unit levels. Every level adds 12% to the unit's five base statistics. The CP limit grows slowly from 10 to 14 with commander level.
+
+New commanders receive the specification's 10 CP starter group: two main battle tanks, one artillery unit, and one reconnaissance vehicle. The active preset becomes an immutable input snapshot for battle resolution. Modules, branching research spending, doctrine perks, repairs, and seasonal prestige remain planned.
 
 ## Target Architecture
 
@@ -80,6 +85,7 @@ src/           Spring Boot application, migration, and tests
 compose.yml    Application and PostgreSQL containers
 scripts/       Telegram and deployment helpers
 assets/        Brand assets, including the Telegram avatar
+src/main/resources/static/assets/units/  Generated equipment-class icons
 docs/          Product, architecture, and repository guidance
 Documents/     Source specifications and retained project materials
 ```
@@ -92,6 +98,7 @@ Mini App and replay-renderer directories will be added only when those milestone
 - [Architecture](DOCUMENTATION.md)
 - [Architecture baseline decision](docs/decisions/0001-architecture-baseline.md)
 - [Localized identity and alliance catalog decision](docs/decisions/0004-localized-identity-and-alliance-catalog.md)
+- [Personal equipment and tactical composition decision](docs/decisions/0005-personal-equipment-and-tactical-composition.md)
 - [Contributor guide](CONTRIBUTING.md)
 - [Agent guide](AGENTS.md)
 - [GitHub About metadata](docs/github-about.md)
@@ -99,9 +106,9 @@ Mini App and replay-renderer directories will be added only when those milestone
 
 ## Development Status
 
-Current phase: command-only MVP with interactive personal operations and scheduled weekly battles.
+Current phase: command-only MVP with persistent equipment progression, interactive personal operations, and scheduled weekly battles.
 
-The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog with recommendations, search, and pagination, moderated nicknames, daily operations, deterministic multi-round battles, transactional progression, weekly pairings, scheduled aggregate resolution, NPC compensation, idempotent campaign rewards, and durable Telegram notifications. Seasonal alliance switching, combat-group composition, typed campaign assets, research spending, full replay UI, Mini App, and video rendering remain planned.
+The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog, moderated nicknames, a seven-class equipment catalog, transactional purchase/crafting/upgrades, three CP-limited presets, five operation offers drawn from 24 battlefields, deterministic composition-aware battles, weekly pairings, scheduled aggregate resolution, NPC compensation, idempotent campaign rewards, and durable Telegram notifications. Seasonal alliance switching, modules, typed campaign assets, research spending, full replay UI, Mini App, and video rendering remain planned.
 
 Run tests with `GRADLE_USER_HOME="$PWD/.gradle-home" ./gradlew test`. For a local Docker run, copy `.env.example` to an ignored `.env`, replace every secret, create the PostgreSQL data directory, and run `docker compose up --build`.
 

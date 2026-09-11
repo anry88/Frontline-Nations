@@ -37,6 +37,13 @@ data class SendMessageRequest(
     @param:JsonProperty("reply_markup") val replyMarkup: InlineKeyboardMarkup? = null,
 )
 
+data class SendPhotoRequest(
+    @param:JsonProperty("chat_id") val chatId: Long,
+    val photo: String,
+    val caption: String,
+    @param:JsonProperty("reply_markup") val replyMarkup: InlineKeyboardMarkup? = null,
+)
+
 data class InlineKeyboardMarkup(
     @param:JsonProperty("inline_keyboard") val inlineKeyboard: List<List<InlineKeyboardButton>>,
 )

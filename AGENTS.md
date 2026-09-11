@@ -7,7 +7,7 @@ Repository-level guidance for coding agents and automated review tools.
 - This repository contains a minimal command-only Telegram bot implemented with Kotlin, Spring Boot, JDBC/Flyway, and PostgreSQL.
 - [Documents/Frontline_TZ_v0.1_RU.docx](Documents/Frontline_TZ_v0.1_RU.docx) is the primary product and technical source.
 - [README.md](README.md) is the public overview, [docs/product-overview.md](docs/product-overview.md) summarizes product intent, and [DOCUMENTATION.md](DOCUMENTATION.md) defines the target engineering boundaries.
-- The implemented surface is localized `/start`, country recommendations/search/pagination through `/country`, `/language`, confirmed `/nickname`, `/settings`, a two-step `/battle` flow, `/profile`, scheduled weekly views in `/front`, locked `/contribute`, and `/help`. Mini App, seasonal alliance switching, full replay UI, combat-group composition, research spending, and campaign-asset classes remain planned.
+- The implemented surface is localized `/start`, `/country`, `/language`, `/nickname`, `/settings`, `/army` and `/hangar` presets, `/shop` purchase/crafting, `/upgrade`, a composition-aware `/battle` flow, `/profile`, scheduled weekly views in `/front`, `/contribute`, and `/help`. Mini App, seasonal alliance switching, full replay UI, modules, research spending, and campaign-asset classes remain planned.
 - Do not describe planned behavior as implemented. Label plans, examples, and target architecture explicitly until code and tests support the claims.
 
 ## First Pass For Any Agent
@@ -40,6 +40,11 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/main/resources/db/migration/V3__weekly_campaign_battles.sql`: campaign weeks, matchups, results, rewards, and notification outbox.
 - `src/main/resources/db/migration/V4__player_locale_and_nickname.sql`: player locale, Telegram locale hint, nickname, and pending confirmation.
 - `src/main/kotlin/com/tggames/frontline/campaign/`: weekly schedule, pairing, aggregate battle, reward, and notification logic.
+- `src/main/kotlin/com/tggames/frontline/catalog/`: data-driven personal equipment definitions and balance validation.
+- `src/main/kotlin/com/tggames/frontline/inventory/`: starter grants, owned units, presets, purchases, crafting, and upgrades.
+- `src/main/resources/catalog/equipment-catalog.json`: localized unit costs, roles, statistics, unlocks, and icon paths.
+- `src/main/resources/static/assets/units/`: generated fictional equipment-class icons served by the backend.
+- `src/main/resources/db/migration/V5__personal_equipment_and_battle_groups.sql`: inventory, presets, audit history, and battle snapshots.
 - `src/main/kotlin/com/tggames/frontline/i18n/`: supported locales and command-interface translations.
 - `src/main/resources/catalog/alliance-codes.txt`: versioned 249-entry ISO catalog plus explicitly supported Kosovo.
 - `compose.yml`: production-shaped application and PostgreSQL services.

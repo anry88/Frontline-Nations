@@ -24,6 +24,18 @@ class TelegramClient(
             .toBodilessEntity()
     }
 
+    fun sendPhoto(chatId: Long, photoUrl: String, caption: String, keyboard: InlineKeyboardMarkup? = null) {
+        if (telegramDisabled()) {
+            logger.info("Telegram is disabled; photo response for chat {}: {} ({})", chatId, caption, photoUrl)
+            return
+        }
+        restClient.post()
+            .uri("/sendPhoto")
+            .body(SendPhotoRequest(chatId, photoUrl, caption, keyboard))
+            .retrieve()
+            .toBodilessEntity()
+    }
+
     fun answerCallback(callbackId: String) {
         if (telegramDisabled()) return
         restClient.post()

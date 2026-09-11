@@ -31,6 +31,28 @@ object GameI18n {
         "enemy_label" to v("Enemy", "Противник", "Enemigo", "Inimigo", "العدو", "Musuh", "शत्रु", "Düşman"),
         "final_power" to v("Final power", "Итоговая сила", "Fuerza final", "Força final", "القوة النهائية", "Kekuatan akhir", "अंतिम शक्ति", "Nihai güç"),
         "counter_order" to v("Counter-order", "Контрприказ", "Contraorden", "Contraordem", "الأمر المضاد", "Kontra-perintah", "जवाबी आदेश", "Karşı emir"),
+        "composition_power" to v("Equipment power", "Сила техники", "Potencia técnica", "Força técnica", "قوة المعدات", "Kekuatan unit", "तकनीकी शक्ति", "Teçhizat gücü"),
+        "tactic_fit" to v("Composition fit", "Совместимость состава", "Ajuste de composición", "Adequação da composição", "ملاءمة التشكيل", "Kecocokan formasi", "संरचना अनुकूलता", "Dizilim uyumu"),
+        "army" to v("🧰 Army", "🧰 Армия", "🧰 Ejército", "🧰 Exército", "🧰 الجيش", "🧰 Pasukan", "🧰 सेना", "🧰 Ordu"),
+        "shop" to v("🏭 Arsenal", "🏭 Арсенал", "🏭 Arsenal", "🏭 Arsenal", "🏭 الترسانة", "🏭 Arsenal", "🏭 शस्त्रागार", "🏭 Cephanelik"),
+        "army_title" to v("🧰 COMBAT GROUPS", "🧰 БОЕВЫЕ ГРУППЫ", "🧰 GRUPOS DE COMBATE", "🧰 GRUPOS DE COMBATE", "🧰 مجموعات القتال", "🧰 GRUP TEMPUR", "🧰 युद्ध समूह", "🧰 MUHAREBE GRUPLARI"),
+        "cp_limit" to v("Command Point limit", "Лимит Command Points", "Límite de puntos de mando", "Limite de pontos de comando", "حد نقاط القيادة", "Batas Poin Komando", "कमांड पॉइंट सीमा", "Komuta Puanı sınırı"),
+        "active_group" to v("Active group", "Активная группа", "Grupo activo", "Grupo ativo", "المجموعة النشطة", "Grup aktif", "सक्रिय समूह", "Aktif grup"),
+        "army_empty" to v("The active group is empty. Add at least one unit.", "Активная группа пуста. Добавьте хотя бы одну машину.", "El grupo activo está vacío. Añade una unidad.", "O grupo ativo está vazio. Adicione uma unidade.", "المجموعة النشطة فارغة. أضف وحدة واحدة.", "Grup aktif kosong. Tambahkan satu unit.", "सक्रिय समूह खाली है। एक यूनिट जोड़ें।", "Aktif grup boş. En az bir birlik ekle."),
+        "army_hint" to v("Choose a preset, then add or remove owned units. A battle uses this exact composition.", "Выберите пресет, затем добавляйте или убирайте свою технику. В бой уйдёт именно этот состав.", "Elige un preset y añade o quita unidades. La batalla usará esa composición.", "Escolha um preset e adicione ou remova unidades. A batalha usará essa composição.", "اختر إعدادًا ثم أضف أو أزل وحداتك. ستستخدم المعركة هذا التشكيل.", "Pilih preset lalu tambah atau hapus unit. Pertempuran memakai susunan ini.", "प्रीसेट चुनें, फिर यूनिट जोड़ें या हटाएँ। युद्ध इसी संरचना से होगा।", "Bir hazır grup seç, birlik ekle veya çıkar. Savaş bu dizilimi kullanır."),
+        "shop_title" to v("🏭 EQUIPMENT ARSENAL", "🏭 АРСЕНАЛ ТЕХНИКИ", "🏭 ARSENAL DE EQUIPO", "🏭 ARSENAL DE EQUIPAMENTO", "🏭 ترسانة المعدات", "🏭 ARSENAL UNIT", "🏭 उपकरण शस्त्रागार", "🏭 TEÇHİZAT CEPHANELİĞİ"),
+        "shop_hint" to v("Buy with Credits or craft more efficiently with Credits and Materials.", "Покупайте за Credits или производите выгоднее из Credits и Materials.", "Compra con Credits o fabrica con Credits y Materials.", "Compre com Credits ou fabrique com Credits e Materials.", "اشترِ بالاعتمادات أو اصنع بكفاءة باستخدام الاعتمادات والمواد.", "Beli dengan Credits atau rakit lebih hemat memakai Credits dan Materials.", "Credits से खरीदें या Credits और Materials से कम लागत में बनाएँ।", "Credits ile satın al veya Credits ve Materials ile daha verimli üret."),
+        "unit_stats" to v("Attack · armor · mobility · recon · support", "Атака · броня · мобильность · разведка · поддержка", "Ataque · blindaje · movilidad · reconocimiento · apoyo", "Ataque · blindagem · mobilidade · reconhecimento · suporte", "هجوم · درع · حركة · استطلاع · دعم", "Serang · zirah · mobilitas · pengintaian · dukungan", "आक्रमण · कवच · गतिशीलता · टोही · समर्थन", "Saldırı · zırh · hareket · keşif · destek"),
+        "buy" to v("Buy", "Купить", "Comprar", "Comprar", "شراء", "Beli", "खरीदें", "Satın al"),
+        "craft" to v("Craft", "Произвести", "Fabricar", "Produzir", "تصنيع", "Rakit", "निर्माण", "Üret"),
+        "upgrade_title" to v("⬆️ EQUIPMENT UPGRADES", "⬆️ ПРОКАЧКА ТЕХНИКИ", "⬆️ MEJORAS DE EQUIPO", "⬆️ MELHORIAS DE EQUIPAMENTO", "⬆️ ترقيات المعدات", "⬆️ PENINGKATAN UNIT", "⬆️ उपकरण उन्नयन", "⬆️ TEÇHİZAT YÜKSELTMELERİ"),
+        "upgrade_growth" to v("Each level adds 12% to all base stats; maximum level is 5.", "Каждый уровень даёт +12% ко всем базовым характеристикам; максимум — 5.", "Cada nivel añade 12% a todas las estadísticas; máximo 5.", "Cada nível adiciona 12% aos atributos; máximo 5.", "يضيف كل مستوى 12٪ إلى الخصائص الأساسية؛ الحد الأقصى 5.", "Tiap level menambah 12% statistik dasar; maksimum 5.", "हर स्तर सभी मूल आँकड़ों में 12% जोड़ता है; अधिकतम 5।", "Her seviye temel değerlere %12 ekler; en fazla 5."),
+        "equipment_success" to v("Equipment updated: {0}, level {1}.", "Техника обновлена: {0}, уровень {1}.", "Equipo actualizado: {0}, nivel {1}.", "Equipamento atualizado: {0}, nível {1}.", "تم تحديث المعدات: {0}، المستوى {1}.", "Unit diperbarui: {0}, level {1}.", "उपकरण अपडेट: {0}, स्तर {1}।", "Teçhizat güncellendi: {0}, seviye {1}."),
+        "equipment_locked" to v("Unlocks at commander level {0}.", "Откроется на уровне командира {0}.", "Se desbloquea en nivel de comandante {0}.", "Desbloqueia no nível de comandante {0}.", "يُفتح عند مستوى القائد {0}.", "Terbuka di level komandan {0}.", "कमांडर स्तर {0} पर खुलेगा।", "Komutan seviyesi {0}'da açılır."),
+        "insufficient_resources" to v("Not enough Credits or Materials.", "Недостаточно Credits или Materials.", "No hay suficientes Credits o Materials.", "Credits ou Materials insuficientes.", "لا توجد اعتمادات أو مواد كافية.", "Credits atau Materials tidak cukup.", "Credits या Materials पर्याप्त नहीं हैं।", "Yeterli Credits veya Materials yok."),
+        "max_level" to v("This unit is already at maximum level.", "Эта техника уже максимального уровня.", "Esta unidad ya está al nivel máximo.", "Esta unidade já está no nível máximo.", "هذه الوحدة في المستوى الأقصى.", "Unit ini sudah level maksimum.", "यह यूनिट अधिकतम स्तर पर है।", "Bu birlik zaten en yüksek seviyede."),
+        "group_full" to v("The Command Point limit would be exceeded.", "Будет превышен лимит Command Points.", "Se superaría el límite de puntos de mando.", "O limite de pontos de comando seria excedido.", "سيتم تجاوز حد نقاط القيادة.", "Batas Poin Komando akan terlampaui.", "कमांड पॉइंट सीमा पार हो जाएगी।", "Komuta Puanı sınırı aşılır."),
+        "last_unit" to v("A combat group must keep at least one unit.", "В боевой группе должна остаться хотя бы одна машина.", "El grupo debe conservar al menos una unidad.", "O grupo deve manter ao menos uma unidade.", "يجب أن تبقى وحدة واحدة على الأقل.", "Grup harus memiliki setidaknya satu unit.", "युद्ध समूह में कम से कम एक यूनिट रहनी चाहिए।", "Muharebe grubunda en az bir birlik kalmalı."),
         "victory" to v("🏆 VICTORY", "🏆 ПОБЕДА", "🏆 VICTORIA", "🏆 VITÓRIA", "🏆 انتصار", "🏆 MENANG", "🏆 विजय", "🏆 ZAFER"),
         "withdrawal" to v("↩️ ORDERLY WITHDRAWAL", "↩️ ОРГАНИЗОВАННОЕ ОТСТУПЛЕНИЕ", "↩️ RETIRADA ORDENADA", "↩️ RETIRADA ORGANIZADA", "↩️ انسحاب منظم", "↩️ MUNDUR TERATUR", "↩️ व्यवस्थित वापसी", "↩️ DÜZENLİ ÇEKİLME"),
         "round" to v("Round", "Раунд", "Ronda", "Rodada", "الجولة", "Ronde", "दौर", "Tur"),
@@ -74,7 +96,7 @@ object GameI18n {
         "profile" to v("🪖 Profile", "🪖 Профиль", "🪖 Perfil", "🪖 Perfil", "🪖 الملف", "🪖 Profil", "🪖 प्रोफ़ाइल", "🪖 Profil"),
         "front" to v("🌍 Front", "🌍 Фронт", "🌍 Frente", "🌍 Frente", "🌍 الجبهة", "🌍 Front", "🌍 मोर्चा", "🌍 Cephe"),
         "settings" to v("⚙️ Settings", "⚙️ Настройки", "⚙️ Ajustes", "⚙️ Ajustes", "⚙️ الإعدادات", "⚙️ Pengaturan", "⚙️ सेटिंग", "⚙️ Ayarlar"),
-        "settings_text" to v("Settings: /language · /nickname · /country", "Настройки: /language · /nickname · /country", "Ajustes: /language · /nickname · /country", "Ajustes: /language · /nickname · /country", "الإعدادات: /language · /nickname · /country", "Pengaturan: /language · /nickname · /country", "सेटिंग: /language · /nickname · /country", "Ayarlar: /language · /nickname · /country"),
+        "settings_text" to v("Settings: /language · /nickname · /country\nGame: /army · /shop · /upgrade", "Настройки: /language · /nickname · /country\nИгра: /army · /shop · /upgrade", "Ajustes: /language · /nickname · /country\nJuego: /army · /shop · /upgrade", "Ajustes: /language · /nickname · /country\nJogo: /army · /shop · /upgrade", "الإعدادات: /language · /nickname · /country\nاللعبة: /army · /shop · /upgrade", "Pengaturan: /language · /nickname · /country\nGim: /army · /shop · /upgrade", "सेटिंग: /language · /nickname · /country\nगेम: /army · /shop · /upgrade", "Ayarlar: /language · /nickname · /country\nOyun: /army · /shop · /upgrade"),
         "no_orders" to v("No Combat Orders left. Refill is at 00:00 game time.", "Боевые приказы закончились. Пополнение — в 00:00 по игровому времени.", "No quedan órdenes. Se reponen a las 00:00 del juego.", "Sem ordens. Reposição às 00:00 do jogo.", "نفدت أوامر القتال. التجديد الساعة 00:00 بتوقيت اللعبة.", "Perintah tempur habis. Diisi ulang pukul 00:00 waktu gim.", "युद्ध आदेश खत्म। गेम समय 00:00 पर फिर मिलेंगे।", "Savaş Emri kalmadı. Oyun saatiyle 00:00'da yenilenir."),
         "operations" to v("🗺 AVAILABLE OPERATIONS", "🗺 ДОСТУПНЫЕ ОПЕРАЦИИ", "🗺 OPERACIONES DISPONIBLES", "🗺 OPERAÇÕES DISPONÍVEIS", "🗺 العمليات المتاحة", "🗺 OPERASI TERSEDIA", "🗺 उपलब्ध अभियान", "🗺 MEVCUT OPERASYONLAR"),
         "terrain" to v("Terrain", "Местность", "Terreno", "Terreno", "التضاريس", "Medan", "भूभाग", "Arazi"),
@@ -106,11 +128,11 @@ object GameI18n {
     )
     private val tacticHints = Tactic.entries.associateWith { tactic ->
         when (tactic) {
-            Tactic.ASSAULT -> v("breaks artillery positions", "прорывает артиллерийские позиции", "rompe posiciones de artillería", "rompe posições de artilharia", "يخترق مواقع المدفعية", "menembus posisi artileri", "तोपखाने की स्थिति तोड़ता है", "topçu mevzilerini yarar")
-            Tactic.DEFENSE -> v("holds armored attacks", "сдерживает бронетанковый натиск", "frena ataques blindados", "contém ataques blindados", "يصد الهجمات المدرعة", "menahan serangan lapis baja", "बख़्तरबंद हमले रोकता है", "zırhlı saldırıyı tutar")
-            Tactic.AMBUSH -> v("threatens armor in rough terrain", "опасна для брони в сложной местности", "amenaza blindados en terreno difícil", "ameaça blindados em terreno difícil", "يهدد المدرعات في التضاريس الصعبة", "mengancam kendaraan di medan sulit", "कठिन भूभाग में कवच के लिए घातक", "zorlu arazide zırhlılara etkilidir")
-            Tactic.MANEUVER -> v("bypasses defense and long-range fire", "обходит оборону и дальний огонь", "rodea defensas y fuego lejano", "contorna defesa e fogo distante", "يتجاوز الدفاع والنيران البعيدة", "melewati pertahanan dan tembakan jauh", "रक्षा और दूर की आग को पार करता है", "savunma ve uzun menzilli ateşi aşar")
-            Tactic.RECON -> v("reveals ambushes and seizes initiative", "вскрывает засады и захватывает инициативу", "revela emboscadas y gana iniciativa", "revela emboscadas e ganha iniciativa", "يكشف الكمائن وينتزع المبادرة", "membuka penyergapan dan merebut inisiatif", "घात खोलता और पहल लेता है", "pusuları açığa çıkarır ve inisiyatif alır")
+            Tactic.ASSAULT -> v("needs firepower and armor", "нужны огневая мощь и броня", "requiere potencia y blindaje", "requer poder de fogo e blindagem", "يحتاج قوة نارية ودرعًا", "butuh daya tembak dan zirah", "अग्निशक्ति और कवच चाहिए", "ateş gücü ve zırh ister")
+            Tactic.DEFENSE -> v("needs armor and support", "нужны броня и поддержка", "requiere blindaje y apoyo", "requer blindagem e suporte", "يحتاج درعًا ودعمًا", "butuh zirah dan dukungan", "कवच और समर्थन चाहिए", "zırh ve destek ister")
+            Tactic.AMBUSH -> v("needs recon and firepower", "нужны разведка и огневая мощь", "requiere reconocimiento y potencia", "requer reconhecimento e poder de fogo", "يحتاج استطلاعًا وقوة نارية", "butuh pengintaian dan daya tembak", "टोही और अग्निशक्ति चाहिए", "keşif ve ateş gücü ister")
+            Tactic.MANEUVER -> v("needs mobility and armor", "нужны мобильность и броня", "requiere movilidad y blindaje", "requer mobilidade e blindagem", "يحتاج حركة ودرعًا", "butuh mobilitas dan zirah", "गतिशीलता और कवच चाहिए", "hareket ve zırh ister")
+            Tactic.RECON -> v("needs reconnaissance equipment", "нужна разведывательная техника", "requiere equipo de reconocimiento", "requer equipamento de reconhecimento", "يحتاج معدات استطلاع", "butuh unit pengintai", "टोही उपकरण चाहिए", "keşif teçhizatı ister")
         }
     }
     private val enemyNames = mapOf(
@@ -119,6 +141,8 @@ object GameI18n {
         EnemyArchetype.FORTIFIED to v("fortified group", "укреплённая группа", "grupo fortificado", "grupo fortificado", "مجموعة محصنة", "grup berbenteng", "किलेबंद समूह", "tahkim edilmiş grup"),
         EnemyArchetype.AMBUSH to v("concealed group", "скрытная группа", "grupo oculto", "grupo oculto", "مجموعة متخفية", "grup tersembunyi", "छिपा समूह", "gizli grup"),
         EnemyArchetype.MOBILE to v("mobile group", "мобильная группа", "grupo móvil", "grupo móvel", "مجموعة متحركة", "grup bergerak", "गतिशील समूह", "hareketli grup"),
+        EnemyArchetype.AIR to v("air strike group", "авиационная группа", "grupo aéreo", "grupo aéreo", "مجموعة جوية", "grup udara", "वायु समूह", "hava grubu"),
+        EnemyArchetype.AIR_DEFENSE to v("air-defense group", "группа ПВО", "grupo antiaéreo", "grupo antiaéreo", "مجموعة دفاع جوي", "grup pertahanan udara", "वायु रक्षा समूह", "hava savunma grubu"),
     )
     private val enemyIntel = EnemyArchetype.entries.associateWith { v("enemy profile identified: ${it.name.lowercase()}", it.intel, "perfil enemigo: ${it.name.lowercase()}", "perfil inimigo: ${it.name.lowercase()}", "تم تحديد نمط العدو", "profil musuh teridentifikasi", "शत्रु स्वरूप पहचाना गया", "düşman profili belirlendi") }
     private val difficultyNames = mapOf(
@@ -140,6 +164,22 @@ object GameI18n {
         "Алтайский рубеж" to v("Altai Frontier", "Алтайский рубеж", "Frontera de Altái", "Fronteira de Altai", "جبهة ألتاي", "Garis Altai", "अल्ताई सीमा", "Altay Hattı"),
         "Полесский рубеж" to v("Polesia Frontier", "Полесский рубеж", "Frontera de Polesia", "Fronteira da Polésia", "جبهة بوليسيا", "Garis Polesia", "पोलेसिया सीमा", "Polesya Hattı"),
         "Северная тундра" to v("Northern Tundra", "Северная тундра", "Tundra Septentrional", "Tundra do Norte", "التندرا الشمالية", "Tundra Utara", "उत्तरी टुंड्रा", "Kuzey Tundrası"),
+        "Гобийская котловина" to v("Gobi Basin", "Гобийская котловина", "Cuenca del Gobi", "Bacia de Gobi", "حوض غوبي", "Cekungan Gobi", "गोबी बेसिन", "Gobi Havzası"),
+        "Дельта Нила" to v("Nile Delta", "Дельта Нила", "Delta del Nilo", "Delta do Nilo", "دلتا النيل", "Delta Nil", "नील डेल्टा", "Nil Deltası"),
+        "Анатолийское плато" to v("Anatolian Plateau", "Анатолийское плато", "Meseta de Anatolia", "Planalto da Anatólia", "هضبة الأناضول", "Dataran Tinggi Anatolia", "अनातोलियाई पठार", "Anadolu Platosu"),
+        "Рейнская равнина" to v("Rhine Plain", "Рейнская равнина", "Llanura del Rin", "Planície do Reno", "سهل الراين", "Dataran Rhein", "राइन मैदान", "Ren Ovası"),
+        "Предгорья Атласа" to v("Atlas Foothills", "Предгорья Атласа", "Estribaciones del Atlas", "Contrafortes do Atlas", "سفوح الأطلس", "Kaki Pegunungan Atlas", "एटलस तलहटी", "Atlas Etekleri"),
+        "Амазонская низменность" to v("Amazon Lowlands", "Амазонская низменность", "Llanura Amazónica", "Planície Amazônica", "أراضي الأمازون المنخفضة", "Dataran Rendah Amazon", "अमेज़न तराई", "Amazon Ovası"),
+        "Великая рифтовая долина" to v("Great Rift Valley", "Великая рифтовая долина", "Gran Valle del Rift", "Grande Vale do Rift", "الوادي المتصدع الكبير", "Great Rift Valley", "ग्रेट रिफ्ट घाटी", "Büyük Rift Vadisi"),
+        "Дельта Меконга" to v("Mekong Delta", "Дельта Меконга", "Delta del Mekong", "Delta do Mekong", "دلتا ميكونغ", "Delta Mekong", "मेकांग डेल्टा", "Mekong Deltası"),
+        "Деканское плато" to v("Deccan Plateau", "Деканское плато", "Meseta del Decán", "Planalto do Decão", "هضبة الدكن", "Dataran Tinggi Dekkan", "दक्कन पठार", "Dekan Platosu"),
+        "Андский перевал" to v("Andean Pass", "Андский перевал", "Paso Andino", "Passo Andino", "ممر الأنديز", "Celah Andes", "एंडीज़ दर्रा", "And Geçidi"),
+        "Аравийское побережье" to v("Arabian Coast", "Аравийское побережье", "Costa Arábiga", "Costa Arábica", "الساحل العربي", "Pesisir Arab", "अरब तट", "Arabistan Kıyısı"),
+        "Великие равнины" to v("Great Plains", "Великие равнины", "Grandes Llanuras", "Grandes Planícies", "السهول الكبرى", "Dataran Besar", "महान मैदान", "Büyük Ovalar"),
+        "Кавказский хребет" to v("Caucasus Ridge", "Кавказский хребет", "Cordillera del Cáucaso", "Cordilheira do Cáucaso", "سلسلة القوقاز", "Pegunungan Kaukasus", "काकेशस पर्वतमाला", "Kafkas Sırtı"),
+        "Балтийские болота" to v("Baltic Marshes", "Балтийские болота", "Pantanos Bálticos", "Pântanos Bálticos", "مستنقعات البلطيق", "Rawa Baltik", "बाल्टिक दलदल", "Baltık Bataklıkları"),
+        "Австралийский аутбэк" to v("Australian Outback", "Австралийский аутбэк", "Interior Australiano", "Interior Australiano", "المناطق النائية الأسترالية", "Pedalaman Australia", "ऑस्ट्रेलियाई आउटबैक", "Avustralya İçleri"),
+        "Камчатское побережье" to v("Kamchatka Coast", "Камчатское побережье", "Costa de Kamchatka", "Costa de Kamchatka", "ساحل كامتشاتكا", "Pesisir Kamchatka", "कामचटका तट", "Kamçatka Kıyısı"),
     )
     private val biomes = mapOf(
         "горы" to v("mountains", "горы", "montañas", "montanhas", "جبال", "pegunungan", "पहाड़", "dağlar"),
@@ -150,5 +190,8 @@ object GameI18n {
         "степь" to v("steppe", "степь", "estepa", "estepe", "سهوب", "stepa", "मैदान", "bozkır"),
         "лес" to v("forest", "лес", "bosque", "floresta", "غابة", "hutan", "जंगल", "orman"),
         "тундра" to v("tundra", "тундра", "tundra", "tundra", "تندرا", "tundra", "टुंड्रा", "tundra"),
+        "равнина" to v("plain", "равнина", "llanura", "planície", "سهل", "dataran", "मैदान", "ova"),
+        "джунгли" to v("jungle", "джунгли", "selva", "selva", "أدغال", "hutan hujan", "जंगल", "orman"),
+        "болота" to v("marshes", "болота", "pantanos", "pântanos", "مستنقعات", "rawa", "दलदल", "bataklık"),
     )
 }

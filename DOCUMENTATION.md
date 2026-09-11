@@ -11,7 +11,7 @@ The deployed MVP has two runtime surfaces:
 - Telegram Bot commands, callback queries, and inline alliance-selection buttons
 - Spring Boot backend as the authority for gameplay and economy
 
-PostgreSQL stores players and their explicit locale/nickname settings, processed Telegram updates, personal battles, ordered event JSON, campaign weeks and matchups, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs restore daily Combat Orders and drive the weekly campaign. Mini App, full replay visualization, combat-group composition, and typed campaign assets remain future milestones.
+PostgreSQL stores players and their explicit locale/nickname settings, processed Telegram updates, owned personal units, three combat-group presets, equipment audit records, personal battles and their immutable group snapshots, ordered event JSON, campaign weeks and matchups, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs restore daily Combat Orders and drive the weekly campaign. Mini App, full replay visualization, equipment modules, research spending, and typed campaign assets remain future milestones.
 
 ### Identity, locale, and alliance selection
 
@@ -25,12 +25,21 @@ PostgreSQL stores players and their explicit locale/nickname settings, processed
 
 ### Personal operation
 
-1. The server deterministically generates three operation offers for the player's current daily-order state.
+1. The server deterministically generates five operation offers from a catalog of 24 battlefields for the player's current daily-order state.
 2. The bot shows a named battlefield, biome, risk/reward tier, and tier-dependent intelligence for each offer.
-3. The player selects an operation and one of five tactical orders with inline buttons.
-4. The backend rejects stale callbacks, derives a protected seed, and simulates 8–12 logical rounds.
-5. One transaction consumes the Combat Order and records the result, rewards, statistics, operation metadata, and ordered `BattleEvent` JSON.
-6. The bot explains the tactic and terrain modifiers and presents three battle highlights. A full replay UI remains planned.
+3. The player maintains one of three reusable presets through `/army`. The 10–14 CP budget makes heavy armor, artillery, aircraft, support, and reconnaissance compete for space.
+4. Before confirmation, the bot scores all five tactics against the active group's attack, armor, mobility, reconnaissance, support, and role coverage. Missing required roles produce a real penalty.
+5. The backend binds the callback to the group version, rejects stale changes, derives a protected seed, and simulates 8–12 logical rounds.
+6. One transaction consumes the Combat Order and records the result, rewards, statistics, operation metadata, ordered `BattleEvent` JSON, and full equipment snapshot.
+7. The bot explains composition power, tactic fit, counter-order, and terrain modifiers and presents three battle highlights. A full replay UI remains planned.
+
+### Personal equipment
+
+1. A one-time idempotent grant creates three presets and the 10 CP starter force from the source specification.
+2. `/shop` reads the versioned JSON catalog and offers purchase for Credits or crafting for Credits plus Materials. Commander level gates later classes.
+3. `/upgrade` spends both resources and scales all base stats by a deterministic integer 12% per level through level 5.
+4. Player balances, wallet ledger rows, owned-unit state, and equipment audit rows change in one transaction.
+5. Generated fictional class icons are served by the backend and sent as Telegram equipment cards. Personal units are persistent and never consumed by the weekly campaign.
 
 ### Weekly campaign
 
@@ -70,7 +79,7 @@ Every completed battle should retain:
 - result summary
 - ordered events with logical ticks and typed payloads
 
-The current engine contract is version 2. After resolution it stores the battle seed and hash, commander-level snapshot, selected location, biome, difficulty, enemy archetype, tactic, 8–12 round events, and rewards. Operation offers are bound to the player, game date, and current order count; an old inline button cannot consume a newer order.
+The current engine contract is version 3. After resolution it stores the battle seed and hash, commander-level snapshot, full unit/group snapshot, group version, composition power, tactic fit, counter bonus, selected location, biome, difficulty, enemy archetype, tactic, 8–12 round events, and rewards. Operation offers are bound to the player, game date, current order count, and preset version; an old inline button cannot consume a newer order or silently use a changed group.
 
 The same engine version, seed, input snapshot, and configuration must reproduce the same outcome and event order. Replay clients may interpolate animations, but they may not invent gameplay outcomes.
 
@@ -82,6 +91,9 @@ Implementation should refine this model through versioned migrations. Important 
 
 - one Telegram identity maps to one player account unless an explicit account-linking flow is introduced
 - resource balances change only through ledger-backed transactions
+- one-time starter grants and equipment transactions are idempotent and auditable
+- a preset cannot exceed its commander-derived CP limit through normal application writes
+- personal equipment and expendable weekly campaign assets have separate storage and lifecycle
 - campaign contributions are immutable after the lock boundary
 - reward issuance is idempotent and traceable to its source
 - historical battles retain the versions needed for replay and audit
