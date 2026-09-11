@@ -46,7 +46,5 @@ frontline:
     loser-xp: ${CAMPAIGN_LOSER_XP:180}
     winner-credits: ${CAMPAIGN_WINNER_CREDITS:250}
     loser-credits: ${CAMPAIGN_LOSER_CREDITS:140}
-    winner-research: ${CAMPAIGN_WINNER_RESEARCH:20}
-    loser-research: ${CAMPAIGN_LOSER_RESEARCH:10}
     winner-materials: ${CAMPAIGN_WINNER_MATERIALS:30}
     loser-materials: ${CAMPAIGN_LOSER_MATERIALS:16}

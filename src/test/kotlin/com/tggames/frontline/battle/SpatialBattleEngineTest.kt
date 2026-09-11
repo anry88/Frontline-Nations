@@ -133,6 +133,9 @@ class SpatialBattleEngineTest {
                 assertThat(defeated).allMatch { it.hitPoints == 0 || it.routed }
             }
         }
+        assertThat(result.playerUnits + result.enemyUnits).allSatisfy { unit ->
+            assertThat(unit.remainingQuantity).isEqualTo(if (unit.hitPoints <= 0) 0 else (unit.hitPoints + 99) / 100)
+        }
     }
 
     @Test

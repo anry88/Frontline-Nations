@@ -7,6 +7,7 @@ import com.tggames.frontline.battle.CombatGroupSnapshot
 import com.tggames.frontline.game.AllianceCatalog
 import com.tggames.frontline.i18n.GameI18n
 import com.tggames.frontline.i18n.GameLanguage
+import com.tggames.frontline.inventory.InventoryService
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -35,6 +36,7 @@ class CampaignService(
     private val objectMapper: ObjectMapper,
     private val clock: Clock,
     private val mapCatalog: WeeklyBattleMapCatalog,
+    private val inventory: InventoryService,
 ) {
     private val calendar = CampaignCalendar(ZoneId.of(properties.gameTimezone))
 
@@ -55,7 +57,7 @@ class CampaignService(
     }
 
     @Transactional
-    fun contribute(playerId: Long, allianceCode: String, snapshot: CombatGroupSnapshot, language: GameLanguage = GameLanguage.RU): ContributionOutcome {
+    fun contribute(playerId: Long, allianceCode: String, snapshot: CombatGroupSnapshot, unitIds: List<UUID>, language: GameLanguage = GameLanguage.RU): ContributionOutcome {
         val period = ensureCurrentWeek()
         val week = jdbc.sql(
             "SELECT status, scheduled_at FROM campaign_weeks WHERE week_key = :week FOR UPDATE",
@@ -67,6 +69,9 @@ class CampaignService(
         }
 
         if (snapshot.units.isEmpty() || snapshot.usedCp <= 0) return ContributionOutcome(false, campaignText(language, "The active group is empty. Add equipment in /army first.", "Активная группа пуста. Сначала добавьте технику в /army."))
+        if (!inventory.reserveForWeeklyBattle(playerId, period.weekKey, unitIds)) {
+            return ContributionOutcome(false, campaignText(language, "Some units are destroyed or already committed to another weekly battle.", "Часть техники уничтожена или уже закреплена за другим недельным боем."))
+        }
         jdbc.sql(
             """
             INSERT INTO campaign_contributions(
@@ -94,7 +99,7 @@ class CampaignService(
             .param("groupVersion", snapshot.version)
             .param("snapshot", objectMapper.writeValueAsString(snapshot))
             .update()
-        return ContributionOutcome(true, campaignText(language, "Active group snapshot added: ${snapshot.usedCp} CP. Your equipment remains in your hangar.", "Снимок активной группы добавлен: ${snapshot.usedCp} CP. Техника остаётся в вашем ангаре."))
+        return ContributionOutcome(true, campaignText(language, "Active group committed: ${snapshot.usedCp} CP. It is reserved until Sunday's battle; survivors return and destroyed units are lost.", "Активная группа отправлена: ${snapshot.usedCp} CP. Она закреплена до воскресного боя; выжившие вернутся, уничтоженные машины будут потеряны."))
     }
 
     @Transactional
@@ -351,6 +356,19 @@ class CampaignService(
                 .update()
             updateRating(matchup.allianceA, ratingAfterA, result.scoreA, result.winnerCode == matchup.allianceA)
             updateRating(matchup.allianceB, ratingAfterB, result.scoreB, result.winnerCode == matchup.allianceB)
+            val casualties = inventory.settleWeeklyCasualties(
+                weekKey, matchup.id, matchup.allianceA,
+                result.formations.filter { it.side == WeeklySide.A }, result.npcUnitsA, result.seed,
+            ) + inventory.settleWeeklyCasualties(
+                weekKey, matchup.id, matchup.allianceB,
+                result.formations.filter { it.side == WeeklySide.B }, result.npcUnitsB, result.seed,
+            )
+            casualties.forEach { (playerId, outcome) ->
+                jdbc.sql(
+                    "UPDATE campaign_contributions SET units_survived = :survived, units_lost = :lost WHERE week_key = :week AND player_telegram_id = :player AND contribution_type = 'EQUIPMENT_SNAPSHOT' AND voided_at IS NULL",
+                ).param("survived", outcome.survived).param("lost", outcome.lost)
+                    .param("week", weekKey).param("player", playerId).update()
+            }
             issueRewardsAndNotifications(weekKey, matchup, result)
         }
         jdbc.sql(
@@ -389,7 +407,8 @@ class CampaignService(
     ) {
         val participants = jdbc.sql(
             """
-            SELECT player_telegram_id, alliance_code, SUM(power) AS power
+            SELECT player_telegram_id, alliance_code, SUM(power) AS power,
+                   SUM(units_survived) AS units_survived, SUM(units_lost) AS units_lost
               FROM campaign_contributions
              WHERE week_key = :week AND alliance_code IN (:allianceA, :allianceB)
                AND contribution_type = 'EQUIPMENT_SNAPSHOT' AND voided_at IS NULL
@@ -399,7 +418,10 @@ class CampaignService(
             .param("allianceA", matchup.allianceA)
             .param("allianceB", matchup.allianceB)
             .query { rs, _ ->
-                CampaignParticipant(rs.getLong("player_telegram_id"), rs.getString("alliance_code"), rs.getLong("power"))
+                CampaignParticipant(
+                    rs.getLong("player_telegram_id"), rs.getString("alliance_code"), rs.getLong("power"),
+                    rs.getInt("units_survived"), rs.getInt("units_lost"),
+                )
             }.list()
         val rewardsByPlayer = participants.associate { participant ->
             participant.playerId to issueReward(weekKey, matchup.id, participant, result.winnerCode)
@@ -437,8 +459,9 @@ class CampaignService(
             id = UUID.nameUUIDFromBytes("$weekKey:${participant.playerId}:reward".toByteArray(StandardCharsets.UTF_8)),
             xp = if (won) config.winnerXp else config.loserXp,
             credits = if (won) config.winnerCredits else config.loserCredits,
-            research = if (won) config.winnerResearch else config.loserResearch,
             materials = if (won) config.winnerMaterials else config.loserMaterials,
+            survived = participant.survived,
+            lost = participant.lost,
         )
         val inserted = jdbc.sql(
             """
@@ -448,7 +471,7 @@ class CampaignService(
             )
             VALUES (
                 :id, :week, :matchupId, :playerId, :alliance, :victory,
-                :power, :xp, :credits, :research, :materials
+                :power, :xp, :credits, 0, :materials
             )
             ON CONFLICT (week_key, player_telegram_id) DO NOTHING
             """.trimIndent(),
@@ -461,7 +484,6 @@ class CampaignService(
             .param("power", participant.power)
             .param("xp", reward.xp)
             .param("credits", reward.credits)
-            .param("research", reward.research)
             .param("materials", reward.materials)
             .update()
         if (inserted == 0) return reward
@@ -469,24 +491,22 @@ class CampaignService(
         jdbc.sql(
             """
             UPDATE players
-               SET xp = xp + :xp,
+                   SET xp = xp + :xp,
                    credits = credits + :credits,
-                   research_points = research_points + :research,
                    materials = materials + :materials,
-                   commander_level = LEAST(50, 1 + CAST((xp + :xp) / 1000 AS INTEGER)),
+                   commander_level = 1 + CAST((xp + :xp) / 1000 AS INTEGER),
+                   command_capacity = LEAST(1000, 10 + CAST((xp + :xp) / 1000 AS INTEGER)),
                    updated_at = CURRENT_TIMESTAMP
              WHERE telegram_id = :playerId
             """.trimIndent(),
         ).param("xp", reward.xp)
             .param("credits", reward.credits)
-            .param("research", reward.research)
             .param("materials", reward.materials)
             .param("playerId", participant.playerId)
             .update()
         listOf(
             "XP" to reward.xp,
             "CREDITS" to reward.credits,
-            "RESEARCH_POINTS" to reward.research,
             "MATERIALS" to reward.materials,
         ).forEach { (resource, delta) ->
             jdbc.sql(
@@ -642,7 +662,8 @@ class CampaignService(
             appendLine()
             appendLine(campaignText(language, "Contribution reward:", "Награда за вклад:"))
             appendLine("+${reward.xp} XP · +${reward.credits} Credits")
-            append("+${reward.research} Research Points · +${reward.materials} Materials")
+            appendLine("+${reward.materials} Materials")
+            append(campaignText(language, "Equipment returned/lost: ${reward.survived}/${reward.lost}", "Техника вернулась/потеряна: ${reward.survived}/${reward.lost}"))
         } else {
             appendLine()
             append(campaignText(language, "Rewards go to commanders who contributed before the lock.", "Награда выдаётся командирам, внесшим вклад до блокировки."))
@@ -730,12 +751,19 @@ private data class MatchupRow(
     val status: String,
 )
 
-private data class CampaignParticipant(val playerId: Long, val allianceCode: String, val power: Long)
+private data class CampaignParticipant(
+    val playerId: Long,
+    val allianceCode: String,
+    val power: Long,
+    val survived: Int,
+    val lost: Int,
+)
 
 private data class CampaignReward(
     val id: UUID,
     val xp: Int,
     val credits: Int,
-    val research: Int,
     val materials: Int,
+    val survived: Int,
+    val lost: Int,
 )

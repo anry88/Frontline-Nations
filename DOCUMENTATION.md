@@ -11,7 +11,7 @@ The deployed MVP has two runtime surfaces:
 - Telegram Bot commands, callback queries, and inline alliance-selection buttons
 - Spring Boot backend as the authority for gameplay and economy
 
-PostgreSQL stores players and their explicit locale/nickname settings, command capacity and its upgrade audit, processed Telegram updates, owned personal units, three combat-group presets, equipment audit records, personal battles and their immutable group/map/opponent/tier snapshots, ordered spatial event JSON, campaign weeks and matchups, cumulative country ratings, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs restore daily Combat Orders and drive the weekly campaign. Mini App, graphical replay visualization, equipment modules, branching technologies, and typed campaign assets remain future milestones.
+PostgreSQL stores players and their explicit locale/nickname settings, level-derived command capacity, daily reward state, processed Telegram updates, owned/reserved/destroyed personal units, three combat-group presets, equipment audit records, personal battles and their immutable group/map/opponent/tier snapshots, ordered spatial event JSON, campaign weeks and matchups, cumulative country ratings, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs drive the weekly campaign; daily rewards are claimed explicitly through the bot. Mini App, graphical replay visualization, equipment modules, and branching technologies remain future milestones.
 
 ### Identity, locale, and alliance selection
 
@@ -25,15 +25,15 @@ PostgreSQL stores players and their explicit locale/nickname settings, command c
 
 ### Personal operation
 
-1. The server deterministically generates five operation offers from a catalog of 24 battlefields for the player's current daily-order state.
+1. The server deterministically generates five operation offers from a catalog of 24 battlefields for a single-use offer version. Operations are unlimited.
 2. The bot shows a named battlefield, biome, risk/reward tier, and tier-dependent intelligence for each offer.
-3. The player maintains one of three reusable presets through `/army`. The persisted command-capacity budget grows from 10 to 1,000 CP through level-gated Research Point purchases, making heavy armor, artillery, aircraft, air defense, and reconnaissance compete for space at every echelon.
+3. The player maintains one of three reusable presets through `/army`. Command capacity is `level + 9 CP`, capped at the supported 1,000 CP maximum, making heavy armor, artillery, aircraft, air defense, and reconnaissance compete for space at every echelon.
 4. The selected operation resolves to a versioned 9×12 axial sector map. The bot sends its immutable square PNG assembled from generated hex terrain and objective blocks; coordinates, entries, roads, and objectives match the server map snapshot.
 5. The player binds the active group to an entry and a first objective, then chooses a behavior doctrine. Doctrines change route preference, holding behavior, movement order, and target selection; engine v5 applies no hidden tactic, counter, or terrain power percentage.
-6. The backend binds callbacks to the current order count and group version, rejects stale changes, derives a protected seed, and moves units through logical steps. Movement costs, line of sight, spotting, weapon range, minimum artillery range, cover, damage, and objective control are resolved using integer arithmetic.
+6. The backend binds callbacks to the current offer version and group version, rejects stale or replayed changes, derives a protected seed, and moves units through logical steps. Movement costs, line of sight, spotting, weapon range, minimum artillery range, cover, damage, and objective control are resolved using integer arithmetic.
 7. Ground units capture an uncontested objective after its configured number of consecutive steps. Existing control remains until an opponent completes the same process, so defenders may contest or retake it. Aircraft do not capture objectives.
 8. The battle ends when one side holds all important objectives, one army has no combat-capable units, or the 48-step safety boundary routes the weaker remaining army by objective control and hit points.
-9. One transaction consumes the Combat Order and records the result, rewards, statistics, force tier and both deployed CP totals, operation metadata, engine/map version, route orders, full player/opponent/map snapshots, final objective state, and typed spatial events.
+9. One transaction invalidates the offer, removes destroyed owned units, returns survivors to their presets, applies XP/Credits/Materials, recalculates level and capacity, and records the result, losses, force tier, deployed CP totals, snapshots, and typed spatial events.
 10. The bot presents objective control and selected highlights. A graphical replay UI remains planned; it will consume the stored spatial events rather than recalculate combat.
 
 ### Personal equipment
@@ -42,21 +42,21 @@ PostgreSQL stores players and their explicit locale/nickname settings, command c
 2. `/shop` reads the versioned JSON catalog and offers purchase for Credits or crafting for Credits plus Materials. Commander level gates later classes. Each class also declares movement profile/points, sight, finite minimum/maximum range, and fire mode.
 3. `/upgrade` spends both resources and scales all base stats by a deterministic integer 12% per level through level 5.
 4. Player balances, wallet ledger rows, owned-unit state, and equipment audit rows change in one transaction.
-5. Generated fictional class icons are served by the backend and sent as Telegram equipment cards. Personal units are persistent and never consumed by the weekly campaign.
-6. `/development` spends ledger-backed Research Points on six level-gated command-capacity ceilings: 25, 50, 100, 250, 500, and 1,000 CP. `/shop` supports batches of 1, 5, or 25 units, `/upgrade` groups identical equipment and upgrades 1, 5, or 25 at once, and `/army` adds or removes one available unit of a selected class per callback.
+5. Generated fictional class icons are served by the backend and sent as Telegram equipment cards. A unit destroyed in either battle mode is soft-deleted from usable inventory while its audit history remains intact.
+6. Research Points and `/development` are retired. Each commander level automatically adds 1 CP: level 1 is 10 CP, level 2 is 11 CP, continuing up to 1,000 CP. `/shop` supports batches of 1, 5, or 25 units, `/upgrade` groups identical equipment and upgrades 1, 5, or 25 at once, and `/army` adds or removes one available unit of a selected class per callback.
 7. Battle category follows deployed CP rather than account level. Rewards scale by the category's configured multiplier, and the generated opponent remains inside the same category.
 8. To keep map complexity bounded, identical units are snapshotted into formations keyed by class and upgrade level. Formation quantity scales hit points and outgoing damage; movement, range, terrain access, spotting, targeting, and capture eligibility still follow the equipment definition.
 
 ### Weekly campaign
 
 1. A Monday 00:05 Belgrade job includes all 250 catalog countries and territories. Countries are ordered by cumulative rating descending and English name ascending, then paired adjacently. Therefore the initial zero-rating round is strictly English alphabetical: 1–2, 3–4, and so on through 125 matches.
-2. Every country receives a seed-derived random NPC equipment group that totals 10–25 CP. Players use `/contribute` to add or replace a snapshot of their active personal group. The snapshot is immutable for resolution and does not remove equipment or spend Credits.
+2. Every country receives a seed-derived random NPC equipment group that totals 10–25 CP. Players use `/contribute` to commit or replace their active personal group. Its concrete owned-unit IDs are reserved until resolution, preventing simultaneous use in personal battles.
 3. Contributions lock at Sunday 15:00 in `Europe/Belgrade`.
 4. The aggregate engine combines the NPC composition and player equipment snapshots, preserving equipment class and upgrade level when it deploys armor, artillery, reconnaissance, air, and support formations.
 5. One of ten 15×21 versioned weekly maps supplies terrain, three entries per side, and five capture points. `/front` sends the pre-rendered map image. Movement, finite range, direct-fire line of sight, indirect artillery, cover, capture, loss, and recapture resolve deterministically for at most 96 turns.
 6. Current objective ownership scores by capture time; losing an objective removes its prior score. Destroyed enemy power and a configured fraction of allied surviving power complete the battle score. All-objective control and army destruction end early. At timeout, remaining power decides first, followed by objective and total score tie-breaks.
 7. Both countries add their battle score to cumulative rating, so losing a single battle never wipes prior standing. The next week reorders all countries from that rating.
-8. One transaction stores map/input/result snapshots, score components, rating transitions and typed events, then issues one ledger-backed reward per contributor. A durable notification outbox is delivered after commit and retried independently.
+8. One transaction stores map/input/result snapshots, score components, rating transitions and typed events, deterministically distributes formation casualties between NPC and reserved player units, returns survivors, removes losses, and issues one ledger-backed reward per contributor. A durable notification outbox is delivered after commit and retried independently.
 
 ## Module Boundaries
 
@@ -66,7 +66,7 @@ PostgreSQL stores players and their explicit locale/nickname settings, command c
 | `player` | Account, profile, alliance membership, commander level, rating |
 | `catalog` | Alliances, locations, units, modules, doctrines, balance configuration |
 | `inventory` | Owned units, equipment, presets, repair and production state |
-| `progression` | XP level gates, Research Point capacity upgrades, force tiers, future research nodes and prestige |
+| `progression` | XP-derived command capacity, force-tier classification, and future prestige |
 | `matchmaking` | Operation offers, opponent snapshots, difficulty bands |
 | `battle-engine` | Versioned deterministic personal and aggregate simulations |
 | `campaign` | Weekly matchups, campaign assets, deficits, contributions, rewards |
@@ -87,7 +87,7 @@ Every completed battle should retain:
 - result summary
 - ordered events with logical ticks and typed payloads
 
-The current personal engine contract is version 5. After resolution it stores the battle seed and hash, commander-level snapshot, full player and generated opponent groups, map/version snapshot, group version, selected location/biome/difficulty/enemy archetype, deployment entry, first objective, both behavior doctrines, final objective control, typed movement/fire/capture events, end reason, and rewards. Operation offers are bound to the player, game date, current order count, and preset version; an old inline button cannot consume a newer order or silently use a changed group. Older engine calculations remain isolated only for historical replay compatibility.
+The current personal engine contract is version 5. After resolution it stores the battle seed and hash, commander-level snapshot, full player and generated opponent groups, map/version snapshot, group version, selected location/biome/difficulty/enemy archetype, deployment entry, first objective, both behavior doctrines, final objective control, typed movement/fire/capture events, end reason, rewards, and owned-unit casualty totals. Operation offers are bound to the player, game date, single-use offer version, and preset version; an old inline button cannot replay a battle or silently use a changed group.
 
 The same engine version, seed, input snapshot, and configuration must reproduce the same outcome and event order. Replay clients may interpolate animations, but they may not invent gameplay outcomes.
 
@@ -101,8 +101,9 @@ Implementation should refine this model through versioned migrations. Important 
 - resource balances change only through ledger-backed transactions
 - one-time starter grants and equipment transactions are idempotent and auditable
 - a preset cannot exceed its persisted command-capacity limit through normal application writes
-- each command-capacity upgrade is level-gated, ledger-backed, auditable, and applied at most once
-- personal equipment and expendable weekly campaign assets have separate storage and lifecycle
+- command capacity is derived from commander level and changes atomically with XP rewards
+- a personal unit reserved for a weekly campaign cannot enter a personal battle or be upgraded until resolution
+- destroyed personal units leave usable inventory while retaining auditable history
 - campaign contributions are immutable after the lock boundary
 - reward issuance is idempotent and traceable to its source
 - historical battles retain the versions needed for replay and audit
@@ -126,7 +127,7 @@ Final endpoint shapes should be captured in an OpenAPI document alongside implem
 
 ## Scheduling
 
-Daily and weekly work is implemented as explicit, persisted state transitions rather than assumptions based only on wall-clock time. The current campaign jobs open Monday matchups, resolve at Sunday 15:00 Belgrade time, recover an overdue unresolved week after restart, and retry notification delivery. Operation generation, richer strength updates, video rendering, and retention cleanup remain planned.
+Daily and weekly work is implemented as explicit, persisted state transitions rather than assumptions based only on wall-clock time. `/daily` locks the player row and records the Belgrade calendar date, reward streak, total claims, and ledger entry, so duplicate updates cannot grant twice. The current campaign jobs open Monday matchups, resolve at Sunday 15:00 Belgrade time, recover an overdue unresolved week after restart, and retry notification delivery. Operation generation, richer strength updates, video rendering, and retention cleanup remain planned.
 
 Campaign rows, matchup rows, and player reward rows have stable uniqueness boundaries, so retries cannot resolve a week or grant a reward twice. Timestamps are stored in UTC while the schedule is calculated in the configured IANA game timezone, preserving 15:00 through daylight-saving changes.
 

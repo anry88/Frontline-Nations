@@ -8,7 +8,7 @@ A player opens the bot, reviews the state of the current campaign, and chooses f
 
 The command-only MVP now implements this strategic slice: five operation offers drawn from 24 named battlefields expose different intelligence and reward multipliers. Each operation uses a 9×12 hex sector with terrain, three entry points, and three illustrated important objectives. The bot sends a pre-rendered square map rather than a text diagram. The player assigns the active group an entry, a first objective, and a behavior doctrine. Units then move, spot, fire at finite ranges, capture objectives over consecutive steps, and can contest or retake them. Full graphical replay playback remains planned.
 
-Between battles, players can buy or craft seven personal equipment classes in batches, select them into one of three CP-limited presets, and upgrade individual units through five levels. Commander level opens larger force echelons and Research Points permanently expand command capacity through `/development`, up to 1,000 CP. Modules, branching technologies, repairs, and doctrine perks remain planned. Expendable campaign assets will be manufactured separately and will not consume personal equipment.
+Between battles, players can buy or craft seven personal equipment classes in batches, select them into one of three CP-limited presets, and upgrade individual units through five levels. Every commander level automatically adds 1 CP, from 10 CP at level 1 to the supported 1,000 CP ceiling. Research Points and manual capacity purchases are retired. Destroyed equipment is permanently removed from usable inventory, while survivors return after personal and weekly battles. Modules, branching technologies, repairs, and doctrine perks remain planned.
 
 ## Strategic Depth
 
@@ -25,7 +25,7 @@ The campaign follows a weekly rhythm:
 - Saturday: publish an incomplete reconnaissance summary.
 - Sunday: lock contributions, resolve the aggregate battle, publish replay/highlights, and award results.
 
-The command-only MVP implements a 250-country ranked weekly front: 125 adjacent pairings, Sunday 15:00 Belgrade resolution, a random 10–25 CP NPC equipment group for every country, non-destructive active-group reinforcement by players, ten pre-rendered 15×21 spatial maps, five illustrated capture points, contributor rewards, and Telegram notifications. Typed expendable campaign assets and visual replay remain planned.
+The command-only MVP implements a 250-country ranked weekly front: 125 adjacent pairings, Sunday 15:00 Belgrade resolution, a random 10–25 CP NPC equipment group for every country, reserved player equipment with deterministic casualties, ten pre-rendered 15×21 spatial maps, five illustrated capture points, contributor rewards, and Telegram notifications. Visual replay remains planned.
 
 The design supports many country- and territory-named alliances without allowing population alone to decide every campaign. Matchmaking, NPC garrisons, underdog factors, contribution caps, and dynamic shortage bonuses are planned balancing tools.
 
@@ -41,14 +41,13 @@ This separation keeps the simulation authoritative and testable while allowing c
 
 ## Economy
 
-The initial economy contains four primary resources:
+The current economy contains three primary resources:
 
-- Credits for modules, repairs, and campaign-asset production
-- Research Points for implemented command-capacity expansions and future technology/doctrine unlocks
+- Credits for equipment replacement, purchases, crafting, and future modules
 - Materials for campaign production and selected upgrades
 - XP for commander progression
 
-The intended monetization boundary is convenience and cosmetics. Direct sale of unbeatable combat power, unlimited paid battle energy, hidden odds, and irreversible loss of purchased personal units are outside the product principles.
+The intended monetization boundary is convenience and cosmetics. Direct sale of unbeatable combat power, paid battle energy, and hidden odds remain outside the product principles. Equipment can be lost in combat, so replacement income must remain earnable through normal play and the explicit daily reward.
 
 ## MVP Scope
 

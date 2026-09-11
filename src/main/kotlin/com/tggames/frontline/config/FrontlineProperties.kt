@@ -30,8 +30,6 @@ data class FrontlineProperties(
         val loserXp: Int = 180,
         val winnerCredits: Int = 250,
         val loserCredits: Int = 140,
-        val winnerResearch: Int = 20,
-        val loserResearch: Int = 10,
         val winnerMaterials: Int = 30,
         val loserMaterials: Int = 16,
     )

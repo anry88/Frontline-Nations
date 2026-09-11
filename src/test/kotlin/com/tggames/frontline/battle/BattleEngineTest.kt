@@ -80,7 +80,6 @@ class BattleEngineTest {
         assertThat(result.enemyPower).isPositive()
         assertThat(result.xp).isPositive()
         assertThat(result.credits).isPositive()
-        assertThat(result.researchPoints).isPositive()
         assertThat(result.materials).isPositive()
         assertThat(result.seedHash).hasSize(64)
         assertThat(result.spatial).isNotNull

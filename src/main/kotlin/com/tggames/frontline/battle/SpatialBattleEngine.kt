@@ -648,7 +648,7 @@ class SpatialBattleEngine(
             it.hitPoints,
             it.routed,
             it.snapshot.quantity,
-            if (it.routed || it.hitPoints <= 0) 0 else (it.hitPoints + 99) / 100,
+            if (it.hitPoints <= 0) 0 else (it.hitPoints + 99) / 100,
         )
     }
 

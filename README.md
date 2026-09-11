@@ -15,10 +15,10 @@ Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
 - `/army` or `/hangar` — switch between three presets and select equipment within the CP limit
 - `/shop` — inspect illustrated equipment cards and buy or craft a unit
 - `/upgrade` — improve an owned unit from level 1 to 5
-- `/development` or `/research` — spend Research Points to expand command capacity
-- `/profile` — inspect alliance, level progress, battle record, resources, and daily orders
+- `/daily` — claim 9,450+ Credits, grow a 100-day streak, and receive a random unlocked unit at the maximum streak
+- `/profile` — inspect alliance, level progress, battle record, resources, capacity, and reward streak
 - `/front` — inspect the current matchup, intelligence, countdown, or published result
-- `/contribute` — add or refresh an immutable snapshot of the active equipment group before the Sunday lock; the equipment is not consumed
+- `/contribute` — commit the active equipment group until the Sunday battle; surviving units return and destroyed units are lost
 - `/country` or `/country Serbia` — browse 250 countries and territories or search by localized name/code
 - `/language` — choose English, Russian, Spanish, Brazilian Portuguese, Arabic, Indonesian, Hindi, or Turkish
 - `/nickname Commander` — choose a sanitized nickname after explicit confirmation
@@ -40,19 +40,21 @@ New accounts infer their initial language from Telegram and receive language-rel
 
 ### Daily operations
 
-Players receive a limited number of Combat Orders and choose one of several operations. The bot sends a pre-rendered square 9×12 hex-sector image with three entry points, illustrated strategic objects, connected roads, natural terrain transitions, and a visibly blocked outer rim. The player orders the active group through an entry toward its first objective and selects a movement/target-priority doctrine. The deterministic engine moves individual units, resolves spotting and finite-range fire, and tracks multi-step objective capture and recapture for at most 48 steps. A battle ends when one side controls every objective or the opposing army is destroyed or routed. Operations award commander XP, credits, research points, and materials.
+Players may launch unlimited operations. The bot sends a pre-rendered square 9×12 hex-sector image with three entry points, illustrated strategic objects, connected roads, natural terrain transitions, and a visibly blocked outer rim. The player orders the active group through an entry toward its first objective and selects a movement/target-priority doctrine. The deterministic engine moves individual units, resolves spotting and finite-range fire, and tracks multi-step objective capture and recapture for at most 48 steps. A battle ends when one side controls every objective or the opposing army is destroyed or routed. Operations award commander XP, Credits, and Materials. Surviving equipment returns to its presets; units reduced to zero HP are removed from the usable inventory and recorded as battle losses.
+
+`/daily` replaces the old battle-order refill. Day one grants 9,450 Credits, exactly three current starter-group replacement costs. Each consecutive claim adds 95 Credits, reaching 18,855 Credits on day 100. A missed Belgrade game day resets the streak. Day 100 and every consecutive day after it retain the maximum reward and add one deterministic random unit from the commander's unlocked catalog.
 
 ### Weekly campaigns
 
 All 250 countries and territories enter 125 weekly pairings. With an empty table they are sorted by English name and paired adjacently; later rounds sort by cumulative battle rating, with English name as the stable tie-break. Contributions remain open until Sunday at 15:00 in the `Europe/Belgrade` timezone.
 
-Each country receives a deterministic random NPC group whose actual equipment fits the first 10–25 CP category. Players reinforce their country only with snapshots of their own active equipment groups; no Credits or equipment are spent. Each matchup uses one of ten pre-rendered, versioned 15×21 hex maps with five illustrated capture points and five aggregate formation classes per side. Formations move across terrain and use finite weapon ranges; artillery can fire indirectly, while aircraft still cannot strike across the whole map. A captured point grants more score when secured early. Losing it removes its retained score, and a later recapture is worth less. Destroyed enemy power and surviving allied power also score. Capturing all five points or destroying the opposing army ends the battle early; at the 96-turn limit, remaining force decides the winner first. Rating accumulates each side's battle score instead of replacing it, preventing one defeat from erasing a leading country's season.
+Each country receives a deterministic random NPC group whose actual equipment fits the first 10–25 CP category. Players reinforce their country with their own active equipment groups. Those machines are reserved until resolution and cannot simultaneously enter a personal battle; surviving units return and destroyed units are removed. Each matchup uses one of ten pre-rendered, versioned 15×21 hex maps with five illustrated capture points and five aggregate formation classes per side. Formations move across terrain and use finite weapon ranges; artillery can fire indirectly, while aircraft still cannot strike across the whole map. A captured point grants more score when secured early. Losing it removes its retained score, and a later recapture is worth less. Destroyed enemy power and surviving allied power also score. Capturing all five points or destroying the opposing army ends the battle early; at the 96-turn limit, remaining force decides the winner first. Rating accumulates each side's battle score instead of replacing it, preventing one defeat from erasing a leading country's season.
 
 ### Progression
 
 The command MVP now includes seven configurable equipment classes, individual owned units, three reusable combat-group presets, commander-level unlocks, purchase and lower-credit crafting recipes, and five unit levels. Every class has map movement, sight, minimum/maximum weapon range, and a fire mode in addition to its five combat statistics. Aircraft movement remains finite; attack aircraft and fighters cannot strike across the whole map. Every level adds 12% to the unit's five base statistics.
 
-New commanders receive the specification's 10 CP starter group: two main battle tanks, one artillery unit, and one reconnaissance vehicle. Commander levels unlock six force echelons while Research Points buy command-capacity expansions from 10 to 1,000 CP. Battles are classified by actually deployed power: 10–25, 26–50, 51–100, 101–250, 251–500, and 501–1,000 CP. Large groups are simulated as homogeneous formations by equipment class and level, preserving tactical differences without creating hundreds of independent map actors. The active preset becomes an immutable input snapshot for battle resolution. Modules, branching technology choices, doctrine perks, repairs, and seasonal prestige remain planned.
+New commanders receive the specification's 10 CP starter group: two main battle tanks, one artillery unit, and one reconnaissance vehicle. Capacity follows commander level directly: level 1 provides 10 CP, level 2 provides 11 CP, and every further level adds 1 CP up to the supported 1,000 CP ceiling. Research Points and manual capacity purchases are retired. Battles are classified by actually deployed power: 10–25, 26–50, 51–100, 101–250, 251–500, and 501–1,000 CP. Large groups are simulated as homogeneous formations by equipment class and level, preserving tactical differences without creating hundreds of independent map actors. Modules, branching technology choices, doctrine perks, repairs, and seasonal prestige remain planned.
 
 ## Target Architecture
 
@@ -107,6 +109,7 @@ Mini App and replay-renderer directories will be added only when those milestone
 - [Command capacity and force tiers decision](docs/decisions/0007-command-capacity-and-force-tiers.md)
 - [Ranked spatial weekly campaigns decision](docs/decisions/0008-ranked-spatial-weekly-campaigns.md)
 - [Graphical hex-map delivery decision](docs/decisions/0009-graphical-hex-map-delivery.md)
+- [Destructive equipment and daily economy decision](docs/decisions/0010-destructive-equipment-and-daily-economy.md)
 - [Contributor guide](CONTRIBUTING.md)
 - [Agent guide](AGENTS.md)
 - [GitHub About metadata](docs/github-about.md)
@@ -116,7 +119,7 @@ Mini App and replay-renderer directories will be added only when those milestone
 
 Current phase: command-only MVP with persistent equipment progression, spatial personal operations, and ranked spatial weekly battles.
 
-The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog, moderated nicknames, a seven-class equipment catalog, transactional bulk purchase/crafting/upgrades, three CP-limited presets, level-gated command capacity expanded with Research Points, six battle categories up to 1,000 CP, five operation offers drawn from 24 battlefields with 24 mapped variants, deterministic formation-based spatial battles with objective control, 125 rating-seeded weekly pairings on ten larger maps, a random 10–25 CP NPC equipment group for every country, non-destructive player equipment reinforcement, timed aggregate spatial resolution, capture/destruction/survival scoring, idempotent campaign rewards, and durable Telegram notifications. Graphical replays, seasonal alliance switching, modules, typed campaign assets, branching technologies, Mini App, and video rendering remain planned.
+The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog, moderated nicknames, a seven-class equipment catalog, transactional bulk purchase/crafting/upgrades, three CP-limited presets, level-derived command capacity, six battle categories up to 1,000 CP, unlimited spatial personal battles with permanent equipment casualties, a ledger-backed 100-day daily reward loop, five operation offers drawn from 24 battlefields with 24 mapped variants, 125 rating-seeded weekly pairings on ten larger maps, a random 10–25 CP NPC equipment group for every country, reserved and destructible player reinforcement, timed aggregate spatial resolution, capture/destruction/survival scoring, idempotent campaign rewards, and durable Telegram notifications. Graphical replays, seasonal alliance switching, modules, typed campaign assets, branching technologies, Mini App, and video rendering remain planned.
 
 Run tests with `GRADLE_USER_HOME="$PWD/.gradle-home" ./gradlew test`. For a local Docker run, copy `.env.example` to an ignored `.env`, replace every secret, create the PostgreSQL data directory, and run `docker compose up --build`.
 

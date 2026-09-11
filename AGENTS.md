@@ -7,7 +7,7 @@ Repository-level guidance for coding agents and automated review tools.
 - This repository contains a minimal command-only Telegram bot implemented with Kotlin, Spring Boot, JDBC/Flyway, and PostgreSQL.
 - [Documents/Frontline_TZ_v0.1_RU.docx](Documents/Frontline_TZ_v0.1_RU.docx) is the primary product and technical source.
 - [README.md](README.md) is the public overview, [docs/product-overview.md](docs/product-overview.md) summarizes product intent, and [DOCUMENTATION.md](DOCUMENTATION.md) defines the target engineering boundaries.
-- The implemented surface is localized `/start`, `/country`, `/language`, `/nickname`, `/settings`, `/army` and `/hangar` presets, bulk `/shop` purchase/crafting, `/upgrade`, `/development` capacity spending, a formation-based spatial entry/objective/doctrine `/battle` flow across six categories up to 1,000 CP, `/profile`, ranked spatial weekly views in `/front`, `/contribute`, and `/help`. Both battle flows send pre-rendered square map images. Mini App, seasonal alliance switching, graphical replay UI, modules, branching technologies, and campaign-asset classes remain planned.
+- The implemented surface is localized `/start`, `/country`, `/language`, `/nickname`, `/settings`, `/army` and `/hangar` presets, bulk `/shop` purchase/crafting, `/upgrade`, `/daily`, an unlimited formation-based spatial entry/objective/doctrine `/battle` flow with permanent equipment casualties across six categories up to 1,000 CP, `/profile`, ranked spatial weekly views in `/front`, destructive reserved-unit `/contribute`, and `/help`. Both battle flows send pre-rendered square map images. Mini App, seasonal alliance switching, graphical replay UI, modules, and branching technologies remain planned.
 - Do not describe planned behavior as implemented. Label plans, examples, and target architecture explicitly until code and tests support the claims.
 
 ## First Pass For Any Agent
@@ -38,6 +38,7 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/test/`: deterministic-engine and application tests.
 - `src/main/resources/db/migration/V2__battle_choices_and_progression.sql`: battle metadata, research currency, and commander statistics.
 - `src/main/resources/db/migration/V3__weekly_campaign_battles.sql`: campaign weeks, matchups, results, rewards, and notification outbox.
+- `src/main/resources/db/migration/V10__destructive_equipment_and_daily_rewards.sql`: daily reward streaks, offer nonces, level-derived capacity migration, equipment reservation, and destruction audit state.
 - `src/main/resources/db/migration/V4__player_locale_and_nickname.sql`: player locale, Telegram locale hint, nickname, and pending confirmation.
 - `src/main/kotlin/com/tggames/frontline/campaign/`: weekly schedule, pairing, aggregate battle, reward, and notification logic.
 - `src/main/kotlin/com/tggames/frontline/catalog/`: data-driven personal equipment definitions and balance validation.
@@ -91,7 +92,7 @@ Update this map when package names or runtime components change.
 - Wallet and inventory mutations must be transactional, auditable, and idempotent where retries are possible.
 - Validate Telegram `initData` server-side. Never trust player identity, reward amounts, combat stats, or timestamps supplied by the client.
 - Do not hardcode balance data that the specification identifies as configurable.
-- Primary player units and expendable weekly `CampaignAsset` units are separate concepts and must not share destructive lifecycle logic.
+- Personal units committed with `/contribute` are reserved by concrete ID until weekly resolution; NPC campaign units remain separate, non-owned assets.
 - Real country and territory names are neutral game identifiers. Avoid political claims or inferred sovereignty in copy, data, maps, and coordinates.
 
 ## Engineering Boundaries

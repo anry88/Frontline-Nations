@@ -20,8 +20,6 @@ import com.tggames.frontline.inventory.EquipmentAction
 import com.tggames.frontline.inventory.EquipmentActionStatus
 import com.tggames.frontline.inventory.InventoryService
 import com.tggames.frontline.inventory.OwnedUnit
-import com.tggames.frontline.progression.CapacityExpansionStatus
-import com.tggames.frontline.progression.CommandProgressionService
 import com.tggames.frontline.progression.ForceTier
 import com.tggames.frontline.progression.ForceTierCatalog
 import com.tggames.frontline.telegram.InlineKeyboardButton
@@ -31,11 +29,12 @@ import com.tggames.frontline.telegram.TelegramClient
 import com.tggames.frontline.telegram.TelegramUpdate
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.jdbc.core.simple.JdbcClient
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
 import java.time.ZoneId
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.util.UUID
 
 @Service
@@ -49,7 +48,6 @@ class GameService(
     private val nicknamePolicy: NicknamePolicy,
     private val inventory: InventoryService,
     private val equipment: EquipmentCatalog,
-    private val progression: CommandProgressionService,
     private val forceTiers: ForceTierCatalog,
 ) {
     @Transactional
@@ -75,7 +73,7 @@ class GameService(
             "/army", "/hangar" -> armyMenu(user.id, message.chat.id)
             "/shop" -> shopMenu(user.id, message.chat.id)
             "/upgrade" -> upgradeMenu(user.id, message.chat.id)
-            "/development", "/research" -> developmentMenu(user.id, message.chat.id)
+            "/daily" -> claimDailyReward(user.id, message.chat.id)
             "/profile" -> telegram.sendMessage(message.chat.id, profileText(user.id), actionKeyboard(language(user.id)))
             "/front" -> front(user.id, user.firstName, message.chat.id)
             "/contribute" -> contribute(user.id, user.firstName, message.chat.id)
@@ -104,7 +102,7 @@ class GameService(
             data == "nav:battle" -> battleMenu(callback.from.id, callback.from.firstName, chatId)
             data == "nav:army" -> armyMenu(callback.from.id, chatId)
             data == "nav:shop" -> shopMenu(callback.from.id, chatId)
-            data == "nav:development" -> developmentMenu(callback.from.id, chatId)
+            data == "nav:daily" -> claimDailyReward(callback.from.id, chatId)
             data == "nav:profile" -> telegram.sendMessage(chatId, profileText(callback.from.id), actionKeyboard(language))
             data == "nav:front" -> front(callback.from.id, callback.from.firstName, chatId)
             data == "nav:settings" -> settings(callback.from.id, chatId)
@@ -115,7 +113,6 @@ class GameService(
             data.startsWith("shop:view:") -> shopDetails(callback.from.id, chatId, data.substringAfterLast(':'))
             data.startsWith("shop:buy:") -> acquireUnit(callback.from.id, chatId, data.removePrefix("shop:buy:"), false)
             data.startsWith("shop:craft:") -> acquireUnit(callback.from.id, chatId, data.removePrefix("shop:craft:"), true)
-            data.startsWith("development:expand:") -> expandCapacity(callback.from.id, chatId, data.substringAfterLast(':').toIntOrNull())
             data.startsWith("unit:upgrade-batch:") -> upgradeBatch(callback.from.id, chatId, data.removePrefix("unit:upgrade-batch:"))
             data.startsWith("unit:upgrade:") -> upgradeUnit(callback.from.id, chatId, data.substringAfterLast(':'))
             data.startsWith("army:toggle:") -> toggleUnit(callback.from.id, chatId, data.substringAfterLast(':'))
@@ -174,17 +171,13 @@ class GameService(
             telegram.sendMessage(chatId, GameI18n.t(language, "choose_country"), recommendedCountryKeyboard(language, GameLanguage.fromTelegram(player.telegramLanguage)))
             return
         }
-        if (player.combatOrders <= 0) {
-            telegram.sendMessage(
-                chatId,
-                GameI18n.t(language, "no_orders"),
-                actionKeyboard(language, includeBattle = false),
-            )
-            return
-        }
         val army = inventory.army(telegramId)
         if (army.activeGroup.units.isEmpty()) {
             telegram.sendMessage(chatId, GameI18n.t(language, "army_empty"), armyKeyboard(army, language))
+            return
+        }
+        if (inventory.hasReservedUnits(army.activeGroup)) {
+            telegram.sendMessage(chatId, GameI18n.t(language, "weekly_units_reserved"), armyKeyboard(army, language))
             return
         }
         val deployedCp = groupCp(army)
@@ -197,8 +190,11 @@ class GameService(
             return
         }
         val forceTier = forceTiers.forDeployedCp(deployedCp)
+        val offerVersion = jdbc.sql(
+            "UPDATE players SET battle_offer_version = battle_offer_version + 1, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = :id RETURNING battle_offer_version",
+        ).param("id", telegramId).query(Long::class.java).single()
 
-        val offers = offersFor(telegramId, player.combatOrders)
+        val offers = offersFor(telegramId, offerVersion)
         val text = buildString {
             appendLine(GameI18n.t(language, "operations"))
             appendLine("${GameI18n.t(language, "active_group")}: ${army.activeGroup.name} · ${groupCp(army)}/${army.cpLimit} CP")
@@ -211,11 +207,11 @@ class GameService(
                 appendLine("   ${GameI18n.t(language, "intel")} (${GameI18n.intelLevel(language, offer.difficulty)}): ${localizedIntel(language, offer)}")
             }
             appendLine()
-            append(GameI18n.t(language, "orders_choose", player.combatOrders))
+            append(GameI18n.t(language, "operation_choose_unlimited"))
         }
         val keyboard = InlineKeyboardMarkup(
             offers.mapIndexed { index, offer ->
-                listOf(InlineKeyboardButton("${index + 1}. ${offer.difficulty.icon} ${GameI18n.battlefield(language, offer.battlefield.location)}", "op:${player.combatOrders}:${offer.slot}"))
+                listOf(InlineKeyboardButton("${index + 1}. ${offer.difficulty.icon} ${GameI18n.battlefield(language, offer.battlefield.location)}", "op:$offerVersion:${offer.slot}"))
             } + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "profile"), "nav:profile"))),
         )
         telegram.sendMessage(chatId, text, keyboard)
@@ -226,9 +222,10 @@ class GameService(
         val parsed = parseSelection(callbackData, "op") ?: return staleSelection(chatId)
         val player = player(telegramId)
         val language = GameLanguage.fromStored(player.language)
-        if (player.allianceCode == null || player.combatOrders != parsed.expectedOrders) return staleSelection(chatId)
-        val operation = offersFor(telegramId, parsed.expectedOrders).getOrNull(parsed.slot) ?: return staleSelection(chatId)
+        if (player.allianceCode == null || player.battleOfferVersion != parsed.expectedOfferVersion) return staleSelection(chatId)
+        val operation = offersFor(telegramId, parsed.expectedOfferVersion).getOrNull(parsed.slot) ?: return staleSelection(chatId)
         val army = inventory.army(telegramId)
+        if (inventory.hasReservedUnits(army.activeGroup)) return weeklyUnitsReserved(chatId, army, language)
         val group = inventory.battleSnapshot(army)
         if (group.units.isEmpty() || group.usedCp < forceTiers.minimumBattleCp || group.usedCp > group.cpLimit) return armyMenu(telegramId, chatId)
         val map = battleEngine.mapFor(operation)
@@ -248,7 +245,7 @@ class GameService(
             listOf(
                 InlineKeyboardButton(
                     "${('A'.code + index).toChar()} · ${GameI18n.t(language, entry.nameKey)}",
-                    "deploy:${parsed.expectedOrders}:${parsed.slot}:${entry.id}:${group.version}",
+                    "deploy:${parsed.expectedOfferVersion}:${parsed.slot}:${entry.id}:${army.activeGroup.presetNo}.${group.version}",
                 ),
             )
         } + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "other_operations"), "nav:battle")))
@@ -264,16 +261,17 @@ class GameService(
         ensurePlayer(telegramId, firstName)
         val parts = callbackData.split(':')
         if (parts.size != 5 || parts[0] != "deploy") return staleSelection(chatId)
-        val expectedOrders = parts[1].toIntOrNull() ?: return staleSelection(chatId)
+        val expectedOfferVersion = parts[1].toLongOrNull() ?: return staleSelection(chatId)
         val slot = parts[2].toIntOrNull() ?: return staleSelection(chatId)
         val entryId = parts[3]
-        val expectedGroupVersion = parts[4].toIntOrNull() ?: return staleSelection(chatId)
+        val expectedGroup = parseGroupBinding(parts[4]) ?: return staleSelection(chatId)
         val player = player(telegramId)
         val language = GameLanguage.fromStored(player.language)
-        if (player.allianceCode == null || player.combatOrders != expectedOrders) return staleSelection(chatId)
-        val operation = offersFor(telegramId, expectedOrders).getOrNull(slot) ?: return staleSelection(chatId)
+        if (player.allianceCode == null || player.battleOfferVersion != expectedOfferVersion) return staleSelection(chatId)
+        val operation = offersFor(telegramId, expectedOfferVersion).getOrNull(slot) ?: return staleSelection(chatId)
         val army = inventory.army(telegramId)
-        if (army.activeGroup.version != expectedGroupVersion || army.activeGroup.units.isEmpty()) return staleSelection(chatId)
+        if (inventory.hasReservedUnits(army.activeGroup)) return weeklyUnitsReserved(chatId, army, language)
+        if (army.activeGroup.presetNo != expectedGroup.presetNo || army.activeGroup.version != expectedGroup.version || army.activeGroup.units.isEmpty()) return staleSelection(chatId)
         val map = battleEngine.mapFor(operation)
         val entry = map.playerEntries.firstOrNull { it.id == entryId } ?: return staleSelection(chatId)
 
@@ -287,7 +285,7 @@ class GameService(
             listOf(
                 InlineKeyboardButton(
                     "${index + 1} · ${GameI18n.t(language, objective.nameKey)}",
-                    "objective:$expectedOrders:$slot:$entryId:${objective.id}:$expectedGroupVersion",
+                    "objective:$expectedOfferVersion:$slot:$entryId:${objective.id}:${expectedGroup.presetNo}.${expectedGroup.version}",
                 ),
             )
         } + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "other_operations"), "nav:battle")))
@@ -298,17 +296,18 @@ class GameService(
         ensurePlayer(telegramId, firstName)
         val parts = callbackData.split(':')
         if (parts.size != 6 || parts[0] != "objective") return staleSelection(chatId)
-        val expectedOrders = parts[1].toIntOrNull() ?: return staleSelection(chatId)
+        val expectedOfferVersion = parts[1].toLongOrNull() ?: return staleSelection(chatId)
         val slot = parts[2].toIntOrNull() ?: return staleSelection(chatId)
         val entryId = parts[3]
         val objectiveId = parts[4]
-        val expectedGroupVersion = parts[5].toIntOrNull() ?: return staleSelection(chatId)
+        val expectedGroup = parseGroupBinding(parts[5]) ?: return staleSelection(chatId)
         val player = player(telegramId)
         val language = GameLanguage.fromStored(player.language)
-        if (player.allianceCode == null || player.combatOrders != expectedOrders) return staleSelection(chatId)
-        val operation = offersFor(telegramId, expectedOrders).getOrNull(slot) ?: return staleSelection(chatId)
+        if (player.allianceCode == null || player.battleOfferVersion != expectedOfferVersion) return staleSelection(chatId)
+        val operation = offersFor(telegramId, expectedOfferVersion).getOrNull(slot) ?: return staleSelection(chatId)
         val army = inventory.army(telegramId)
-        if (army.activeGroup.version != expectedGroupVersion || army.activeGroup.units.isEmpty()) return staleSelection(chatId)
+        if (inventory.hasReservedUnits(army.activeGroup)) return weeklyUnitsReserved(chatId, army, language)
+        if (army.activeGroup.presetNo != expectedGroup.presetNo || army.activeGroup.version != expectedGroup.version || army.activeGroup.units.isEmpty()) return staleSelection(chatId)
         val map = battleEngine.mapFor(operation)
         val entry = map.playerEntries.firstOrNull { it.id == entryId } ?: return staleSelection(chatId)
         val objective = map.objectives.firstOrNull { it.id == objectiveId } ?: return staleSelection(chatId)
@@ -326,7 +325,7 @@ class GameService(
         val buttons = Tactic.entries.map { tactic ->
             InlineKeyboardButton(
                 "${tactic.icon} ${GameI18n.tactic(language, tactic)}",
-                "fight:$expectedOrders:$slot:$entryId:$objectiveId:${tactic.code}:$expectedGroupVersion",
+                "fight:$expectedOfferVersion:$slot:$entryId:$objectiveId:${tactic.code}:${expectedGroup.presetNo}.${expectedGroup.version}",
             )
         }.chunked(2) + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "other_operations"), "nav:battle")))
         telegram.sendMessage(chatId, text.trim(), InlineKeyboardMarkup(buttons))
@@ -336,18 +335,19 @@ class GameService(
         ensurePlayer(telegramId, firstName)
         val parts = callbackData.split(':')
         if (parts.size != 7 || parts[0] != "fight") return staleSelection(chatId)
-        val expectedOrders = parts[1].toIntOrNull() ?: return staleSelection(chatId)
+        val expectedOfferVersion = parts[1].toLongOrNull() ?: return staleSelection(chatId)
         val slot = parts[2].toIntOrNull() ?: return staleSelection(chatId)
         val entryId = parts[3]
         val objectiveId = parts[4]
         val tactic = Tactic.fromCode(parts[5]) ?: return staleSelection(chatId)
-        val expectedGroupVersion = parts[6].toIntOrNull() ?: return staleSelection(chatId)
+        val expectedGroup = parseGroupBinding(parts[6]) ?: return staleSelection(chatId)
         val player = player(telegramId)
         val language = GameLanguage.fromStored(player.language)
-        if (player.allianceCode == null || player.combatOrders != expectedOrders) return staleSelection(chatId)
-        val operation = offersFor(telegramId, expectedOrders).getOrNull(slot) ?: return staleSelection(chatId)
+        if (player.allianceCode == null || player.battleOfferVersion != expectedOfferVersion) return staleSelection(chatId)
+        val operation = offersFor(telegramId, expectedOfferVersion).getOrNull(slot) ?: return staleSelection(chatId)
         val army = inventory.army(telegramId)
-        if (army.activeGroup.version != expectedGroupVersion || army.activeGroup.units.isEmpty()) return staleSelection(chatId)
+        if (inventory.hasReservedUnits(army.activeGroup)) return weeklyUnitsReserved(chatId, army, language)
+        if (army.activeGroup.presetNo != expectedGroup.presetNo || army.activeGroup.version != expectedGroup.version || army.activeGroup.units.isEmpty()) return staleSelection(chatId)
         val group = inventory.battleSnapshot(army)
         if (group.usedCp < forceTiers.minimumBattleCp || group.usedCp > group.cpLimit) return armyMenu(telegramId, chatId)
         val map = battleEngine.mapFor(operation)
@@ -356,7 +356,7 @@ class GameService(
         val battleId = UUID.randomUUID()
         val battle = battleEngine.resolve(
             properties.battleServerSalt,
-            "$telegramId:${todayKey()}:$expectedOrders:$slot",
+            "$telegramId:${todayKey()}:$expectedOfferVersion:$slot",
             player.commanderLevel,
             operation,
             tactic,
@@ -368,29 +368,29 @@ class GameService(
         val updated = jdbc.sql(
             """
             UPDATE players
-               SET combat_orders = combat_orders - 1,
+               SET battle_offer_version = battle_offer_version + 1,
                    xp = xp + :xp,
                    credits = credits + :credits,
-                   research_points = research_points + :research,
                    materials = materials + :materials,
-                   commander_level = LEAST(50, 1 + CAST((xp + :xp) / 1000 AS INTEGER)),
+                   commander_level = 1 + CAST((xp + :xp) / 1000 AS INTEGER),
+                   command_capacity = LEAST(1000, 10 + CAST((xp + :xp) / 1000 AS INTEGER)),
                    victories = victories + CASE WHEN :victory THEN 1 ELSE 0 END,
                    defeats = defeats + CASE WHEN :victory THEN 0 ELSE 1 END,
                    current_streak = CASE WHEN :victory THEN current_streak + 1 ELSE 0 END,
                    best_streak = CASE WHEN :victory THEN GREATEST(best_streak, current_streak + 1) ELSE best_streak END,
                    updated_at = CURRENT_TIMESTAMP
-             WHERE telegram_id = :id AND combat_orders = :expectedOrders
+             WHERE telegram_id = :id AND battle_offer_version = :expectedOfferVersion
             """.trimIndent(),
         ).param("xp", battle.xp)
             .param("credits", battle.credits)
-            .param("research", battle.researchPoints)
             .param("materials", battle.materials)
             .param("victory", battle.victory)
             .param("id", telegramId)
-            .param("expectedOrders", expectedOrders)
+            .param("expectedOfferVersion", expectedOfferVersion)
             .update()
 
         if (updated == 0) return staleSelection(chatId)
+        val casualties = inventory.destroyPersonalCasualties(telegramId, army, group, spatial.playerUnits, battleId)
 
         jdbc.sql(
             """
@@ -403,11 +403,12 @@ class GameService(
                 map_id, map_version, deployment_entry, primary_objective,
                 enemy_entry, enemy_objective, enemy_tactic, end_reason,
                 map_snapshot_json, enemy_group_snapshot_json, spatial_events_json, objective_state_json,
-                force_tier_id, player_deployed_cp, enemy_deployed_cp
+                force_tier_id, player_deployed_cp, enemy_deployed_cp,
+                player_units_survived, player_units_lost
             )
             VALUES (
                 :id, :playerId, :victory, :playerPower, :enemyPower,
-                :xp, :credits, :research, :materials,
+                :xp, :credits, 0, :materials,
                 :battleSeed, :commanderLevel, :seedHash, 5, :location, :biome, :difficulty,
                 :enemy, :tactic, :rounds, CAST(:events AS jsonb),
                 :groupId, CAST(:groupSnapshot AS jsonb), :groupVersion, :compositionPower, 0, 0,
@@ -415,7 +416,8 @@ class GameService(
                 :enemyEntry, :enemyObjective, :enemyTactic, :endReason,
                 CAST(:mapSnapshot AS jsonb), CAST(:enemyGroupSnapshot AS jsonb),
                 CAST(:spatialEvents AS jsonb), CAST(:objectiveState AS jsonb),
-                :forceTier, :playerDeployedCp, :enemyDeployedCp
+                :forceTier, :playerDeployedCp, :enemyDeployedCp,
+                :playerUnitsSurvived, :playerUnitsLost
             )
             """.trimIndent(),
         ).param("id", battleId)
@@ -425,7 +427,6 @@ class GameService(
             .param("enemyPower", battle.enemyPower)
             .param("xp", battle.xp)
             .param("credits", battle.credits)
-            .param("research", battle.researchPoints)
             .param("materials", battle.materials)
             .param("battleSeed", battle.seed)
             .param("commanderLevel", player.commanderLevel)
@@ -456,11 +457,12 @@ class GameService(
             .param("forceTier", battle.forceTierId)
             .param("playerDeployedCp", battle.playerDeployedCp)
             .param("enemyDeployedCp", battle.enemyDeployedCp)
+            .param("playerUnitsSurvived", casualties.survived)
+            .param("playerUnitsLost", casualties.lost)
             .update()
 
         recordWalletChange(telegramId, "XP", battle.xp.toLong(), "BATTLE_REWARD", battleId)
         recordWalletChange(telegramId, "CREDITS", battle.credits.toLong(), "BATTLE_REWARD", battleId)
-        recordWalletChange(telegramId, "RESEARCH_POINTS", battle.researchPoints.toLong(), "BATTLE_REWARD", battleId)
         recordWalletChange(telegramId, "MATERIALS", battle.materials.toLong(), "BATTLE_REWARD", battleId)
 
         val fresh = player(telegramId)
@@ -480,7 +482,9 @@ class GameService(
         val enemyRemaining = spatial.enemyUnits.sumOf { it.remainingQuantity }
         val outcome = GameI18n.t(language, if (battle.victory) "victory" else "withdrawal")
         val forceTier = forceTiers.forDeployedCp(requireNotNull(battle.playerDeployedCp))
-        val levelUp = if (fresh.commanderLevel > player.commanderLevel) "\n⭐ ${GameI18n.t(language, "new_level")}: ${fresh.commanderLevel}" else ""
+        val levelUp = if (fresh.commanderLevel > player.commanderLevel) {
+            "\n⭐ ${GameI18n.t(language, "new_level")}: ${fresh.commanderLevel} · ${fresh.commandCapacity} CP"
+        } else ""
         val report = buildString {
             appendLine(GameI18n.t(language, "battle_complete"))
             appendLine("${GameI18n.battlefield(language, operation.battlefield.location)} · ${GameI18n.biome(language, operation.battlefield.biome)}")
@@ -503,13 +507,11 @@ class GameService(
             }
             appendLine("+${battle.xp} XP")
             appendLine("+${battle.credits} Credits")
-            appendLine("+${battle.researchPoints} ${GameI18n.t(language, "research_points")}")
             appendLine("+${battle.materials} Materials")
+            appendLine(GameI18n.t(language, "equipment_returned_lost", casualties.survived, casualties.lost))
             appendLine("${GameI18n.t(language, "streak")}: ${fresh.currentStreak}$levelUp")
-            appendLine()
-            append("${GameI18n.t(language, "combat_orders")}: ${fresh.combatOrders}/5")
         }
-        telegram.sendMessage(chatId, report, actionKeyboard(language, includeBattle = fresh.combatOrders > 0))
+        telegram.sendMessage(chatId, report.trim(), actionKeyboard(language))
     }
 
     private fun staleSelection(chatId: Long) {
@@ -517,13 +519,23 @@ class GameService(
         telegram.sendMessage(chatId, GameI18n.t(language, "stale"), actionKeyboard(language))
     }
 
-    private fun offersFor(telegramId: Long, orders: Int): List<OperationOffer> =
-        battleEngine.offers(properties.battleServerSalt, "$telegramId:${todayKey()}:$orders")
+    private fun weeklyUnitsReserved(chatId: Long, army: Army, language: GameLanguage) {
+        telegram.sendMessage(chatId, GameI18n.t(language, "weekly_units_reserved"), armyKeyboard(army, language))
+    }
+
+    private fun offersFor(telegramId: Long, offerVersion: Long): List<OperationOffer> =
+        battleEngine.offers(properties.battleServerSalt, "$telegramId:${todayKey()}:$offerVersion")
 
     private fun parseSelection(data: String, prefix: String): Selection? {
         val parts = data.split(':')
         if (parts.size != 3 || parts[0] != prefix) return null
-        return Selection(parts[1].toIntOrNull() ?: return null, parts[2].toIntOrNull() ?: return null)
+        return Selection(parts[1].toLongOrNull() ?: return null, parts[2].toIntOrNull() ?: return null)
+    }
+
+    private fun parseGroupBinding(value: String): GroupBinding? {
+        val parts = value.split('.')
+        if (parts.size != 2) return null
+        return GroupBinding(parts[0].toIntOrNull() ?: return null, parts[1].toIntOrNull() ?: return null)
     }
 
     private fun armyMenu(telegramId: Long, chatId: Long) {
@@ -551,7 +563,10 @@ class GameService(
             if (active.units.isEmpty()) appendLine(GameI18n.t(language, "army_empty"))
             else active.units.groupBy { it.code to it.level }
                 .toSortedMap(compareBy<Pair<String, Int>> { it.first }.thenBy { it.second })
-                .forEach { (key, units) -> appendLine("• ${units.size}× ${unitLabel(key.first, key.second, language)}") }
+                .forEach { (key, units) ->
+                    val reserved = units.count { it.reservedWeekKey != null }.takeIf { it > 0 }?.let { " · 🔒$it" }.orEmpty()
+                    appendLine("• ${units.size}× ${unitLabel(key.first, key.second, language)}$reserved")
+                }
             snapshot?.let {
                 appendLine()
                 appendLine("${GameI18n.t(language, "composition_power")}: ${battleEngine.compositionPower(it)}")
@@ -729,6 +744,7 @@ class GameService(
                 GameI18n.t(language, "equipment_success", name, action.unit?.level ?: 1)
             }
             EquipmentActionStatus.LOCKED -> GameI18n.t(language, "equipment_locked", action.definition?.unlockLevel ?: 1)
+            EquipmentActionStatus.RESERVED -> GameI18n.t(language, "equipment_reserved")
             EquipmentActionStatus.INSUFFICIENT_RESOURCES -> GameI18n.t(language, "insufficient_resources")
             EquipmentActionStatus.MAX_LEVEL -> GameI18n.t(language, "max_level")
             EquipmentActionStatus.GROUP_FULL -> GameI18n.t(language, "group_full")
@@ -750,64 +766,35 @@ class GameService(
     private fun forceTierLabel(language: GameLanguage, tier: ForceTier): String =
         "${GameI18n.t(language, tier.nameKey)} · ${tier.minCp}–${tier.maxCp} CP"
 
-    private fun developmentMenu(telegramId: Long, chatId: Long, prefix: String? = null) {
-        val language = language(telegramId)
-        val state = progression.state(telegramId)
-        val next = state.nextExpansion
-        val text = buildString {
-            prefix?.let { appendLine(it); appendLine() }
-            appendLine(GameI18n.t(language, "development_title"))
-            appendLine("${GameI18n.t(language, "research_points")}: ${state.researchPoints}")
-            appendLine("${GameI18n.t(language, "command_capacity")}: ${state.commandCapacity} CP")
-            appendLine("${GameI18n.t(language, "capacity_tier")}: ${forceTierLabel(language, state.currentTier)}")
-            appendLine()
-            appendLine(GameI18n.t(language, "cp_explanation"))
-            appendLine()
-            appendLine(GameI18n.t(language, "force_tier_list"))
-            forceTiers.tiers.forEach { tier ->
-                val marker = when {
-                    state.commandCapacity >= tier.maxCp -> "✅"
-                    state.commanderLevel >= tier.unlockLevel -> "🔬"
-                    else -> "🔒"
-                }
-                appendLine("$marker ${forceTierLabel(language, tier)} · L${tier.unlockLevel} · ${tier.researchCost} RP")
-            }
-            appendLine()
-            if (next == null) {
-                append(GameI18n.t(language, "capacity_maximum"))
-            } else {
-                append(GameI18n.t(language, "next_capacity", next.maxCp, next.unlockLevel, next.researchCost))
-            }
+    private fun claimDailyReward(telegramId: Long, chatId: Long) {
+        val before = player(telegramId, lock = true)
+        val language = GameLanguage.fromStored(before.language)
+        val today = LocalDate.now(ZoneId.of(properties.gameTimezone))
+        if (before.dailyRewardLastClaim == today) {
+            telegram.sendMessage(chatId, GameI18n.t(language, "daily_already_claimed", before.dailyRewardStreak), actionKeyboard(language))
+            return
         }
-        val keyboard = buildList {
-            if (next != null) {
-                add(listOf(InlineKeyboardButton(
-                    GameI18n.t(language, "expand_capacity_button", next.maxCp, next.researchCost),
-                    "development:expand:${state.commandCapacity}",
-                )))
-            }
-            add(listOf(InlineKeyboardButton(GameI18n.t(language, "army"), "nav:army")))
-        }
-        telegram.sendMessage(chatId, text, InlineKeyboardMarkup(keyboard))
-    }
-
-    private fun expandCapacity(telegramId: Long, chatId: Long, expectedCapacity: Int?) {
-        val language = language(telegramId)
-        if (expectedCapacity == null) return developmentMenu(telegramId, chatId)
-        val result = progression.expand(telegramId, expectedCapacity)
-        val message = when (result.status) {
-            CapacityExpansionStatus.SUCCESS -> GameI18n.t(
-                language,
-                "capacity_expanded",
-                result.expandedTo ?: result.progression.commandCapacity,
-                result.spentResearch,
-            )
-            CapacityExpansionStatus.LEVEL_LOCKED -> GameI18n.t(language, "capacity_level_locked", result.progression.nextExpansion?.unlockLevel ?: 50)
-            CapacityExpansionStatus.INSUFFICIENT_RESEARCH -> GameI18n.t(language, "capacity_research_missing", result.progression.nextExpansion?.researchCost ?: 0)
-            CapacityExpansionStatus.MAXIMUM_REACHED -> GameI18n.t(language, "capacity_maximum")
-            CapacityExpansionStatus.STALE -> GameI18n.t(language, "stale")
-        }
-        developmentMenu(telegramId, chatId, message)
+        val reward = DailyRewardPolicy.reward(before.dailyRewardStreak, before.dailyRewardLastClaim, today)
+        val referenceId = UUID.nameUUIDFromBytes("daily:$telegramId:$today".toByteArray(StandardCharsets.UTF_8))
+        jdbc.sql(
+            """
+            UPDATE players
+               SET credits = credits + :credits,
+                   daily_reward_streak = :streak,
+                   daily_reward_last_claim = :today,
+                   daily_reward_claims = daily_reward_claims + 1,
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE telegram_id = :id AND (daily_reward_last_claim IS NULL OR daily_reward_last_claim < :today)
+            """.trimIndent(),
+        ).param("credits", reward.credits).param("streak", reward.streak).param("today", today).param("id", telegramId).update()
+        recordWalletChange(telegramId, "CREDITS", reward.credits, "DAILY_REWARD", referenceId)
+        val bonusUnit = if (reward.grantsUnit) {
+            val unlocked = equipment.units.filter { it.unlockLevel <= before.commanderLevel }
+            val digest = MessageDigest.getInstance("SHA-256").digest("${properties.battleServerSalt}:$telegramId:$today".toByteArray(StandardCharsets.UTF_8))
+            inventory.grantDailyUnit(telegramId, unlocked[Math.floorMod(digest.take(4).fold(0) { acc, byte -> acc * 31 + byte }, unlocked.size)])
+        } else null
+        val bonus = bonusUnit?.let { "\n${GameI18n.t(language, "daily_bonus_unit", unitLabel(it, language))}" }.orEmpty()
+        telegram.sendMessage(chatId, GameI18n.t(language, "daily_claimed", reward.credits, reward.streak) + bonus, actionKeyboard(language))
     }
 
     private fun contribute(telegramId: Long, firstName: String, chatId: Long) {
@@ -818,8 +805,9 @@ class GameService(
             telegram.sendMessage(chatId, GameI18n.t(language, "choose_country"), recommendedCountryKeyboard(language, GameLanguage.fromTelegram(player.telegramLanguage)))
             return
         }
-        val snapshot = inventory.battleSnapshot(inventory.army(telegramId))
-        val outcome = campaigns.contribute(telegramId, player.allianceCode, snapshot, language)
+        val army = inventory.army(telegramId)
+        val snapshot = inventory.battleSnapshot(army)
+        val outcome = campaigns.contribute(telegramId, player.allianceCode, snapshot, army.activeGroup.units.map { it.id }, language)
         telegram.sendMessage(chatId, outcome.message)
         sendFront(player.allianceCode, language, chatId)
     }
@@ -831,7 +819,7 @@ class GameService(
         val alliance = p.allianceCode?.let { AllianceCatalog.option(it, language).label } ?: GameI18n.t(language, "not_selected")
         val battles = p.victories + p.defeats
         val winRate = if (battles == 0) 0 else p.victories * 100 / battles
-        val levelProgress = if (p.commanderLevel == 50) "MAX" else "${p.xp % 1000}/1000 XP"
+        val levelProgress = "${p.xp % 1000}/1000 XP"
         return """
             🪖 ${GameI18n.t(language, "commander")} ${p.displayName}
 
@@ -841,10 +829,9 @@ class GameService(
             ${GameI18n.t(language, "streak")}: ${p.currentStreak} · ${GameI18n.t(language, "record")} ${p.bestStreak}
 
             Credits: ${p.credits}
-            ${GameI18n.t(language, "research_points")}: ${p.researchPoints}
             Materials: ${p.materials}
             ${GameI18n.t(language, "command_capacity")}: ${p.commandCapacity} CP
-            ${GameI18n.t(language, "combat_orders")}: ${p.combatOrders}/5
+            ${GameI18n.t(language, "daily_reward_streak")}: ${p.dailyRewardStreak}/100
         """.trimIndent()
     }
 
@@ -885,14 +872,15 @@ class GameService(
         inventory.ensureStarter(telegramId)
     }
 
-    private fun player(telegramId: Long): Player = jdbc.sql(
+    private fun player(telegramId: Long, lock: Boolean = false): Player = jdbc.sql(
         """
         SELECT telegram_id, first_name, nickname, pending_nickname, language, telegram_language,
                alliance_code, commander_level, xp,
-               credits, research_points, materials, command_capacity, combat_orders,
-               victories, defeats, current_streak, best_streak
+               credits, materials, command_capacity, battle_offer_version,
+               victories, defeats, current_streak, best_streak,
+               daily_reward_streak, daily_reward_last_claim, daily_reward_claims
           FROM players
-         WHERE telegram_id = :id
+         WHERE telegram_id = :id${if (lock) " FOR UPDATE" else ""}
         """.trimIndent(),
     ).param("id", telegramId).query(Player::class.java).single()
 
@@ -926,16 +914,18 @@ class GameService(
             listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "all_options"), "country:all"))),
     )
 
-    private fun actionKeyboard(language: GameLanguage, includeBattle: Boolean = true): InlineKeyboardMarkup {
+    private fun actionKeyboard(language: GameLanguage): InlineKeyboardMarkup {
         val rows = mutableListOf<List<InlineKeyboardButton>>()
-        if (includeBattle) rows += listOf(InlineKeyboardButton(GameI18n.t(language, "battle"), "nav:battle"))
+        rows += listOf(
+            InlineKeyboardButton(GameI18n.t(language, "battle"), "nav:battle"),
+            InlineKeyboardButton(GameI18n.t(language, "daily"), "nav:daily"),
+        )
         rows += listOf(
             InlineKeyboardButton(GameI18n.t(language, "army"), "nav:army"),
             InlineKeyboardButton(GameI18n.t(language, "shop"), "nav:shop"),
         )
         rows += listOf(
             InlineKeyboardButton(GameI18n.t(language, "profile"), "nav:profile"),
-            InlineKeyboardButton(GameI18n.t(language, "development"), "nav:development"),
         )
         rows += listOf(InlineKeyboardButton(GameI18n.t(language, "front"), "nav:front"))
         rows += listOf(InlineKeyboardButton(GameI18n.t(language, "settings"), "nav:settings"))
@@ -1114,17 +1104,13 @@ class GameService(
         appendLine("/army — ${GameI18n.t(language, "army_title")}")
         appendLine("/shop — ${GameI18n.t(language, "shop_title")}")
         appendLine("/upgrade — ${GameI18n.t(language, "upgrade_title")}")
-        append("/development — ${GameI18n.t(language, "development_title")}")
+        append("/daily — ${GameI18n.t(language, "daily")}")
     }
 
     companion object {
         private const val COUNTRY_PAGE_SIZE = 10
     }
 
-    @Scheduled(cron = "0 0 0 * * *", zone = "\${frontline.game-timezone}")
-    fun resetDailyOrders() {
-        jdbc.sql("UPDATE players SET combat_orders = 5, updated_at = CURRENT_TIMESTAMP").update()
-    }
 }
 
 data class Player(
@@ -1138,16 +1124,19 @@ data class Player(
     val commanderLevel: Int,
     val xp: Long,
     val credits: Long,
-    val researchPoints: Long,
     val materials: Long,
     val commandCapacity: Int,
-    val combatOrders: Int,
+    val battleOfferVersion: Long,
     val victories: Int,
     val defeats: Int,
     val currentStreak: Int,
     val bestStreak: Int,
+    val dailyRewardStreak: Int,
+    val dailyRewardLastClaim: LocalDate?,
+    val dailyRewardClaims: Long,
 ) {
     val displayName: String get() = nickname?.takeIf(String::isNotBlank) ?: firstName
 }
 
-private data class Selection(val expectedOrders: Int, val slot: Int)
+private data class Selection(val expectedOfferVersion: Long, val slot: Int)
+private data class GroupBinding(val presetNo: Int, val version: Int)

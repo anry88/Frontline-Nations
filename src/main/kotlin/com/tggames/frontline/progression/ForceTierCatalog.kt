@@ -10,8 +10,6 @@ data class ForceTier(
     val nameKey: String,
     val minCp: Int,
     val maxCp: Int,
-    val unlockLevel: Int,
-    val researchCost: Int,
     val rewardPercent: Int,
 )
 
@@ -27,11 +25,6 @@ class ForceTierCatalog(objectMapper: ObjectMapper) {
     fun forDeployedCp(cp: Int): ForceTier = tiers.firstOrNull { cp in it.minCp..it.maxCp }
         ?: if (cp < minimumBattleCp) tiers.first() else error("No force tier for $cp CP")
 
-    fun forCapacity(capacity: Int): ForceTier = tiers.firstOrNull { capacity <= it.maxCp }
-        ?: tiers.last()
-
-    fun nextExpansion(capacity: Int): ForceTier? = tiers.firstOrNull { it.maxCp > capacity }
-
     private fun validate(definitions: List<ForceTier>) {
         require(definitions.isNotEmpty()) { "Force tier catalog cannot be empty" }
         require(definitions.map { it.id }.distinct().size == definitions.size) { "Force tier ids must be unique" }
@@ -41,14 +34,15 @@ class ForceTierCatalog(objectMapper: ObjectMapper) {
             require(tier.id.matches(Regex("[a-z][a-z0-9-]*")))
             require(tier.minCp in 1..tier.maxCp)
             require(tier.maxCp <= 1_000)
-            require(tier.unlockLevel in 1..50)
-            require(tier.researchCost > 0 && tier.rewardPercent >= 100)
+            require(tier.rewardPercent >= 100)
             if (index > 0) {
                 val previous = definitions[index - 1]
                 require(tier.minCp == previous.maxCp + 1) { "Force tiers must be contiguous" }
-                require(tier.unlockLevel > previous.unlockLevel) { "Force tier levels must increase" }
-                require(tier.researchCost > previous.researchCost) { "Force tier costs must increase" }
             }
         }
+    }
+
+    companion object {
+        fun capacityForLevel(level: Int): Int = (level.coerceAtLeast(1) + 9).coerceAtMost(1_000)
     }
 }
