@@ -12,9 +12,10 @@ The first graphical renderer treated rectangular `width × height` catalogs as a
 - All player and enemy entries must occupy unique boundary cells. Images label the sides with blue A–C and red X–Z badges placed outside the playable edge.
 - The renderer seals generated art inside exact opaque hex masks, overlaps placement by a pixel, draws narrow roads toward actual neighboring road cells, keeps the board unrotated, and exports a fixed 1,536×1,536 PNG. Dim half-hexes outside the rectangle remain non-playable visual plugs.
 - Every personal map must expose at least four terrain types; every weekly map must expose at least four terrain types and exactly five suitable objectives.
+- Map version 5 replaces the remaining shared anchor template with explicitly authored anchors for every battlefield. Personal sectors have unique three-objective layouts and at least eight deployment-edge patterns; weekly maps have unique five-objective layouts across six front orientations. Roads attach boundary entries to their nearest objectives, span the objective graph, and add deterministic alternate links.
 
 ## Consequences
 
 - The image now matches movement, range, line of sight, and pathfinding rather than presenting a cosmetic projection of different geometry.
 - Map assets are larger and the generator takes longer, but the committed PNGs remain cacheable and Telegram never renders a map at request time.
-- Old resolved snapshots retain their axial default and engine version. Open weekly snapshots are refreshed from current map version 4 during normal campaign recovery.
+- Old resolved snapshots retain their stored geometry and engine version. Open weekly snapshots are refreshed from current map version 5 during normal campaign recovery.

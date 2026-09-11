@@ -52,9 +52,9 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/main/resources/db/migration/V5__personal_equipment_and_battle_groups.sql`: inventory, presets, audit history, and battle snapshots.
 - `src/main/kotlin/com/tggames/frontline/battle/`: versioned personal engines, rectangular odd-row offset maps with legacy axial compatibility, deterministic movement/fire/capture events, and legacy replay support.
 - `src/main/kotlin/com/tggames/frontline/replay/`: event-log projection, Java2D frame composition, FFmpeg encoding, signed MP4 delivery, and expiring local cache.
-- `src/main/resources/catalog/battle-maps.json`: versioned 9×12 terrain maps, entries, and important objectives.
+- `src/main/resources/catalog/battle-maps.json`: version-5 9×12 terrain maps with unique authored entry/objective layouts.
 - `src/main/resources/static/assets/maps/`: generated hex/object blocks plus 24 personal and 10 weekly square PNG maps.
-- `scripts/generate-map-catalogs.py`: deterministic authored-anchor generator for distinct personal and weekly terrain/road layouts.
+- `scripts/generate-map-catalogs.py`: deterministic authored-anchor generator for distinct personal and weekly front orientations, objectives, terrain, and looped road layouts.
 - `scripts/render-battle-map-assets.py`: deterministic full-bleed tile normalization, terrain-transition, connected-road, unique edge-marker, objective-placement, blocked-rim, and upright square-image pipeline.
 - `src/main/resources/db/migration/V6__spatial_personal_battles.sql`: map/route/opponent snapshots, spatial events, final objective state, and end reason.
 - `src/main/kotlin/com/tggames/frontline/progression/`: command-capacity expansion and force-tier rules.
@@ -63,7 +63,7 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/main/resources/db/migration/V8__ranked_spatial_weekly_battles.sql`: weekly map/result snapshots, cumulative alliance ratings, and v2 pairing reset.
 - `src/main/resources/db/migration/V9__larger_graphical_battle_maps.sql`: larger open weekly snapshots and the 96-turn boundary.
 - `src/main/resources/catalog/battlefield-map-index.json`: one spatial map assignment for every personal battlefield.
-- `src/main/resources/catalog/weekly-battle-maps.json`: ten large weekly maps with five objectives each.
+- `src/main/resources/catalog/weekly-battle-maps.json`: ten large version-5 weekly maps with unique five-objective layouts.
 - `src/main/kotlin/com/tggames/frontline/i18n/`: supported locales and command-interface translations.
 - `src/main/resources/catalog/alliance-codes.txt`: versioned 249-entry ISO catalog plus explicitly supported Kosovo.
 - `compose.yml`: production-shaped application and PostgreSQL services.

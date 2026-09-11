@@ -26,10 +26,11 @@ WEEKLY_PATH = CATALOG / "weekly-battle-maps.json"
 EVEN_DIRECTIONS = ((1, 0), (0, -1), (-1, -1), (-1, 0), (-1, 1), (0, 1))
 ODD_DIRECTIONS = ((1, 0), (1, -1), (0, -1), (-1, 0), (0, 1), (1, 1))
 BLOCKED = {"MOUNTAIN", "WATER"}
+MAP_VERSION = 5
 
 
 def seeded(identifier: str) -> random.Random:
-    seed = int.from_bytes(hashlib.sha256(f"frontline-map-v4:{identifier}".encode()).digest()[:8], "big")
+    seed = int.from_bytes(hashlib.sha256(f"frontline-map-v{MAP_VERSION}:{identifier}".encode()).digest()[:8], "big")
     return random.Random(seed)
 
 
@@ -259,27 +260,106 @@ def position(value: tuple[int, int]) -> dict[str, int]:
     return {"q": value[0], "r": value[1]}
 
 
+def entry_name_key(value: tuple[int, int], width: int, height: int) -> str:
+    q, r = value
+    if r == 0:
+        return "entry_north"
+    if r == height - 1:
+        return "entry_south_road"
+    if q == 0:
+        return "entry_west_road"
+    if q == width - 1:
+        return "entry_east_route"
+    raise ValueError(f"Entry {value} is not on the {width}×{height} boundary")
+
+
+def road_graph(
+    entries: list[tuple[int, int]],
+    enemies: list[tuple[int, int]],
+    objectives: list[tuple[int, int]],
+    rng: random.Random,
+) -> list[tuple[tuple[int, int], tuple[int, int]]]:
+    """Connect every deployment edge through an objective-specific road network."""
+    connections: set[tuple[tuple[int, int], tuple[int, int]]] = set()
+
+    def add(first: tuple[int, int], second: tuple[int, int]) -> None:
+        connections.add(tuple(sorted((first, second))))
+
+    def nearest(value: tuple[int, int]) -> tuple[int, int]:
+        return min(objectives, key=lambda objective: (distance(value, objective), objective))
+
+    for anchor in entries + enemies:
+        add(anchor, nearest(anchor))
+
+    # A minimum spanning tree keeps the objective network connected without
+    # forcing every map through the same central hub.
+    connected = {objectives[0]}
+    pending = set(objectives[1:])
+    while pending:
+        first, second = min(
+            ((first, second) for first in connected for second in pending),
+            key=lambda pair: (distance(*pair), pair),
+        )
+        add(first, second)
+        connected.add(second)
+        pending.remove(second)
+
+    # Larger maps gain two deterministic alternative links, personal sectors
+    # one, producing loops and flanking routes rather than a single road tree.
+    candidates = [
+        (first, second)
+        for index, first in enumerate(objectives)
+        for second in objectives[index + 1:]
+        if tuple(sorted((first, second))) not in connections
+    ]
+    rng.shuffle(candidates)
+    for first, second in candidates[:2 if len(objectives) >= 5 else 1]:
+        add(first, second)
+    return sorted(connections)
+
+
+# These are authored tactical anchors, not random offsets around one template.
+# Keeping them explicit makes each named battlefield reviewable and stable while
+# terrain fill and road routing remain deterministic.
+PERSONAL_LAYOUTS: dict[str, dict[str, list[tuple[int, int]]]] = {
+    "carpathian-pass": {"player": [(1, 11), (5, 11), (8, 9)], "enemy": [(0, 2), (4, 0), (7, 0)], "objectives": [(2, 8), (5, 5), (6, 2)]},
+    "danube-valley": {"player": [(0, 2), (0, 6), (0, 10)], "enemy": [(8, 1), (8, 6), (8, 10)], "objectives": [(2, 3), (4, 7), (6, 9)]},
+    "adriatic-coast": {"player": [(1, 0), (4, 0), (7, 0)], "enemy": [(0, 10), (4, 11), (8, 9)], "objectives": [(2, 3), (6, 5), (4, 9)]},
+    "patagonian-plateau": {"player": [(0, 8), (2, 11), (6, 11)], "enemy": [(3, 0), (8, 3), (8, 7)], "objectives": [(2, 8), (4, 5), (7, 4)]},
+    "sahara-corridor": {"player": [(0, 1), (3, 0), (0, 7)], "enemy": [(8, 4), (8, 10), (5, 11)], "objectives": [(2, 3), (4, 6), (6, 8)]},
+    "altai-frontier": {"player": [(0, 9), (2, 11), (7, 11)], "enemy": [(1, 0), (6, 0), (8, 5)], "objectives": [(2, 7), (6, 5), (5, 2)]},
+    "polesie-frontier": {"player": [(0, 1), (0, 5), (0, 10)], "enemy": [(8, 2), (8, 7), (8, 10)], "objectives": [(3, 2), (5, 6), (3, 9)]},
+    "northern-tundra": {"player": [(1, 0), (5, 0), (8, 3)], "enemy": [(0, 7), (3, 11), (7, 11)], "objectives": [(3, 3), (6, 7), (2, 9)]},
+    "gobi-basin": {"player": [(0, 2), (4, 0), (8, 1)], "enemy": [(0, 10), (4, 11), (8, 9)], "objectives": [(2, 4), (6, 5), (4, 8)]},
+    "nile-delta": {"player": [(0, 3), (0, 8), (3, 11)], "enemy": [(5, 0), (8, 3), (8, 9)], "objectives": [(2, 5), (5, 3), (6, 8)]},
+    "anatolian-plateau": {"player": [(1, 11), (4, 11), (8, 8)], "enemy": [(0, 3), (4, 0), (8, 2)], "objectives": [(2, 7), (4, 4), (7, 6)]},
+    "rhine-plain": {"player": [(0, 2), (0, 9), (4, 11)], "enemy": [(4, 0), (8, 2), (8, 9)], "objectives": [(2, 6), (4, 3), (6, 7)]},
+    "atlas-foothills": {"player": [(0, 4), (0, 10), (5, 11)], "enemy": [(2, 0), (8, 1), (8, 7)], "objectives": [(2, 8), (3, 4), (6, 3)]},
+    "amazon-lowlands": {"player": [(0, 1), (4, 0), (8, 2)], "enemy": [(0, 9), (5, 11), (8, 8)], "objectives": [(2, 5), (4, 8), (6, 4)]},
+    "rift-valley": {"player": [(1, 0), (6, 0), (8, 5)], "enemy": [(0, 6), (2, 11), (7, 11)], "objectives": [(2, 3), (6, 7), (3, 9)]},
+    "mekong-delta": {"player": [(0, 3), (0, 7), (2, 11)], "enemy": [(6, 0), (8, 4), (8, 9)], "objectives": [(2, 6), (5, 3), (6, 9)]},
+    "deccan-plateau": {"player": [(0, 5), (3, 11), (8, 10)], "enemy": [(0, 1), (5, 0), (8, 4)], "objectives": [(2, 3), (4, 8), (7, 6)]},
+    "andean-pass": {"player": [(0, 10), (4, 11), (8, 8)], "enemy": [(0, 3), (3, 0), (8, 1)], "objectives": [(2, 7), (4, 5), (6, 3)]},
+    "arabian-coast": {"player": [(0, 1), (0, 8), (4, 11)], "enemy": [(4, 0), (8, 3), (8, 10)], "objectives": [(2, 3), (3, 8), (6, 6)]},
+    "great-plains": {"player": [(1, 11), (6, 11), (8, 7)], "enemy": [(0, 4), (2, 0), (7, 0)], "objectives": [(2, 8), (4, 3), (6, 6)]},
+    "caucasus-ridge": {"player": [(0, 2), (3, 0), (8, 1)], "enemy": [(0, 8), (5, 11), (8, 10)], "objectives": [(2, 4), (4, 9), (7, 5)]},
+    "baltic-marshes": {"player": [(0, 5), (0, 10), (6, 11)], "enemy": [(1, 0), (8, 2), (8, 7)], "objectives": [(2, 8), (4, 3), (7, 6)]},
+    "australian-outback": {"player": [(0, 1), (5, 0), (8, 4)], "enemy": [(0, 9), (3, 11), (8, 10)], "objectives": [(2, 5), (5, 8), (6, 3)]},
+    "kamchatka-coast": {"player": [(0, 4), (2, 11), (8, 9)], "enemy": [(0, 1), (6, 0), (8, 3)], "objectives": [(2, 7), (5, 3), (6, 7)]},
+}
+
+
 def personal_definition(assignment: dict[str, str]) -> dict[str, Any]:
     identifier, biome = assignment["id"], assignment["biome"]
     width, height = 9, 12
     base, grid = terrain_grid(identifier, biome, width, height)
-    rng = seeded(f"anchors:{identifier}")
-    entries = [(4, 11), (0, 7 + rng.randrange(0, 2)), (8, 8 + rng.randrange(0, 2))]
-    enemies = [(4, 0), (0, 2 + rng.randrange(0, 2)), (8, 2 + rng.randrange(0, 2))]
-    objectives = [
-        (2 + rng.randrange(0, 2), 3 + rng.randrange(0, 2)),
-        (4, 6),
-        (5 + rng.randrange(0, 2), 8 + rng.randrange(0, 2)),
-    ]
-    connections = [
-        (entries[0], objectives[1]), (entries[1], objectives[0]), (entries[2], objectives[2]),
-        (objectives[0], objectives[1]), (objectives[1], objectives[2]),
-        (objectives[0], enemies[1]), (objectives[1], enemies[0]), (objectives[2], enemies[2]),
-    ]
+    layout = PERSONAL_LAYOUTS[identifier]
+    entries, enemies, objectives = layout["player"], layout["enemy"], layout["objectives"]
+    connections = road_graph(entries, enemies, objectives, seeded(f"roads:{identifier}"))
     add_roads(grid, connections, width, height)
     return {
         "id": identifier,
-        "version": 4,
+        "version": MAP_VERSION,
         "nameKey": {
             "горы": "map_mountain_pass", "холмистая местность": "map_mountain_pass",
             "речная долина": "map_river_valley", "болота": "map_river_valley", "побережье": "map_river_valley",
@@ -291,14 +371,12 @@ def personal_definition(assignment: dict[str, str]) -> dict[str, Any]:
         "baseTerrain": base,
         "cells": cells_for(grid, base),
         "playerEntries": [
-            {"id": "S", "nameKey": "entry_south_road", "position": position(entries[0])},
-            {"id": "W", "nameKey": "entry_west_road", "position": position(entries[1])},
-            {"id": "E", "nameKey": "entry_east_route", "position": position(entries[2])},
+            {"id": entry_id, "nameKey": entry_name_key(value, width, height), "position": position(value)}
+            for entry_id, value in zip(("S", "W", "E"), entries)
         ],
         "enemyEntries": [
-            {"id": "N", "nameKey": "entry_north", "position": position(enemies[0])},
-            {"id": "NW", "nameKey": "entry_west_road", "position": position(enemies[1])},
-            {"id": "NE", "nameKey": "entry_east_route", "position": position(enemies[2])},
+            {"id": entry_id, "nameKey": entry_name_key(value, width, height), "position": position(value)}
+            for entry_id, value in zip(("N", "NW", "NE"), enemies)
         ],
         "objectives": [
             {"id": "signal", "nameKey": "objective_signal_tower", "position": position(objectives[0]), "captureSteps": 2},
@@ -322,28 +400,77 @@ WEEKLY_THEMES = {
 }
 
 
+WEEKLY_LAYOUTS: dict[str, dict[str, list[tuple[int, int]]]] = {
+    # Wide river front: opposing banks, offset crossings and a southern hook.
+    "grand-river-crossing": {
+        "player": [(0, 3), (0, 11), (5, 20)],
+        "enemy": [(9, 0), (14, 7), (14, 17)],
+        "objectives": [(3, 4), (8, 3), (6, 9), (10, 14), (5, 17)],
+    },
+    # Vertical mountain advance through two passes rather than a lateral lane.
+    "highland-corridor": {
+        "player": [(1, 20), (7, 20), (14, 16)],
+        "enemy": [(0, 4), (5, 0), (12, 0)],
+        "objectives": [(3, 15), (6, 11), (11, 16), (9, 6), (3, 5)],
+    },
+    # Diagonal desert pincer with objectives spread along three approach axes.
+    "desert-trident": {
+        "player": [(0, 1), (4, 0), (0, 13)],
+        "enemy": [(14, 7), (10, 20), (14, 19)],
+        "objectives": [(3, 4), (8, 6), (5, 11), (11, 13), (8, 17)],
+    },
+    # Northern and southern forces converge on an irregular forest basin.
+    "forest-basin": {
+        "player": [(1, 0), (7, 0), (13, 0)],
+        "enemy": [(0, 17), (6, 20), (13, 20)],
+        "objectives": [(4, 5), (10, 4), (7, 9), (3, 14), (10, 16)],
+    },
+    # Landings arrive from two coastal edges against an inland defence arc.
+    "coastal-breach": {
+        "player": [(0, 4), (0, 15), (6, 20)],
+        "enemy": [(5, 0), (14, 5), (14, 13)],
+        "objectives": [(3, 8), (7, 4), (6, 13), (11, 9), (10, 17)],
+    },
+    # A corner-to-corner tundra battle with a deliberately off-centre hinge.
+    "tundra-line": {
+        "player": [(0, 2), (2, 0), (0, 18)],
+        "enemy": [(14, 2), (12, 20), (14, 18)],
+        "objectives": [(4, 4), (10, 5), (5, 10), (9, 14), (5, 17)],
+    },
+    # Mixed north/west versus south/east deployment around marsh causeways.
+    "marsh-causeway": {
+        "player": [(0, 6), (3, 0), (10, 0)],
+        "enemy": [(4, 20), (14, 10), (12, 20)],
+        "objectives": [(3, 8), (7, 4), (8, 10), (5, 15), (11, 14)],
+    },
+    # Opposing sweeping arcs create several viable encirclement routes.
+    "steppe-encirclement": {
+        "player": [(0, 4), (0, 16), (8, 20)],
+        "enemy": [(6, 0), (14, 4), (14, 16)],
+        "objectives": [(3, 6), (8, 3), (6, 11), (11, 10), (9, 17)],
+    },
+    # Long canyon diagonal with side entrances that reward flanking mobility.
+    "canyon-network": {
+        "player": [(1, 20), (0, 13), (5, 20)],
+        "enemy": [(9, 0), (14, 7), (13, 0)],
+        "objectives": [(3, 16), (5, 10), (9, 14), (8, 6), (12, 4)],
+    },
+    # Cross-front industrial assault, distinct from every natural terrain map.
+    "industrial-front": {
+        "player": [(0, 2), (0, 10), (4, 20)],
+        "enemy": [(10, 0), (14, 10), (14, 19)],
+        "objectives": [(3, 4), (8, 5), (5, 11), (11, 12), (8, 17)],
+    },
+}
+
+
 def weekly_definition(source: dict[str, Any]) -> dict[str, Any]:
     identifier = source["id"]
     width, height = 15, 21
     base, grid = terrain_grid(identifier, WEEKLY_THEMES[identifier], width, height)
-    rng = seeded(f"anchors:{identifier}")
-    player_rows = [3 + rng.randrange(0, 2), 9 + rng.randrange(0, 3), 16 + rng.randrange(0, 2)]
-    enemy_rows = [3 + rng.randrange(0, 2), 9 + rng.randrange(0, 3), 16 + rng.randrange(0, 2)]
-    entries = [(0, row) for row in player_rows]
-    enemies = [(14, row) for row in enemy_rows]
-    objectives = [
-        (4 + rng.randrange(0, 2), 4 + rng.randrange(0, 2)),
-        (9 + rng.randrange(0, 2), 5 + rng.randrange(0, 2)),
-        (7, 10),
-        (4 + rng.randrange(0, 2), 14 + rng.randrange(0, 2)),
-        (9 + rng.randrange(0, 2), 15 + rng.randrange(0, 2)),
-    ]
-    connections = [
-        (entries[0], objectives[0]), (entries[1], objectives[2]), (entries[2], objectives[3]),
-        (objectives[0], objectives[1]), (objectives[0], objectives[2]), (objectives[1], objectives[2]),
-        (objectives[2], objectives[3]), (objectives[2], objectives[4]), (objectives[3], objectives[4]),
-        (objectives[1], enemies[0]), (objectives[2], enemies[1]), (objectives[4], enemies[2]),
-    ]
+    layout = WEEKLY_LAYOUTS[identifier]
+    entries, enemies, objectives = layout["player"], layout["enemy"], layout["objectives"]
+    connections = road_graph(entries, enemies, objectives, seeded(f"roads:{identifier}"))
     add_roads(grid, connections, width, height)
     objective_specs = [
         ("command", "objective_command_post", 3),
@@ -354,7 +481,7 @@ def weekly_definition(source: dict[str, Any]) -> dict[str, Any]:
     ]
     return {
         "id": identifier,
-        "version": 4,
+        "version": MAP_VERSION,
         "nameKey": source["nameKey"],
         "biomes": ["weekly"],
         "width": width,
@@ -363,11 +490,11 @@ def weekly_definition(source: dict[str, Any]) -> dict[str, Any]:
         "baseTerrain": base,
         "cells": cells_for(grid, base),
         "playerEntries": [
-            {"id": f"A{index + 1}", "nameKey": "entry_west_road", "position": position(value)}
+            {"id": f"A{index + 1}", "nameKey": entry_name_key(value, width, height), "position": position(value)}
             for index, value in enumerate(entries)
         ],
         "enemyEntries": [
-            {"id": f"B{index + 1}", "nameKey": "entry_east_route", "position": position(value)}
+            {"id": f"B{index + 1}", "nameKey": entry_name_key(value, width, height), "position": position(value)}
             for index, value in enumerate(enemies)
         ],
         "objectives": [
