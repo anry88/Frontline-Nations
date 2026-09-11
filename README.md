@@ -18,7 +18,7 @@ Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
 - `/development` or `/research` — spend Research Points to expand command capacity
 - `/profile` — inspect alliance, level progress, battle record, resources, and daily orders
 - `/front` — inspect the current matchup, intelligence, countdown, or published result
-- `/contribute 100` — transfer Credits before the Sunday contribution lock
+- `/contribute` — add or refresh an immutable snapshot of the active equipment group before the Sunday lock; the equipment is not consumed
 - `/country` or `/country Serbia` — browse 250 countries and territories or search by localized name/code
 - `/language` — choose English, Russian, Spanish, Brazilian Portuguese, Arabic, Indonesian, Hindi, or Turkish
 - `/nickname Commander` — choose a sanitized nickname after explicit confirmation
@@ -44,7 +44,9 @@ Players receive a limited number of Combat Orders and choose one of several oper
 
 ### Weekly campaigns
 
-The command-only MVP pairs player-selected alliances each week. Contributions remain open until Sunday at 15:00 in the `Europe/Belgrade` timezone. At that time the server locks the campaign, applies capped contribution and bounded NPC compensation, resolves four deterministic phases, persists the results, grants idempotent rewards to contributors, and queues Telegram notifications. Campaign assets, richer formation composition, and visual replay remain planned.
+All 250 countries and territories enter 125 weekly pairings. With an empty table they are sorted by English name and paired adjacently; later rounds sort by cumulative battle rating, with English name as the stable tie-break. Contributions remain open until Sunday at 15:00 in the `Europe/Belgrade` timezone.
+
+Each country receives a deterministic random NPC group whose actual equipment fits the first 10–25 CP category. Players reinforce their country only with snapshots of their own active equipment groups; no Credits or equipment are spent. Each matchup uses one of ten versioned 13×11 maps with five capture points and five aggregate formation classes per side. Formations move across terrain and use finite weapon ranges; artillery can fire indirectly, while aircraft still cannot strike across the whole map. A captured point grants more score when secured early. Losing it removes its retained score, and a later recapture is worth less. Destroyed enemy power and surviving allied power also score. Capturing all five points or destroying the opposing army ends the battle early; at the 48-turn limit, remaining force decides the winner first. Rating accumulates each side's battle score instead of replacing it, preventing one defeat from erasing a leading country's season.
 
 ### Progression
 
@@ -102,6 +104,7 @@ Mini App and replay-renderer directories will be added only when those milestone
 - [Personal equipment and tactical composition decision](docs/decisions/0005-personal-equipment-and-tactical-composition.md)
 - [Spatial personal battles decision](docs/decisions/0006-spatial-personal-battles.md)
 - [Command capacity and force tiers decision](docs/decisions/0007-command-capacity-and-force-tiers.md)
+- [Ranked spatial weekly campaigns decision](docs/decisions/0008-ranked-spatial-weekly-campaigns.md)
 - [Contributor guide](CONTRIBUTING.md)
 - [Agent guide](AGENTS.md)
 - [GitHub About metadata](docs/github-about.md)
@@ -109,9 +112,9 @@ Mini App and replay-renderer directories will be added only when those milestone
 
 ## Development Status
 
-Current phase: command-only MVP with persistent equipment progression, spatial personal operations, and scheduled weekly battles.
+Current phase: command-only MVP with persistent equipment progression, spatial personal operations, and ranked spatial weekly battles.
 
-The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog, moderated nicknames, a seven-class equipment catalog, transactional bulk purchase/crafting/upgrades, three CP-limited presets, level-gated command capacity expanded with Research Points, six battle categories up to 1,000 CP, five operation offers drawn from 24 battlefields, three data-driven tactical maps, deterministic formation-based spatial battles with objective control, weekly pairings, scheduled aggregate resolution, NPC compensation, idempotent campaign rewards, and durable Telegram notifications. Graphical maps/replays, alliance-scale spatial battles above the personal 1,000 CP boundary, seasonal alliance switching, modules, typed campaign assets, branching technologies, Mini App, and video rendering remain planned.
+The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog, moderated nicknames, a seven-class equipment catalog, transactional bulk purchase/crafting/upgrades, three CP-limited presets, level-gated command capacity expanded with Research Points, six battle categories up to 1,000 CP, five operation offers drawn from 24 battlefields with 24 mapped variants, deterministic formation-based spatial battles with objective control, 125 rating-seeded weekly pairings on ten larger maps, a random 10–25 CP NPC equipment group for every country, non-destructive player equipment reinforcement, timed aggregate spatial resolution, capture/destruction/survival scoring, idempotent campaign rewards, and durable Telegram notifications. Graphical replays, seasonal alliance switching, modules, typed campaign assets, branching technologies, Mini App, and video rendering remain planned.
 
 Run tests with `GRADLE_USER_HOME="$PWD/.gradle-home" ./gradlew test`. For a local Docker run, copy `.env.example` to an ignored `.env`, replace every secret, create the PostgreSQL data directory, and run `docker compose up --build`.
 

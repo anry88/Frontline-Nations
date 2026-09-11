@@ -11,7 +11,7 @@ The deployed MVP has two runtime surfaces:
 - Telegram Bot commands, callback queries, and inline alliance-selection buttons
 - Spring Boot backend as the authority for gameplay and economy
 
-PostgreSQL stores players and their explicit locale/nickname settings, command capacity and its upgrade audit, processed Telegram updates, owned personal units, three combat-group presets, equipment audit records, personal battles and their immutable group/map/opponent/tier snapshots, ordered spatial event JSON, campaign weeks and matchups, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs restore daily Combat Orders and drive the weekly campaign. Mini App, graphical replay visualization, alliance-scale spatial battles, equipment modules, branching technologies, and typed campaign assets remain future milestones.
+PostgreSQL stores players and their explicit locale/nickname settings, command capacity and its upgrade audit, processed Telegram updates, owned personal units, three combat-group presets, equipment audit records, personal battles and their immutable group/map/opponent/tier snapshots, ordered spatial event JSON, campaign weeks and matchups, cumulative country ratings, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs restore daily Combat Orders and drive the weekly campaign. Mini App, graphical replay visualization, equipment modules, branching technologies, and typed campaign assets remain future milestones.
 
 ### Identity, locale, and alliance selection
 
@@ -49,12 +49,14 @@ PostgreSQL stores players and their explicit locale/nickname settings, command c
 
 ### Weekly campaign
 
-1. A Monday 00:05 Belgrade job pairs the alliances currently selected by players and chooses named battlefields. Pairing uses the prior week's contribution power with a deterministic weekly tie-break; an unmatched side receives an unused NPC opponent. Newly selected, previously unmatched alliances can be appended without rewriting existing pairings.
-2. Players contribute Credits during the week. `/front` shows their matchup, own confirmed power, and a coarse comparison signal.
+1. A Monday 00:05 Belgrade job includes all 250 catalog countries and territories. Countries are ordered by cumulative rating descending and English name ascending, then paired adjacently. Therefore the initial zero-rating round is strictly English alphabetical: 1–2, 3–4, and so on through 125 matches.
+2. Every country receives a seed-derived random NPC equipment group that totals 10–25 CP. Players use `/contribute` to add or replace a snapshot of their active personal group. The snapshot is immutable for resolution and does not remove equipment or spend Credits.
 3. Contributions lock at Sunday 15:00 in `Europe/Belgrade`.
-4. The aggregate engine applies a configurable contribution soft cap, diminishing overflow, baseline garrisons, and bounded NPC compensation for contributor-count imbalance.
-5. Four deterministic phases resolve each matchup and persist cumulative scores, seed, engine version, and event JSON.
-6. One transaction records every result and issues one ledger-backed reward per contributing player. A durable notification outbox is delivered after commit and retried independently.
+4. The aggregate engine combines the NPC composition and player equipment snapshots, preserving equipment class and upgrade level when it deploys armor, artillery, reconnaissance, air, and support formations.
+5. One of ten 13×11 versioned weekly maps supplies terrain, three entries per side, and five capture points. Movement, finite range, direct-fire line of sight, indirect artillery, cover, capture, loss, and recapture resolve deterministically for at most 48 turns.
+6. Current objective ownership scores by capture time; losing an objective removes its prior score. Destroyed enemy power and a configured fraction of allied surviving power complete the battle score. All-objective control and army destruction end early. At timeout, remaining power decides first, followed by objective and total score tie-breaks.
+7. Both countries add their battle score to cumulative rating, so losing a single battle never wipes prior standing. The next week reorders all countries from that rating.
+8. One transaction stores map/input/result snapshots, score components, rating transitions and typed events, then issues one ledger-backed reward per contributor. A durable notification outbox is delivered after commit and retried independently.
 
 ## Module Boundaries
 

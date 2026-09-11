@@ -51,6 +51,9 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/main/kotlin/com/tggames/frontline/progression/`: command-capacity expansion and force-tier rules.
 - `src/main/resources/catalog/force-tiers.json`: level gates, capacity ceilings, costs, and reward multipliers through 1,000 CP.
 - `src/main/resources/db/migration/V7__command_capacity_and_force_tiers.sql`: persisted capacity, upgrade audit, larger presets, and battle-tier metadata.
+- `src/main/resources/db/migration/V8__ranked_spatial_weekly_battles.sql`: weekly map/result snapshots, cumulative alliance ratings, and v2 pairing reset.
+- `src/main/resources/catalog/battlefield-map-index.json`: one spatial map assignment for every personal battlefield.
+- `src/main/resources/catalog/weekly-battle-maps.json`: ten large weekly maps with five objectives each.
 - `src/main/kotlin/com/tggames/frontline/i18n/`: supported locales and command-interface translations.
 - `src/main/resources/catalog/alliance-codes.txt`: versioned 249-entry ISO catalog plus explicitly supported Kosovo.
 - `compose.yml`: production-shaped application and PostgreSQL services.
@@ -108,7 +111,7 @@ At minimum, add tests for:
 - authorization and Telegram authentication failure paths
 - idempotent rewards, wallet transactions, contributions, and scheduled jobs
 - campaign lock and resolve state transitions
-- alliance balancing, NPC compensation, and capped-contribution rules
+- deterministic NPC group generation, equipment snapshot idempotency, and weekly rating rules
 - persistence migrations and API serialization contracts
 
 Every bug fix should include a regression test when practical. Do not weaken or delete a failing test merely to make a build green.

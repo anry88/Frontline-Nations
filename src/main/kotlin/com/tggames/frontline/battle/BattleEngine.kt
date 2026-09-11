@@ -126,7 +126,8 @@ class BattleEngine(
         return (0 until OFFER_COUNT).map { OperationOffer(it, locations[it], enemies[it], difficulties[it]) }
     }
 
-    fun mapFor(operation: OperationOffer): BattleMapDefinition = mapCatalog.forBiome(operation.battlefield.biome)
+    fun mapFor(operation: OperationOffer): BattleMapDefinition =
+        mapCatalog.forBattlefield(operation.battlefield.location, operation.battlefield.biome)
 
     fun resolve(
         serverSalt: String,

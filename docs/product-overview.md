@@ -25,7 +25,7 @@ The campaign follows a weekly rhythm:
 - Saturday: publish an incomplete reconnaissance summary.
 - Sunday: lock contributions, resolve the aggregate battle, publish replay/highlights, and award results.
 
-The command-only MVP implements the scheduling and aggregate-result portion: dynamic weekly 1v1 matchups for selected alliances, Sunday 15:00 Belgrade resolution, capped contributions, limited NPC compensation, four battle phases, contributor rewards, and Telegram notifications. Campaign-asset classes, deficit-specific bonuses, and visual replay remain planned.
+The command-only MVP implements a 250-country ranked weekly front: 125 adjacent pairings, Sunday 15:00 Belgrade resolution, a random 10–25 CP NPC equipment group for every country, non-destructive active-group reinforcement by players, ten large spatial maps, five capture points, contributor rewards, and Telegram notifications. Typed expendable campaign assets and visual replay remain planned.
 
 The design supports many country- and territory-named alliances without allowing population alone to decide every campaign. Matchmaking, NPC garrisons, underdog factors, contribution caps, and dynamic shortage bonuses are planned balancing tools.
 

@@ -79,7 +79,7 @@ class GameService(
             "/development", "/research" -> developmentMenu(user.id, message.chat.id)
             "/profile" -> telegram.sendMessage(message.chat.id, profileText(user.id), actionKeyboard(language(user.id)))
             "/front" -> front(user.id, user.firstName, message.chat.id)
-            "/contribute" -> contribute(user.id, user.firstName, message.chat.id, argument)
+            "/contribute" -> contribute(user.id, user.firstName, message.chat.id)
             "/language" -> if (argument.isBlank()) languageMenu(user.id, message.chat.id) else selectLanguage(user.id, message.chat.id, argument.lowercase())
             "/nickname" -> nickname(user.id, message.chat.id, argument)
             "/country" -> countryMenu(user.id, message.chat.id, argument)
@@ -810,7 +810,7 @@ class GameService(
         developmentMenu(telegramId, chatId, message)
     }
 
-    private fun contribute(telegramId: Long, firstName: String, chatId: Long, argument: String) {
+    private fun contribute(telegramId: Long, firstName: String, chatId: Long) {
         ensurePlayer(telegramId, firstName)
         val player = player(telegramId)
         val language = GameLanguage.fromStored(player.language)
@@ -818,12 +818,8 @@ class GameService(
             telegram.sendMessage(chatId, GameI18n.t(language, "choose_country"), recommendedCountryKeyboard(language, GameLanguage.fromTelegram(player.telegramLanguage)))
             return
         }
-        val amount = argument.toIntOrNull() ?: 50
-        if (amount !in 10..10_000) {
-            telegram.sendMessage(chatId, GameI18n.t(language, "contribute_usage"))
-            return
-        }
-        val outcome = campaigns.contribute(telegramId, player.allianceCode, amount, language)
+        val snapshot = inventory.battleSnapshot(inventory.army(telegramId))
+        val outcome = campaigns.contribute(telegramId, player.allianceCode, snapshot, language)
         val front = campaigns.frontText(player.allianceCode, language)
         telegram.sendMessage(chatId, "${outcome.message}\n\n$front", actionKeyboard(language))
     }

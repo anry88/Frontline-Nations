@@ -1,44 +1,66 @@
 package com.tggames.frontline.campaign
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.tggames.frontline.catalog.EquipmentCatalog
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
 class WeeklyBattleEngineTest {
-    private val engine = WeeklyBattleEngine()
-    private val balance = WeeklyBalance(
-        npcBasePower = 500,
-        npcPerMissingContributor = 150,
-        maxNpcCompensation = 900,
-        contributionSoftCap = 5_000,
-        overflowDivisor = 4,
-    )
+    private val objectMapper = jacksonObjectMapper()
+    private val equipment = EquipmentCatalog(objectMapper)
+    private val engine = WeeklyBattleEngine(equipment)
+    private val maps = WeeklyBattleMapCatalog(objectMapper).maps
+    private val map = maps.first()
+    private val balance = WeeklyBalance()
 
     @Test
     fun `same weekly inputs produce the same battle and events`() {
-        val a = AllianceForce("RS", 1_200, 4)
-        val b = AllianceForce("BR", 1_100, 3)
+        val a = AllianceForce("RS", listOf(WeeklyUnitContribution("MBT", 2, 4)), 1, 1_200)
+        val b = AllianceForce("BR", listOf(WeeklyUnitContribution("ARTILLERY", 1, 3)), 1, 900)
 
-        val first = engine.resolve("secret", "2026-W37", 0, "Дунайская долина", a, b, balance)
-        val second = engine.resolve("secret", "2026-W37", 0, "Дунайская долина", a, b, balance)
+        val first = engine.resolve("secret", "2026-W37", 0, map, a, b, balance)
+        val second = engine.resolve("secret", "2026-W37", 0, map, a, b, balance)
 
         assertThat(second).isEqualTo(first)
-        assertThat(first.events).hasSize(4)
+        assertThat(first.completedTicks).isBetween(1, balance.maxTicks)
+        assertThat(first.objectives).hasSize(5)
+        assertThat(first.scoreA).isEqualTo(first.objectiveScoreA + first.destroyedScoreA + first.survivorScoreA)
         assertThat(first.seedHash).hasSize(64)
         assertThat(first.winnerCode).isIn("RS", "BR")
     }
 
     @Test
-    fun `smaller active side receives bounded npc compensation`() {
-        val small = AllianceForce("RS", 900, 1)
-        val large = AllianceForce("BR", 900, 20)
+    fun `every country receives a deterministic first tier npc squad`() {
+        val emptyA = AllianceForce("RS", emptyList(), 0, 0)
+        val emptyB = AllianceForce("BR", emptyList(), 0, 0)
+        val result = engine.resolve("secret", "2026-W37", 4, map, emptyA, emptyB, balance)
 
-        assertThat(engine.npcCompensation(small, large, balance)).isEqualTo(900)
-        assertThat(engine.npcCompensation(large, small, balance)).isZero()
+        assertThat(result.npcBonusA).isBetween(10, 25)
+        assertThat(result.npcBonusB).isBetween(10, 25)
+        assertThat(result.effectivePowerA).isBetween(1_000, 2_500)
+        assertThat(result.effectivePowerB).isBetween(1_000, 2_500)
+        assertThat(result.effectivePowerA).isEqualTo(result.npcBonusA * 100L)
+        assertThat(result.effectivePowerB).isEqualTo(result.npcBonusB * 100L)
+        assertThat(result.npcUnitsA.sumOf { equipment.require(it.code).cpCost * it.quantity }).isEqualTo(result.npcBonusA)
     }
 
     @Test
-    fun `contribution above soft cap has diminishing returns`() {
-        assertThat(engine.cappedContribution(5_000, balance)).isEqualTo(5_000)
-        assertThat(engine.cappedContribution(9_000, balance)).isEqualTo(6_000)
+    fun `late capture is worth less but never below floor`() {
+        assertThat(engine.capturePoints(1, balance)).isGreaterThan(engine.capturePoints(20, balance))
+        assertThat(engine.capturePoints(10_000, balance)).isEqualTo(balance.objectiveMinPoints.toLong())
+    }
+
+    @Test
+    fun `all weekly maps resolve with catalog ranges and bounded duration`() {
+        val forceA = AllianceForce("RS", listOf(WeeklyUnitContribution("FIGHTER", 3, 2), WeeklyUnitContribution("MBT", 2, 4)), 1, 1_800)
+        val forceB = AllianceForce("BR", listOf(WeeklyUnitContribution("AIR_DEFENSE", 2, 3), WeeklyUnitContribution("ARTILLERY", 2, 4)), 1, 1_800)
+
+        maps.forEachIndexed { index, weeklyMap ->
+            val result = engine.resolve("secret", "2026-W37", index, weeklyMap, forceA, forceB, balance)
+            assertThat(result.completedTicks).isBetween(1, balance.maxTicks)
+            assertThat(result.formations).allSatisfy { formation ->
+                assertThat(formation.weaponRange).isEqualTo(equipment.require(formation.unitCode).spatial.weaponRange)
+            }
+        }
     }
 }

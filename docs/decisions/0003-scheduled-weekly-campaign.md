@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR 0008](0008-ranked-spatial-weekly-campaigns.md)
 
 ## Context
 
