@@ -31,6 +31,7 @@ frontline:
   telegram:
     bot-token: ${TELEGRAM_BOT_TOKEN:}
     webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
+    admin-chat-id: ${TELEGRAM_ADMIN_CHAT_ID:0}
   replay:
     ffmpeg-path: ${REPLAY_FFMPEG_PATH:ffmpeg}
     cache-directory: ${REPLAY_CACHE_DIRECTORY:/tmp/frontline-replays}

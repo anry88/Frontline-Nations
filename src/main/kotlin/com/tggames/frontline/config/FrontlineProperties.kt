@@ -14,6 +14,7 @@ data class FrontlineProperties(
     data class Telegram(
         val botToken: String = "",
         val webhookSecret: String = "",
+        val adminChatId: Long = 0,
     )
 
     data class Campaign(

@@ -20,6 +20,13 @@ import com.tggames.frontline.inventory.EquipmentAction
 import com.tggames.frontline.inventory.EquipmentActionStatus
 import com.tggames.frontline.inventory.InventoryService
 import com.tggames.frontline.inventory.OwnedUnit
+import com.tggames.frontline.monetization.AdminSupportResult
+import com.tggames.frontline.monetization.AnswerResult
+import com.tggames.frontline.monetization.PaymentDelivery
+import com.tggames.frontline.monetization.StarsCreditCatalog
+import com.tggames.frontline.monetization.StarsMessages
+import com.tggames.frontline.monetization.StarsPaymentService
+import com.tggames.frontline.monetization.SupportCreation
 import com.tggames.frontline.progression.ForceTier
 import com.tggames.frontline.progression.ForceTierCatalog
 import com.tggames.frontline.progression.CommanderProgression
@@ -54,12 +61,23 @@ class GameService(
     private val forceTiers: ForceTierCatalog,
     private val replays: ReplayService,
     private val rankings: RankingService,
+    private val stars: StarsPaymentService,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     @Transactional
     fun handle(update: TelegramUpdate) {
         if (!claimUpdate(update.updateId)) return
+
+        update.preCheckoutQuery?.let { query ->
+            val validation = stars.validate(query)
+            telegram.answerPreCheckout(
+                query.id,
+                validation.valid,
+                if (validation.valid) null else "This Stars purchase is no longer available.",
+            )
+            return
+        }
 
         update.callbackQuery?.let { callback ->
             ensurePlayer(callback.from.id, callback.from.firstName, callback.from.languageCode)
@@ -73,14 +91,44 @@ class GameService(
         val message = update.message ?: return
         val user = message.from ?: return
         ensurePlayer(user.id, user.firstName, user.languageCode)
+        val language = language(user.id)
+
+        message.successfulPayment?.let { payment ->
+            when (val result = stars.deliver(user.id, payment)) {
+                is PaymentDelivery.Delivered -> telegram.sendMessage(
+                    message.chat.id,
+                    StarsMessages.paymentComplete(language, result.pack.credits, result.creditsBalance),
+                    actionKeyboard(user.id, language),
+                )
+                is PaymentDelivery.Duplicate -> telegram.sendMessage(
+                    message.chat.id,
+                    StarsMessages.duplicate(language),
+                    actionKeyboard(user.id, language),
+                )
+                is PaymentDelivery.Invalid -> {
+                    logger.warn("Rejected Stars payment for player {}: {}", user.id, result.reason)
+                    telegram.sendMessage(message.chat.id, StarsMessages.invalid(language))
+                }
+            }
+            return
+        }
+
         val command = message.text.orEmpty().trim().substringBefore('@').substringBefore(' ').lowercase()
         val argument = message.text.orEmpty().trim().substringAfter(' ', "").trim()
+
+        if (stars.isAdminContext(message.chat.id, user.id) && command in ADMIN_PAYMENT_COMMANDS) {
+            handleAdminPaymentCommand(command, argument, message.chat.id)
+            return
+        }
 
         when (command) {
             "/start" -> start(user.id, user.firstName, message.chat.id)
             "/battle" -> battleMenu(user.id, user.firstName, message.chat.id)
             "/army", "/hangar" -> armyMenu(user.id, message.chat.id)
             "/shop" -> shopMenu(user.id, message.chat.id)
+            "/stars", "/buycredits" -> starsMenu(user.id, message.chat.id)
+            "/paysupport" -> paymentSupport(user.id, message.chat.id, argument)
+            "/answer" -> answerPaymentSupport(user.id, message.chat.id, argument)
             "/upgrade" -> upgradeMenu(user.id, message.chat.id)
             "/daily" -> claimDailyReward(user.id, message.chat.id)
             "/profile" -> telegram.sendMessage(message.chat.id, profileText(user.id), actionKeyboard(user.id, language(user.id)))
@@ -113,6 +161,8 @@ class GameService(
             data == "nav:battle" -> battleMenu(callback.from.id, callback.from.firstName, chatId)
             data == "nav:army" -> armyMenu(callback.from.id, chatId)
             data == "nav:shop" -> shopMenu(callback.from.id, chatId)
+            data == "stars:menu" -> starsMenu(callback.from.id, chatId)
+            data.startsWith("stars:buy:") -> sendStarsInvoice(callback.from.id, chatId, data.removePrefix("stars:buy:"))
             data == "nav:upgrade" -> upgradeMenu(callback.from.id, chatId)
             data == "nav:daily" -> claimDailyReward(callback.from.id, chatId)
             data == "nav:profile" -> telegram.sendMessage(chatId, profileText(callback.from.id), actionKeyboard(callback.from.id, language))
@@ -714,11 +764,158 @@ class GameService(
         val rows = GameUiPolicy.shopOrder(equipment.units, player.commanderLevel).map { definition ->
             val lock = if (player.commanderLevel < definition.unlockLevel) "🔒 L${definition.unlockLevel}" else "${definition.cpCost} CP"
             listOf(InlineKeyboardButton("${definition.emoji} ${definition.name(language)} · $lock", "shop:view:${definition.code}"))
-        } + listOf(listOf(
+        } + listOf(
+            listOf(InlineKeyboardButton("⭐ ${StarsMessages.packButton(language, StarsCreditCatalog.packs.first()).substringBefore(" · ")}", "stars:menu")),
+            listOf(
             InlineKeyboardButton(GameI18n.t(language, "upgrade"), "nav:upgrade"),
             InlineKeyboardButton(GameI18n.t(language, "army"), "nav:army"),
-        ))
+            ),
+        )
         telegram.sendMessage(chatId, text, InlineKeyboardMarkup(rows))
+    }
+
+    private fun starsMenu(telegramId: Long, chatId: Long) {
+        val player = player(telegramId)
+        val language = GameLanguage.fromStored(player.language)
+        val rows = StarsCreditCatalog.packs.map { pack ->
+            listOf(InlineKeyboardButton(StarsMessages.packButton(language, pack), "stars:buy:${pack.id}"))
+        } + listOf(listOf(InlineKeyboardButton("↩️ ${GameI18n.t(language, "shop")}", "nav:shop")))
+        telegram.sendMessage(chatId, StarsMessages.menu(language, player.credits), InlineKeyboardMarkup(rows))
+    }
+
+    private fun sendStarsInvoice(telegramId: Long, chatId: Long, packId: String) {
+        val language = language(telegramId)
+        val pack = StarsCreditCatalog.find(packId) ?: return starsMenu(telegramId, chatId)
+        telegram.sendInvoice(
+            chatId = chatId,
+            title = "${pack.credits} Credits",
+            description = StarsMessages.invoiceTitle(language, pack.credits),
+            payload = StarsCreditCatalog.payload(telegramId, pack.id),
+            label = "${pack.credits} Credits",
+            stars = pack.priceStars,
+        )
+    }
+
+    private fun paymentSupport(telegramId: Long, chatId: Long, argument: String) {
+        val language = language(telegramId)
+        val payments = stars.refundablePayments(telegramId)
+        if (argument.isBlank()) {
+            if (payments.isEmpty()) {
+                telegram.sendMessage(chatId, StarsMessages.noPurchases(language))
+            } else {
+                val list = payments.joinToString("\n") { "${it.id}: ${it.credits} Credits — ${it.priceStars} ⭐" }
+                telegram.sendMessage(chatId, StarsMessages.supportList(language, list))
+            }
+            return
+        }
+        val parts = argument.split(Regex("\\s+"), limit = 2)
+        val paymentId = parts.firstOrNull()?.toLongOrNull()
+        val reason = parts.getOrNull(1)?.trim().orEmpty()
+        if (paymentId == null || reason.isBlank()) {
+            telegram.sendMessage(chatId, StarsMessages.supportFormat(language))
+            return
+        }
+        when (val result = stars.createSupportRequest(telegramId, paymentId, reason)) {
+            is SupportCreation.Created -> {
+                telegram.sendMessage(chatId, StarsMessages.supportSubmitted(language, result.requestId))
+                stars.adminChatId()?.let { adminChatId ->
+                    try {
+                        telegram.sendMessage(
+                            adminChatId,
+                            """
+                            Запрос возврата #${result.requestId}
+                            Игрок: $telegramId
+                            Платёж: ${result.payment.id} · ${result.payment.credits} Credits за ${result.payment.priceStars} Stars
+                            Причина: $reason
+
+                            /refund ${result.requestId} — вернуть Stars
+                            /reject ${result.requestId} <причина> — отклонить
+                            /ask ${result.requestId} <вопрос> — уточнить
+                            """.trimIndent(),
+                        )
+                    } catch (error: Exception) {
+                        logger.error("Failed to notify payment support admin for request {}", result.requestId, error)
+                    }
+                }
+            }
+            is SupportCreation.AlreadyOpen -> telegram.sendMessage(chatId, StarsMessages.supportAlreadyOpen(language, result.requestId))
+            SupportCreation.PaymentNotFound -> telegram.sendMessage(chatId, StarsMessages.supportNotFound(language))
+        }
+    }
+
+    private fun answerPaymentSupport(telegramId: Long, chatId: Long, argument: String) {
+        val language = language(telegramId)
+        val parts = argument.split(Regex("\\s+"), limit = 2)
+        val explicitId = parts.firstOrNull()?.toLongOrNull()
+        val answer = if (explicitId != null) parts.getOrNull(1).orEmpty().trim() else argument.trim()
+        if (answer.isBlank()) {
+            telegram.sendMessage(chatId, StarsMessages.supportFormat(language).replace("/paysupport", "/answer"))
+            return
+        }
+        when (val result = stars.answer(telegramId, explicitId, answer)) {
+            is AnswerResult.Accepted -> {
+                telegram.sendMessage(chatId, StarsMessages.answerAccepted(language, result.requestId))
+                stars.adminChatId()?.let { adminChatId ->
+                    try {
+                        telegram.sendMessage(adminChatId, "Ответ игрока $telegramId по запросу #${result.requestId}:\n$answer")
+                    } catch (error: Exception) {
+                        logger.error("Failed to forward payment support answer {}", result.requestId, error)
+                    }
+                }
+            }
+            AnswerResult.NotFound -> telegram.sendMessage(chatId, StarsMessages.supportNotFound(language))
+        }
+    }
+
+    private fun handleAdminPaymentCommand(command: String, argument: String, chatId: Long) {
+        val parts = argument.split(Regex("\\s+"), limit = 2)
+        val requestId = parts.firstOrNull()?.toLongOrNull()
+        if (requestId == null) {
+            telegram.sendMessage(chatId, "Нужен ID запроса.")
+            return
+        }
+        when (command) {
+            "/refund" -> when (val result = stars.refund(requestId)) {
+                is AdminSupportResult.Updated -> {
+                    telegram.sendMessage(chatId, "Запрос #$requestId: Stars возвращены, Credits списаны.")
+                    trySendPaymentSupportMessage(result.playerTelegramId, StarsMessages.refunded(languageByChat(result.playerTelegramId), requestId))
+                }
+                AdminSupportResult.NotFound -> telegram.sendMessage(chatId, "Запрос #$requestId не найден.")
+                AdminSupportResult.AlreadyResolved -> telegram.sendMessage(chatId, "Запрос #$requestId уже закрыт.")
+            }
+            "/reject" -> {
+                val reason = parts.getOrNull(1)?.trim().orEmpty()
+                if (reason.isBlank()) return telegram.sendMessage(chatId, "Используйте /reject <ID> <причина>.")
+                when (val result = stars.reject(requestId, reason)) {
+                    is AdminSupportResult.Updated -> {
+                        telegram.sendMessage(chatId, "Запрос #$requestId отклонён.")
+                        trySendPaymentSupportMessage(result.playerTelegramId, StarsMessages.rejected(languageByChat(result.playerTelegramId), requestId, reason))
+                    }
+                    AdminSupportResult.NotFound -> telegram.sendMessage(chatId, "Запрос #$requestId не найден.")
+                    AdminSupportResult.AlreadyResolved -> telegram.sendMessage(chatId, "Запрос #$requestId уже закрыт.")
+                }
+            }
+            "/ask" -> {
+                val question = parts.getOrNull(1)?.trim().orEmpty()
+                if (question.isBlank()) return telegram.sendMessage(chatId, "Используйте /ask <ID> <вопрос>.")
+                when (val result = stars.ask(requestId, question)) {
+                    is AdminSupportResult.Updated -> {
+                        telegram.sendMessage(chatId, "Уточнение по запросу #$requestId отправлено.")
+                        trySendPaymentSupportMessage(result.playerTelegramId, StarsMessages.informationRequested(languageByChat(result.playerTelegramId), requestId, question))
+                    }
+                    AdminSupportResult.NotFound -> telegram.sendMessage(chatId, "Запрос #$requestId не найден.")
+                    AdminSupportResult.AlreadyResolved -> telegram.sendMessage(chatId, "Запрос #$requestId уже закрыт.")
+                }
+            }
+        }
+    }
+
+    private fun trySendPaymentSupportMessage(chatId: Long, text: String) {
+        try {
+            telegram.sendMessage(chatId, text)
+        } catch (error: Exception) {
+            logger.warn("Payment support result could not be delivered to player {}", chatId, error)
+        }
     }
 
     private fun shopDetails(telegramId: Long, chatId: Long, code: String) {
@@ -1411,6 +1608,8 @@ class GameService(
         appendLine(GameI18n.t(language, "help"))
         appendLine("/army — ${GameI18n.t(language, "army_title")}")
         appendLine("/shop — ${GameI18n.t(language, "shop_title")}")
+        appendLine("/stars — ${frontLocalized(language, "buy Credits with Telegram Stars", "купить Credits за Telegram Stars")}")
+        appendLine("/paysupport — ${frontLocalized(language, "Stars purchase support", "поддержка покупок за Stars")}")
         appendLine("/upgrade — ${GameI18n.t(language, "upgrade_title")}")
         appendLine("/daily — ${GameI18n.t(language, "daily")}")
         appendLine("/rankings — ${frontLocalized(language, "alliance and player ratings", "рейтинг стран и игроков")}")
@@ -1423,6 +1622,7 @@ class GameService(
     companion object {
         private const val COUNTRY_PAGE_SIZE = 10
         private const val ALLIANCE_RATING_PAGE_SIZE = 10
+        private val ADMIN_PAYMENT_COMMANDS = setOf("/refund", "/reject", "/ask")
     }
 
 }

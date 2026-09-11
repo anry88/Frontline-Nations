@@ -36,6 +36,15 @@ commands_id="${commands_id%]}, {\"command\":\"rankings\",\"description\":\"Perin
 commands_hi="${commands_hi%]}, {\"command\":\"rankings\",\"description\":\"रैंकिंग\"}, {\"command\":\"guide\",\"description\":\"गेम गाइड\"}]"
 commands_tr="${commands_tr%]}, {\"command\":\"rankings\",\"description\":\"Sıralamalar\"}, {\"command\":\"guide\",\"description\":\"Oyun rehberi\"}]"
 
+commands_en="${commands_en%]}, {\"command\":\"stars\",\"description\":\"Buy Credits with Telegram Stars\"}, {\"command\":\"paysupport\",\"description\":\"Stars purchase and refund support\"}]"
+commands_ru="${commands_ru%]}, {\"command\":\"stars\",\"description\":\"Купить Credits за Telegram Stars\"}, {\"command\":\"paysupport\",\"description\":\"Поддержка покупок и возвратов\"}]"
+commands_es="${commands_es%]}, {\"command\":\"stars\",\"description\":\"Comprar Credits con Telegram Stars\"}, {\"command\":\"paysupport\",\"description\":\"Soporte de compras y reembolsos\"}]"
+commands_pt="${commands_pt%]}, {\"command\":\"stars\",\"description\":\"Comprar Credits com Telegram Stars\"}, {\"command\":\"paysupport\",\"description\":\"Suporte a compras e reembolsos\"}]"
+commands_ar="${commands_ar%]}, {\"command\":\"stars\",\"description\":\"شراء Credits عبر Telegram Stars\"}, {\"command\":\"paysupport\",\"description\":\"دعم المشتريات والاسترداد\"}]"
+commands_id="${commands_id%]}, {\"command\":\"stars\",\"description\":\"Beli Credits dengan Telegram Stars\"}, {\"command\":\"paysupport\",\"description\":\"Dukungan pembelian dan refund\"}]"
+commands_hi="${commands_hi%]}, {\"command\":\"stars\",\"description\":\"Telegram Stars से Credits खरीदें\"}, {\"command\":\"paysupport\",\"description\":\"खरीद और वापसी सहायता\"}]"
+commands_tr="${commands_tr%]}, {\"command\":\"stars\",\"description\":\"Telegram Stars ile Credits al\"}, {\"command\":\"paysupport\",\"description\":\"Satın alım ve iade desteği\"}]"
+
 set_commands '' "$commands_en"
 set_commands en "$commands_en"
 set_commands ru "$commands_ru"
@@ -50,7 +59,7 @@ curl --fail --silent --show-error \
   --request POST \
   --data-urlencode "url=${public_base_url%/}/bot" \
   --data-urlencode "secret_token=${TELEGRAM_WEBHOOK_SECRET}" \
-  --data-urlencode 'allowed_updates=["message","callback_query"]' \
+  --data-urlencode 'allowed_updates=["message","callback_query","pre_checkout_query"]' \
   "$api_url/setWebhook"
 printf '\n'
 

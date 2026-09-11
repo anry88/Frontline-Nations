@@ -27,9 +27,15 @@ if [[ -z "$image_tag" ]]; then
   image_tag="hdc-$(git -C "$repo_root" rev-parse --short HEAD)"
 fi
 
-for name in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET BATTLE_SERVER_SALT POSTGRES_PASSWORD; do
+for name in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET TELEGRAM_ADMIN_CHAT_ID BATTLE_SERVER_SALT POSTGRES_PASSWORD; do
   grep -q "^${name}=." "$env_file" || { printf 'Missing %s in %s\n' "$name" "$env_file" >&2; exit 1; }
 done
+
+admin_chat_id="$(grep '^TELEGRAM_ADMIN_CHAT_ID=' "$env_file" | tail -1 | cut -d= -f2- | tr -d '\r\"')"
+[[ "$admin_chat_id" =~ ^[1-9][0-9]*$ ]] || {
+  printf 'TELEGRAM_ADMIN_CHAT_ID must be a positive private Telegram chat ID\n' >&2
+  exit 1
+}
 
 remote_deploy="$windows_root\\deploy\\prod"
 remote_state="$windows_root\\state\\prod"

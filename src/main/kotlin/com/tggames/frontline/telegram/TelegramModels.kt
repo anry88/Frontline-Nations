@@ -6,6 +6,7 @@ data class TelegramUpdate(
     @param:JsonProperty("update_id") val updateId: Long,
     val message: TelegramMessage? = null,
     @param:JsonProperty("callback_query") val callbackQuery: TelegramCallbackQuery? = null,
+    @param:JsonProperty("pre_checkout_query") val preCheckoutQuery: TelegramPreCheckoutQuery? = null,
 )
 
 data class TelegramMessage(
@@ -13,6 +14,23 @@ data class TelegramMessage(
     val from: TelegramUser? = null,
     val chat: TelegramChat,
     val text: String? = null,
+    @param:JsonProperty("successful_payment") val successfulPayment: TelegramSuccessfulPayment? = null,
+)
+
+data class TelegramPreCheckoutQuery(
+    val id: String,
+    val from: TelegramUser,
+    val currency: String,
+    @param:JsonProperty("total_amount") val totalAmount: Int,
+    @param:JsonProperty("invoice_payload") val invoicePayload: String,
+)
+
+data class TelegramSuccessfulPayment(
+    val currency: String,
+    @param:JsonProperty("total_amount") val totalAmount: Int,
+    @param:JsonProperty("invoice_payload") val invoicePayload: String,
+    @param:JsonProperty("telegram_payment_charge_id") val telegramPaymentChargeId: String,
+    @param:JsonProperty("provider_payment_charge_id") val providerPaymentChargeId: String? = null,
 )
 
 data class TelegramCallbackQuery(
@@ -65,4 +83,30 @@ data class InlineKeyboardButton(
 
 data class AnswerCallbackRequest(
     @param:JsonProperty("callback_query_id") val callbackQueryId: String,
+)
+
+data class LabeledPrice(
+    val label: String,
+    val amount: Int,
+)
+
+data class SendInvoiceRequest(
+    @param:JsonProperty("chat_id") val chatId: Long,
+    val title: String,
+    val description: String,
+    val payload: String,
+    @param:JsonProperty("provider_token") val providerToken: String = "",
+    val currency: String = "XTR",
+    val prices: List<LabeledPrice>,
+)
+
+data class AnswerPreCheckoutRequest(
+    @param:JsonProperty("pre_checkout_query_id") val preCheckoutQueryId: String,
+    val ok: Boolean,
+    @param:JsonProperty("error_message") val errorMessage: String? = null,
+)
+
+data class RefundStarPaymentRequest(
+    @param:JsonProperty("user_id") val userId: Long,
+    @param:JsonProperty("telegram_payment_charge_id") val telegramPaymentChargeId: String,
 )

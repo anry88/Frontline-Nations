@@ -11,7 +11,7 @@ The deployed MVP has two runtime surfaces:
 - Telegram Bot commands, callback queries, and inline alliance-selection buttons
 - Spring Boot backend as the authority for gameplay and economy
 
-PostgreSQL stores players and their explicit locale/nickname settings, Telegram reachability, level-derived command capacity, daily reward state, processed Telegram updates, owned/reserved/destroyed personal units, three combat-group presets, equipment audit records, personal battles and their immutable group/map/opponent/tier snapshots, ordered spatial event JSON, campaign weeks and matchups, cumulative country ratings, contributions, weekly rewards, staged notification outbox entries, and wallet ledger entries. Scheduled jobs drive the weekly campaign; daily rewards are claimed explicitly through the bot. The backend renders saved events as MP4 replays on demand and for country-wide weekly result delivery; Mini App playback, equipment modules, and branching technologies remain future milestones.
+PostgreSQL stores players and their explicit locale/nickname settings, Telegram reachability, level-derived command capacity, daily reward state, processed Telegram updates, owned/reserved/destroyed personal units, three combat-group presets, equipment audit records, personal battles and their immutable group/map/opponent/tier snapshots, ordered spatial event JSON, campaign weeks and matchups, cumulative country ratings, contributions, weekly rewards, staged notification outbox entries, Telegram Stars payments/support requests, and wallet ledger entries. Scheduled jobs drive the weekly campaign; daily rewards are claimed explicitly through the bot. The backend renders saved events as MP4 replays on demand and for country-wide weekly result delivery; Mini App playback, equipment modules, and branching technologies remain future milestones.
 
 ### Identity, locale, and alliance selection
 
@@ -47,6 +47,16 @@ PostgreSQL stores players and their explicit locale/nickname settings, Telegram 
 7. Battle category follows deployed CP rather than account level. Rewards scale by the category's configured multiplier, and the generated opponent remains inside the same category.
 8. To keep map complexity bounded, identical units are snapshotted into formations keyed by class and upgrade level. Formation quantity scales hit points and outgoing damage; movement, range, terrain access, spotting, targeting, and capture eligibility still follow the equipment definition.
 
+### Telegram Stars monetization and support
+
+1. `/stars`, `/buycredits`, and the arsenal payment button expose only five server-owned packs: 100/500/2,500/5,000/10,000 Credits for 20/85/350/600/1,000 Stars.
+2. The bot sends a native `XTR` invoice with an empty provider token. Its payload binds the pack to the Telegram player ID.
+3. A `pre_checkout_query` succeeds only when the player exists and buyer ID, payload player, currency, package, and Stars amount all match current server data.
+4. `successful_payment` inserts the unique Telegram charge, updates Credits, and writes the `STARS_PURCHASE` wallet entry in the same transaction as Telegram update claiming. Retried charges do not credit twice.
+5. `/paysupport` lists only unrefunded purchases, prevents multiple open requests for one payment, and forwards the selected purchase and reason to the configured private admin chat.
+6. The same private admin identity may use `/refund`, `/reject`, or `/ask`. Telegram refund success is followed by an audited `STARS_REFUND` Credit reversal and request closure; Credits may become negative so already-spent value cannot survive a refund.
+7. Bot tokens and the admin chat ID remain deployment environment values. They are never stored in the repository.
+
 ### Weekly campaign
 
 1. A Monday 00:05 Belgrade job includes all 250 catalog countries and territories. Countries are ordered by cumulative rating descending and English name ascending, then paired adjacently. Therefore the initial zero-rating round is strictly English alphabetical: 1–2, 3–4, and so on through 125 matches.
@@ -80,6 +90,7 @@ PostgreSQL stores players and their explicit locale/nickname settings, Telegram 
 | `replay` | Snapshot/event projection, frame rendering, MP4 encoding, signed delivery, and bounded cache |
 | `jobs` | Daily reset, snapshot refresh, campaign lifecycle, cleanup, rendering |
 | `admin` | Protected catalog, balance, campaign, and operational controls |
+| `monetization` | Fixed Stars packages, checkout validation, idempotent delivery, refunds, and payment support |
 
 Modules may live in one deployable Spring Boot application while keeping dependencies explicit. Domain modules should not call Telegram or rendering code directly; they publish results that adapters deliver.
 
@@ -106,6 +117,7 @@ Implementation should refine this model through versioned migrations. Important 
 
 - one Telegram identity maps to one player account unless an explicit account-linking flow is introduced
 - resource balances change only through ledger-backed transactions
+- Telegram payment delivery is unique by Telegram charge ID and every refund reverses its granted Credits
 - one-time starter grants and equipment transactions are idempotent and auditable
 - a preset cannot exceed its persisted command-capacity limit through normal application writes
 - command capacity is derived from commander level and changes atomically with XP rewards

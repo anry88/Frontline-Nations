@@ -69,6 +69,57 @@ class TelegramClient(
         }
     }
 
+    fun sendInvoice(
+        chatId: Long,
+        title: String,
+        description: String,
+        payload: String,
+        label: String,
+        stars: Int,
+    ) {
+        if (telegramDisabled()) {
+            logger.info("Telegram is disabled; invoice for chat {}: {} XTR ({})", chatId, stars, payload)
+            return
+        }
+        deliver("sendInvoice") {
+            restClient.post()
+                .uri("/sendInvoice")
+                .body(
+                    SendInvoiceRequest(
+                        chatId = chatId,
+                        title = title,
+                        description = description,
+                        payload = payload,
+                        prices = listOf(LabeledPrice(label, stars)),
+                    ),
+                )
+                .retrieve()
+                .toBodilessEntity()
+        }
+    }
+
+    fun answerPreCheckout(queryId: String, ok: Boolean, errorMessage: String? = null) {
+        if (telegramDisabled()) return
+        deliver("answerPreCheckoutQuery") {
+            restClient.post()
+                .uri("/answerPreCheckoutQuery")
+                .body(AnswerPreCheckoutRequest(queryId, ok, errorMessage))
+                .retrieve()
+                .toBodilessEntity()
+        }
+    }
+
+    fun refundStarPayment(userId: Long, telegramPaymentChargeId: String) {
+        check(!telegramDisabled()) { "Telegram is disabled" }
+        deliver("refundStarPayment") {
+            restClient.post()
+                .uri("/refundStarPayment")
+                .body(RefundStarPaymentRequest(userId, telegramPaymentChargeId))
+                .retrieve()
+                .toBodilessEntity()
+        }
+    }
+
     fun answerCallback(callbackId: String) {
         if (telegramDisabled()) return
         restClient.post()

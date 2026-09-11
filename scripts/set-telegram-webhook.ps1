@@ -54,10 +54,24 @@ foreach ($language in @('es', 'pt', 'ar', 'id', 'hi', 'tr')) {
 }
 
 $languages = @('en', 'ru', 'es', 'pt', 'ar', 'id', 'hi', 'tr')
+$paymentDescriptions = @{
+    en = @('Buy Credits with Telegram Stars', 'Stars purchase and refund support')
+    ru = @('Купить Credits за Telegram Stars', 'Поддержка покупок и возвратов')
+    es = @('Comprar Credits con Telegram Stars', 'Soporte de compras y reembolsos')
+    pt = @('Comprar Credits com Telegram Stars', 'Suporte a compras e reembolsos')
+    ar = @('شراء Credits عبر Telegram Stars', 'دعم المشتريات والاسترداد')
+    id = @('Beli Credits dengan Telegram Stars', 'Dukungan pembelian dan refund')
+    hi = @('Telegram Stars से Credits खरीदें', 'खरीद और वापसी सहायता')
+    tr = @('Telegram Stars ile Credits al', 'Satın alım ve iade desteği')
+}
 foreach ($language in $languages) {
+    $commandSets[$language] = @($commandSets[$language]) + @(
+        [pscustomobject]@{ command = 'stars'; description = $paymentDescriptions[$language][0] },
+        [pscustomobject]@{ command = 'paysupport'; description = $paymentDescriptions[$language][1] }
+    )
     $catalogCount = if ($commandSets.ContainsKey($language)) { $commandSets[$language].Count } else { 0 }
-    if ($catalogCount -ne 16) {
-        throw "Invalid command catalog for language $language (found $catalogCount, expected 16)"
+    if ($catalogCount -ne 18) {
+        throw "Invalid command catalog for language $language (found $catalogCount, expected 18)"
     }
 }
 
@@ -74,7 +88,7 @@ $webhookUrl = "$publicBaseUrl/bot"
 Invoke-Telegram 'setWebhook' @{
     url = $webhookUrl
     secret_token = $webhookSecret
-    allowed_updates = '["message","callback_query"]'
+    allowed_updates = '["message","callback_query","pre_checkout_query"]'
 } | Out-Null
 
 $webhookInfo = Invoke-Telegram 'getWebhookInfo'
@@ -84,8 +98,9 @@ if (-not $webhookInfo.ok -or $webhookInfo.result.url -ne $webhookUrl) {
 foreach ($language in $languages) {
     $menu = Invoke-Telegram 'getMyCommands' @{ language_code = $language }
     $names = @($menu.result | ForEach-Object { $_.command })
-    if (-not $menu.ok -or $names.Count -ne 16 -or
-        -not ($names -contains 'rankings') -or -not ($names -contains 'guide')) {
+    if (-not $menu.ok -or $names.Count -ne 18 -or
+        -not ($names -contains 'rankings') -or -not ($names -contains 'guide') -or
+        -not ($names -contains 'stars') -or -not ($names -contains 'paysupport')) {
         throw "Telegram command menu verification failed for language $language"
     }
 }

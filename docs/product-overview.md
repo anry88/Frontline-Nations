@@ -47,7 +47,9 @@ The current economy contains three primary resources:
 - Materials for campaign production and selected upgrades
 - XP for commander progression
 
-The intended monetization boundary is convenience and cosmetics. Direct sale of unbeatable combat power, paid battle energy, and hidden odds remain outside the product principles. Equipment can be lost in combat, so replacement income remains earnable through normal play: 90 base daily Credits plus victory and destroyed-enemy bounties are balanced around roughly five equal-force operations.
+Players may also buy fixed Credit packages through Telegram Stars: 100/500/2,500/5,000/10,000 Credits cost 20/85/350/600/1,000 Stars. Larger packs progressively improve value, topping out at twice the starter-pack Credits per Star. Native invoices, strict server-side pre-checkout checks, charge-ID idempotency, wallet auditing, and an admin-mediated `/paysupport` refund flow keep the purchase path narrow and recoverable.
+
+The monetization boundary is convenience and cosmetics. Purchased Credits buy the same destructible catalog equipment as earned Credits; direct sale of exclusive unbeatable units, paid battle energy, and hidden odds remain outside the product principles. Equipment can be lost in combat, so replacement income remains earnable through normal play: 90 base daily Credits plus victory and destroyed-enemy bounties are balanced around roughly five equal-force operations.
 
 ## MVP Scope
 

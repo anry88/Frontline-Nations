@@ -14,6 +14,8 @@ Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
 - `/battle` — choose an operation, map entry, first objective, and behavior doctrine for the active group
 - `/army` or `/hangar` — switch between three presets and select currently available equipment within the CP limit through stable paired `− / +` controls
 - `/shop` — inspect illustrated equipment cards with the current Credits/Materials balance and buy or craft a unit without leaving the arsenal flow
+- `/stars` — buy one of five fixed Credit packages through a native Telegram Stars invoice
+- `/paysupport` — list refundable Stars purchases or send a refund request to support
 - `/upgrade` — improve an owned unit from level 1 to 5
 - `/daily` — claim 90–180 Credits, grow a 100-day streak, and receive a random unlocked unit at the maximum streak
 - `/profile` — inspect alliance, level progress, battle record, resources, capacity, and reward streak
@@ -57,6 +59,8 @@ Each country receives a deterministic random NPC group whose actual equipment fi
 After resolution, every reachable commander in either participating country receives that country's result and the generated battle replay, even without a personal contribution. The result is persisted once per matchup, and one shared replay artifact is prepared for all recipients instead of reading and rendering it per player. Weekly MP4s remain in a persistent cache for at least 168 hours, including across container replacement. Resolution, replay rendering, and one-at-a-time outbox delivery run on a dedicated worker so bot commands remain responsive. Permanent Telegram delivery rejection marks the account unreachable and suppresses later broadcasts until a new inbound update proves the player reachable again.
 
 ### Progression
+
+The command shop also offers fixed packs of 100/500/2,500/5,000/10,000 Credits for 20/85/350/600/1,000 Telegram Stars. Value rises by roughly 20% between adjacent tiers, and the largest pack delivers twice as many Credits per Star as the starter pack. Telegram validates the native `XTR` payment; the server binds its invoice to the player, checks pack and amount at pre-checkout, and credits a Telegram charge only once. `/paysupport` forwards refund requests to a private admin chat, and an approved Telegram refund reverses the full Credit grant even if that creates Credit debt.
 
 The command MVP now includes seven configurable equipment classes, individual owned units, three reusable combat-group presets, commander-level unlocks, purchase and lower-credit crafting recipes, and five unit levels. Every class has map movement, sight, minimum/maximum weapon range, and a fire mode in addition to its five combat statistics. Aircraft movement remains finite; attack aircraft and fighters cannot strike across the whole map. Every level adds 12% to the unit's five base statistics.
 

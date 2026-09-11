@@ -7,7 +7,7 @@ Repository-level guidance for coding agents and automated review tools.
 - This repository contains a minimal command-only Telegram bot implemented with Kotlin, Spring Boot, JDBC/Flyway, and PostgreSQL.
 - [Documents/Frontline_TZ_v0.1_RU.docx](Documents/Frontline_TZ_v0.1_RU.docx) is the primary product and technical source.
 - [README.md](README.md) is the public overview, [docs/product-overview.md](docs/product-overview.md) summarizes product intent, and [DOCUMENTATION.md](DOCUMENTATION.md) defines the target engineering boundaries.
-- The implemented surface is localized `/start`, `/country`, `/language`, `/nickname`, `/settings`, `/army` and `/hangar` presets, bulk `/shop` purchase/crafting, `/upgrade`, `/daily`, an unlimited formation-based spatial entry/objective/doctrine `/battle` flow with permanent equipment casualties across six categories up to 1,000 CP, `/profile`, ranked spatial weekly views in `/front`, three independently ordered and withdrawable reserved-unit contributions through `/contribute`, paginated `/rankings`, paginated `/guide`, and `/help`. Both battle flows send pre-rendered square map images and expose event-log MP4 replays after resolution; weekly results and videos are also delivered asynchronously to every reachable player in the matched countries. Mini App, seasonal alliance switching, modules, and branching technologies remain planned.
+- The implemented surface is localized `/start`, `/country`, `/language`, `/nickname`, `/settings`, `/army` and `/hangar` presets, bulk `/shop` purchase/crafting, `/upgrade`, `/daily`, native Telegram Stars Credit packages through `/stars`, admin-mediated refunds through `/paysupport`, an unlimited formation-based spatial entry/objective/doctrine `/battle` flow with permanent equipment casualties across six categories up to 1,000 CP, `/profile`, ranked spatial weekly views in `/front`, three independently ordered and withdrawable reserved-unit contributions through `/contribute`, paginated `/rankings`, paginated `/guide`, and `/help`. Both battle flows send pre-rendered square map images and expose event-log MP4 replays after resolution; weekly results and videos are also delivered asynchronously to every reachable player in the matched countries. Mini App, seasonal alliance switching, modules, and branching technologies remain planned.
 - Do not describe planned behavior as implemented. Label plans, examples, and target architecture explicitly until code and tests support the claims.
 
 ## First Pass For Any Agent
@@ -42,6 +42,8 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/main/resources/db/migration/V11__progressive_levels_and_campaign_economy.sql`: compact Credits rebase, progressive XP levels, contributor reward audit, and weekly country bonuses.
 - `src/main/resources/db/migration/V12__front_squads_and_orders.sql`: per-preset weekly contributions, concrete reserved unit IDs, entries, and tactics.
 - `src/main/resources/db/migration/V13__campaign_delivery_and_player_reachability.sql`: staged result/replay delivery and durable Telegram reachability.
+- `src/main/resources/db/migration/V14__telegram_stars_credit_purchases.sql`: unique Stars charges, refund state, payment support requests, and Credit-debt support.
+- `src/main/kotlin/com/tggames/frontline/monetization/`: fixed Credit packs, pre-checkout validation, idempotent delivery, refunds, and support workflow.
 - `src/main/kotlin/com/tggames/frontline/progression/CommanderProgression.kt`: authoritative cumulative XP curve and current-level progress.
 - `src/main/resources/db/migration/V4__player_locale_and_nickname.sql`: player locale, Telegram locale hint, nickname, and pending confirmation.
 - `src/main/kotlin/com/tggames/frontline/campaign/`: weekly schedule, pairing, aggregate battle, reward, and notification logic.
@@ -96,6 +98,7 @@ Update this map when package names or runtime components change.
 - Use integer or fixed-point arithmetic where cross-version determinism matters.
 - Include a secret server value when deriving unrevealed battle seeds. Do not expose future random rolls.
 - Wallet and inventory mutations must be transactional, auditable, and idempotent where retries are possible.
+- Validate Stars currency, amount, package, payload owner, and buyer before checkout; successful delivery must remain unique by Telegram charge ID.
 - Validate Telegram `initData` server-side. Never trust player identity, reward amounts, combat stats, or timestamps supplied by the client.
 - Do not hardcode balance data that the specification identifies as configurable.
 - Personal units committed with `/contribute` are reserved by concrete ID until weekly resolution; NPC campaign units remain separate, non-owned assets.
