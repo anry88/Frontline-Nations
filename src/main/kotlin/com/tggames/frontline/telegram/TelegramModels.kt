@@ -44,6 +44,16 @@ data class SendPhotoRequest(
     @param:JsonProperty("reply_markup") val replyMarkup: InlineKeyboardMarkup? = null,
 )
 
+data class SendAnimationRequest(
+    @param:JsonProperty("chat_id") val chatId: Long,
+    val animation: String,
+    val caption: String,
+    val width: Int,
+    val height: Int,
+    val duration: Int,
+    @param:JsonProperty("reply_markup") val replyMarkup: InlineKeyboardMarkup? = null,
+)
+
 data class InlineKeyboardMarkup(
     @param:JsonProperty("inline_keyboard") val inlineKeyboard: List<List<InlineKeyboardButton>>,
 )

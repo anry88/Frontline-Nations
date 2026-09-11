@@ -7,7 +7,7 @@ RUN chmod +x gradlew && ./gradlew --no-daemon test bootJar
 
 FROM eclipse-temurin:17-jre-jammy AS runtime
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tini wget \
+    && apt-get install -y --no-install-recommends ca-certificates ffmpeg tini wget \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system frontline \
     && useradd --system --gid frontline --home-dir /app --shell /usr/sbin/nologin frontline

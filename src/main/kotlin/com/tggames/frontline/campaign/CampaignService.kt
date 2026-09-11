@@ -156,6 +156,27 @@ class CampaignService(
             ?.let { "/assets/maps/weekly/${it.first}.png?v=${it.second}" }
     }
 
+    @Transactional
+    fun frontReplayId(allianceCode: String?): UUID? {
+        if (allianceCode == null) return null
+        val period = ensureCurrentWeek()
+        return jdbc.sql(
+            """
+            SELECT id
+              FROM campaign_matchups
+             WHERE week_key = :week
+               AND resolved_at IS NOT NULL
+               AND (alliance_a = :alliance OR alliance_b = :alliance)
+             ORDER BY pair_index
+             LIMIT 1
+            """.trimIndent(),
+        ).param("week", period.weekKey)
+            .param("alliance", allianceCode)
+            .query(UUID::class.java)
+            .optional()
+            .orElse(null)
+    }
+
     fun activeEconomyBonus(allianceCode: String?): ActiveEconomyBonus? {
         if (allianceCode == null) return null
         return jdbc.sql(
@@ -337,7 +358,7 @@ class CampaignService(
                        winner_code = :winner,
                        battle_seed = :seed,
                        seed_hash = :seedHash,
-                       engine_version = 4,
+                       engine_version = 5,
                        events_json = CAST(:events AS jsonb),
                        formations_json = CAST(:formations AS jsonb),
                        objective_state_json = CAST(:objectives AS jsonb),
@@ -724,7 +745,13 @@ class CampaignService(
             matchup.eventsJson,
             object : TypeReference<List<WeeklyBattleEvent>>() {},
         )
-        val highlights = events.takeLast(12).joinToString("\n") { "• ${weeklyEventText(it, matchup, language)}" }
+        val highlights = events.filter {
+            it.type == null || it.type in setOf(
+                WeeklyEventType.OBJECTIVE_CAPTURED,
+                WeeklyEventType.OBJECTIVE_LOST,
+                WeeklyEventType.FORMATION_DESTROYED,
+            )
+        }.takeLast(12).joinToString("\n") { "• ${weeklyEventText(it, matchup, language)}" }
         val map = (matchup.mapId ?: matchup.battlefield).let(mapCatalog::find)
         return buildString {
             appendLine(if (map != null) "🗺 ${GameI18n.t(language, map.nameKey)} · ${map.width}×${map.height}" else "🗺 ${GameI18n.battlefield(language, matchup.battlefield)}")
@@ -805,6 +832,9 @@ class CampaignService(
         val side = if (event.side == WeeklySide.A) matchup.allianceA else matchup.allianceB
         val name = AllianceCatalog.option(side, language).label
         return when (event.type) {
+            WeeklyEventType.FORMATION_MOVED -> campaignText(language, "turn ${event.tick}: $name moved ${event.formationType}", "ход ${event.tick}: $name перемещает соединение ${event.formationType}")
+            WeeklyEventType.FORMATION_HIT -> campaignText(language, "turn ${event.tick}: $name hit ${event.targetUnitCode}", "ход ${event.tick}: $name поражает ${event.targetUnitCode}")
+            WeeklyEventType.OBJECTIVE_PROGRESS -> campaignText(language, "turn ${event.tick}: $name is securing ${event.objectiveId}", "ход ${event.tick}: $name закрепляется на ${event.objectiveId}")
             WeeklyEventType.OBJECTIVE_CAPTURED -> campaignText(language, "turn ${event.tick}: $name captured ${event.objectiveId} (+${event.awardedPoints})", "ход ${event.tick}: $name захватывает ${event.objectiveId} (+${event.awardedPoints})")
             WeeklyEventType.OBJECTIVE_LOST -> campaignText(language, "turn ${event.tick}: $name lost ${event.objectiveId}; its points were reset", "ход ${event.tick}: $name теряет ${event.objectiveId}; очки за него обнулены")
             WeeklyEventType.FORMATION_DESTROYED -> campaignText(language, "turn ${event.tick}: $name destroyed ${event.formationType}", "ход ${event.tick}: $name уничтожает соединение ${event.formationType}")

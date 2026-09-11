@@ -36,6 +36,26 @@ class TelegramClient(
             .toBodilessEntity()
     }
 
+    fun sendAnimation(
+        chatId: Long,
+        animationUrl: String,
+        caption: String,
+        width: Int,
+        height: Int,
+        duration: Int,
+        keyboard: InlineKeyboardMarkup? = null,
+    ) {
+        if (telegramDisabled()) {
+            logger.info("Telegram is disabled; animation response for chat {}: {} ({})", chatId, caption, animationUrl)
+            return
+        }
+        restClient.post()
+            .uri("/sendAnimation")
+            .body(SendAnimationRequest(chatId, animationUrl, caption, width, height, duration, replyMarkup = keyboard))
+            .retrieve()
+            .toBodilessEntity()
+    }
+
     fun answerCallback(callbackId: String) {
         if (telegramDisabled()) return
         restClient.post()

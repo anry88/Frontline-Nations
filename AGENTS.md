@@ -7,7 +7,7 @@ Repository-level guidance for coding agents and automated review tools.
 - This repository contains a minimal command-only Telegram bot implemented with Kotlin, Spring Boot, JDBC/Flyway, and PostgreSQL.
 - [Documents/Frontline_TZ_v0.1_RU.docx](Documents/Frontline_TZ_v0.1_RU.docx) is the primary product and technical source.
 - [README.md](README.md) is the public overview, [docs/product-overview.md](docs/product-overview.md) summarizes product intent, and [DOCUMENTATION.md](DOCUMENTATION.md) defines the target engineering boundaries.
-- The implemented surface is localized `/start`, `/country`, `/language`, `/nickname`, `/settings`, `/army` and `/hangar` presets, bulk `/shop` purchase/crafting, `/upgrade`, `/daily`, an unlimited formation-based spatial entry/objective/doctrine `/battle` flow with permanent equipment casualties across six categories up to 1,000 CP, `/profile`, ranked spatial weekly views in `/front`, destructive reserved-unit `/contribute`, and `/help`. Both battle flows send pre-rendered square map images. Mini App, seasonal alliance switching, graphical replay UI, modules, and branching technologies remain planned.
+- The implemented surface is localized `/start`, `/country`, `/language`, `/nickname`, `/settings`, `/army` and `/hangar` presets, bulk `/shop` purchase/crafting, `/upgrade`, `/daily`, an unlimited formation-based spatial entry/objective/doctrine `/battle` flow with permanent equipment casualties across six categories up to 1,000 CP, `/profile`, ranked spatial weekly views in `/front`, destructive reserved-unit `/contribute`, and `/help`. Both battle flows send pre-rendered square map images and expose on-demand event-log MP4 replays after resolution. Mini App, seasonal alliance switching, modules, and branching technologies remain planned.
 - Do not describe planned behavior as implemented. Label plans, examples, and target architecture explicitly until code and tests support the claims.
 
 ## First Pass For Any Agent
@@ -49,6 +49,7 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/main/resources/static/assets/units/`: generated fictional equipment-class icons served by the backend.
 - `src/main/resources/db/migration/V5__personal_equipment_and_battle_groups.sql`: inventory, presets, audit history, and battle snapshots.
 - `src/main/kotlin/com/tggames/frontline/battle/`: versioned personal engines, rectangular odd-row offset maps with legacy axial compatibility, deterministic movement/fire/capture events, and legacy replay support.
+- `src/main/kotlin/com/tggames/frontline/replay/`: event-log projection, Java2D frame composition, FFmpeg encoding, signed MP4 delivery, and expiring local cache.
 - `src/main/resources/catalog/battle-maps.json`: versioned 9×12 terrain maps, entries, and important objectives.
 - `src/main/resources/static/assets/maps/`: generated hex/object blocks plus 24 personal and 10 weekly square PNG maps.
 - `scripts/generate-map-catalogs.py`: deterministic authored-anchor generator for distinct personal and weekly terrain/road layouts.

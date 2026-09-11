@@ -9,6 +9,7 @@ data class FrontlineProperties(
     val battleServerSalt: String = "local-development-only",
     val telegram: Telegram = Telegram(),
     val campaign: Campaign = Campaign(),
+    val replay: Replay = Replay(),
 ) {
     data class Telegram(
         val botToken: String = "",
@@ -38,5 +39,13 @@ data class FrontlineProperties(
         val captureXp: Int = 100,
         val victoryBonusPercent: Int = 120,
         val victoryBonusDays: Long = 7,
+    )
+
+    data class Replay(
+        val ffmpegPath: String = "ffmpeg",
+        val cacheDirectory: String = "/tmp/frontline-replays",
+        val width: Int = 768,
+        val fps: Int = 6,
+        val retentionHours: Long = 48,
     )
 }

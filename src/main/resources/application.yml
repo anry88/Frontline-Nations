@@ -31,6 +31,12 @@ frontline:
   telegram:
     bot-token: ${TELEGRAM_BOT_TOKEN:}
     webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
+  replay:
+    ffmpeg-path: ${REPLAY_FFMPEG_PATH:ffmpeg}
+    cache-directory: ${REPLAY_CACHE_DIRECTORY:/tmp/frontline-replays}
+    width: ${REPLAY_WIDTH:768}
+    fps: ${REPLAY_FPS:6}
+    retention-hours: ${REPLAY_RETENTION_HOURS:48}
   campaign:
     resolve-cron: ${CAMPAIGN_RESOLVE_CRON:0 0 15 * * SUN}
     retry-cron: ${CAMPAIGN_RETRY_CRON:0 5/10 * * * *}

@@ -25,6 +25,8 @@ Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
 - `/settings` — open language and profile settings
 - `/help` — show command help
 
+Every newly completed personal battle includes a `▶️ Battle replay` button. The bot renders a square MP4 directly from the saved event log, showing formation movement, fire, losses, and objective control. Resolved weekly matchups expose the same button in `/front`.
+
 New accounts infer their initial language from Telegram and receive language-relevant country suggestions. The explicit language selection is retained even when Telegram later sends another interface locale. Existing accounts keep Russian until they choose another language.
 
 ## Product Principles
@@ -79,7 +81,7 @@ The MVP currently uses:
 - Telegram Bot commands and inline flows
 - Docker Compose for local and production-like environments
 
-The diagram also shows the planned Mini App, admin interface, replay stream, and optional renderer; those components are not part of the command-only MVP.
+The command MVP implements the replay/video path inside the Spring Boot container with FFmpeg. The diagram also shows the planned Mini App and admin interface; a separately scalable renderer remains an optional later extraction.
 
 See [DOCUMENTATION.md](DOCUMENTATION.md) for module boundaries and data flow.
 
@@ -96,7 +98,7 @@ docs/          Product, architecture, and repository guidance
 Documents/     Source specifications and retained project materials
 ```
 
-Mini App and replay-renderer directories will be added only when those milestones begin.
+Mini App and a separately deployed replay-renderer directory will be added only when those milestones begin; the current renderer lives in the modular monolith.
 
 ## Documentation
 
@@ -112,6 +114,7 @@ Mini App and replay-renderer directories will be added only when those milestone
 - [Rectangular tactical-map geometry decision](docs/decisions/0011-rectangular-tactical-map-geometry.md)
 - [Destructive equipment and daily economy decision](docs/decisions/0010-destructive-equipment-and-daily-economy.md)
 - [Progressive XP and compact campaign economy decision](docs/decisions/0012-progressive-xp-and-compact-campaign-economy.md)
+- [Event-log video replay decision](docs/decisions/0013-event-log-video-replays.md)
 - [Contributor guide](CONTRIBUTING.md)
 - [Agent guide](AGENTS.md)
 - [GitHub About metadata](docs/github-about.md)
@@ -121,7 +124,7 @@ Mini App and replay-renderer directories will be added only when those milestone
 
 Current phase: command-only MVP with persistent equipment progression, spatial personal operations, and ranked spatial weekly battles.
 
-The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog, moderated nicknames, a seven-class equipment catalog, transactional bulk purchase/crafting/upgrades, three CP-limited presets, level-derived command capacity, six battle categories up to 1,000 CP, unlimited spatial personal battles with permanent equipment casualties, a ledger-backed 100-day daily reward loop, five operation offers drawn from 24 battlefields with 24 mapped variants, 125 rating-seeded weekly pairings on ten larger maps, a random 10–25 CP NPC equipment group for every country, reserved and destructible player reinforcement, timed aggregate spatial resolution, capture/destruction/survival scoring, idempotent campaign rewards, and durable Telegram notifications. Graphical replays, seasonal alliance switching, modules, typed campaign assets, branching technologies, Mini App, and video rendering remain planned.
+The current implementation proves localized registration and settings, a versioned 250-entry country/territory catalog, moderated nicknames, a seven-class equipment catalog, transactional bulk purchase/crafting/upgrades, three CP-limited presets, level-derived command capacity, six battle categories up to 1,000 CP, unlimited spatial personal battles with permanent equipment casualties, a ledger-backed 100-day daily reward loop, five operation offers drawn from 24 battlefields with 24 mapped variants, 125 rating-seeded weekly pairings on ten larger maps, a random 10–25 CP NPC equipment group for every country, reserved and destructible player reinforcement, timed aggregate spatial resolution, capture/destruction/survival scoring, idempotent campaign rewards, durable Telegram notifications, and on-demand MP4 playback for personal and weekly battles. Seasonal alliance switching, modules, typed campaign assets, branching technologies, and the Mini App remain planned.
 
 Run tests with `GRADLE_USER_HOME="$PWD/.gradle-home" ./gradlew test`. For a local Docker run, copy `.env.example` to an ignored `.env`, replace every secret, create the PostgreSQL data directory, and run `docker compose up --build`.
 

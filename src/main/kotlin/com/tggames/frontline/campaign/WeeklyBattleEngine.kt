@@ -41,7 +41,7 @@ data class WeeklyBalance(
 
 enum class WeeklySide { A, B }
 enum class WeeklyEndReason { ALL_OBJECTIVES_CAPTURED, ARMY_DESTROYED, TIME_LIMIT }
-enum class WeeklyEventType { OBJECTIVE_CAPTURED, OBJECTIVE_LOST, FORMATION_DESTROYED }
+enum class WeeklyEventType { FORMATION_MOVED, FORMATION_HIT, OBJECTIVE_PROGRESS, OBJECTIVE_CAPTURED, OBJECTIVE_LOST, FORMATION_DESTROYED }
 enum class WeeklyFormationType { ARMOR, ARTILLERY, RECON, AIR, SUPPORT }
 
 data class WeeklyBattleEvent(
@@ -57,6 +57,13 @@ data class WeeklyBattleEvent(
     val awardedPoints: Long = 0,
     val contributorPlayerIds: List<Long> = emptyList(),
     val destroyedPower: Long = 0,
+    val formationId: String? = null,
+    val targetFormationId: String? = null,
+    val unitCode: String? = null,
+    val targetUnitCode: String? = null,
+    val from: HexCoord? = null,
+    val to: HexCoord? = null,
+    val amount: Long = 0,
 )
 
 data class WeeklyFormationResult(
@@ -70,6 +77,8 @@ data class WeeklyFormationResult(
     val initialPower: Long,
     val remainingPower: Long,
     val contributorPlayerId: Long? = null,
+    val id: String = "",
+    val initialPosition: HexCoord? = null,
 )
 data class WeeklyObjectiveResult(val id: String, val owner: WeeklySide?, val retainedPoints: Long, val capturedAtTick: Int?)
 
@@ -125,7 +134,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
 
         for (tick in 1..balance.maxTicks) {
             completedTicks = tick
-            moveFormations(formations, objectives.values.toList(), map)
+            moveFormations(formations, objectives.values.toList(), map, tick, events)
             fire(WeeklySide.A, formations, map, random, tick, events)
             fire(WeeklySide.B, formations, map, random, tick, events)
             capture(formations, objectives.values, tick, balance, events)
@@ -188,6 +197,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
             val unit = WeeklyUnitContribution(code, level, quantity, contributorPlayerId)
             val power = unitPower(unit)
             FormationState(
+                id = "${side.name.lowercase()}:$index:${contributorPlayerId ?: "npc"}:$code:$level",
                 side = side,
                 contributorPlayerId = contributorPlayerId,
                 type = formationType(code),
@@ -195,6 +205,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
                 level = level,
                 quantity = quantity,
                 position = entries[index % entries.size],
+                initialPosition = entries[index % entries.size],
                 initialPower = power,
                 power = power,
                 movement = max(1, definition.spatial.movementPoints / 2),
@@ -235,11 +246,30 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         else -> error("No weekly formation type for $code")
     }
 
-    private fun moveFormations(formations: List<FormationState>, objectives: List<ObjectiveState>, map: BattleMapDefinition) {
+    private fun moveFormations(
+        formations: List<FormationState>,
+        objectives: List<ObjectiveState>,
+        map: BattleMapDefinition,
+        tick: Int,
+        events: MutableList<WeeklyBattleEvent>,
+    ) {
         formations.filter { it.power > 0 }.forEach { unit ->
             val candidates = objectives.filter { it.owner != unit.side }.ifEmpty { objectives }
             val goal = candidates.minWithOrNull(compareBy<ObjectiveState> { map.distanceBetween(unit.position, it.position) }.thenBy { it.id }) ?: return@forEach
+            val from = unit.position
             repeat(unit.movement) { shortestNextStep(unit.position, goal.position, unit.profile, map)?.let { unit.position = it } }
+            if (unit.position != from) {
+                events += WeeklyBattleEvent(
+                    tick = tick,
+                    type = WeeklyEventType.FORMATION_MOVED,
+                    side = unit.side,
+                    formationType = unit.type,
+                    formationId = unit.id,
+                    unitCode = unit.unitCode,
+                    from = from,
+                    to = unit.position,
+                )
+            }
         }
     }
 
@@ -252,6 +282,19 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
             val damage = max(1L, base * random.nextInt(85, 116) / 100 * max(3, 10 - protection) / 10)
             val before = target.power
             target.power = (target.power - damage).coerceAtLeast(0)
+            events += WeeklyBattleEvent(
+                tick = tick,
+                type = WeeklyEventType.FORMATION_HIT,
+                side = side,
+                formationType = shooter.type,
+                formationId = shooter.id,
+                targetFormationId = target.id,
+                unitCode = shooter.unitCode,
+                targetUnitCode = target.unitCode,
+                from = shooter.position,
+                to = target.position,
+                amount = damage,
+            )
             if (before > 0 && target.power == 0L) events += WeeklyBattleEvent(
                 tick = tick,
                 type = WeeklyEventType.FORMATION_DESTROYED,
@@ -259,6 +302,12 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
                 formationType = target.type,
                 contributorPlayerIds = listOfNotNull(shooter.contributorPlayerId),
                 destroyedPower = target.initialPower,
+                formationId = shooter.id,
+                targetFormationId = target.id,
+                unitCode = shooter.unitCode,
+                targetUnitCode = target.unitCode,
+                from = shooter.position,
+                to = target.position,
             )
         }
     }
@@ -284,6 +333,13 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
             if (objective.owner == side) return@forEach
             if (objective.progressSide != side) { objective.progressSide = side; objective.progress = 0 }
             objective.progress++
+            events += WeeklyBattleEvent(
+                tick = tick,
+                type = WeeklyEventType.OBJECTIVE_PROGRESS,
+                side = side,
+                objectiveId = objective.id,
+                amount = objective.progress.toLong(),
+            )
             if (objective.progress >= objective.captureSteps) {
                 objective.owner?.let { events += WeeklyBattleEvent(tick = tick, type = WeeklyEventType.OBJECTIVE_LOST, side = it, objectiveId = objective.id) }
                 objective.owner = side
@@ -342,6 +398,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
 }
 
 private data class FormationState(
+    val id: String,
     val side: WeeklySide,
     val contributorPlayerId: Long?,
     val type: WeeklyFormationType,
@@ -349,6 +406,7 @@ private data class FormationState(
     val level: Int,
     val quantity: Int,
     var position: HexCoord,
+    val initialPosition: HexCoord,
     val initialPower: Long,
     var power: Long,
     val movement: Int,
@@ -358,7 +416,20 @@ private data class FormationState(
     val profile: MovementProfile,
     val fireMode: FireMode,
 ) {
-    fun result() = WeeklyFormationResult(side, type, unitCode, level, quantity, position, weaponRange, initialPower, power, contributorPlayerId)
+    fun result() = WeeklyFormationResult(
+        side = side,
+        type = type,
+        unitCode = unitCode,
+        level = level,
+        quantity = quantity,
+        position = position,
+        weaponRange = weaponRange,
+        initialPower = initialPower,
+        remainingPower = power,
+        contributorPlayerId = contributorPlayerId,
+        id = id,
+        initialPosition = initialPosition,
+    )
 }
 
 private data class NpcSquad(val cp: Int, val units: List<WeeklyUnitContribution>)

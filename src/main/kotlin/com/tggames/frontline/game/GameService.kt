@@ -23,6 +23,7 @@ import com.tggames.frontline.inventory.OwnedUnit
 import com.tggames.frontline.progression.ForceTier
 import com.tggames.frontline.progression.ForceTierCatalog
 import com.tggames.frontline.progression.CommanderProgression
+import com.tggames.frontline.replay.ReplayService
 import com.tggames.frontline.telegram.InlineKeyboardButton
 import com.tggames.frontline.telegram.InlineKeyboardMarkup
 import com.tggames.frontline.telegram.TelegramCallbackQuery
@@ -30,6 +31,7 @@ import com.tggames.frontline.telegram.TelegramClient
 import com.tggames.frontline.telegram.TelegramUpdate
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.jdbc.core.simple.JdbcClient
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
@@ -50,15 +52,20 @@ class GameService(
     private val inventory: InventoryService,
     private val equipment: EquipmentCatalog,
     private val forceTiers: ForceTierCatalog,
+    private val replays: ReplayService,
 ) {
+    private val logger = LoggerFactory.getLogger(javaClass)
+
     @Transactional
     fun handle(update: TelegramUpdate) {
         if (!claimUpdate(update.updateId)) return
 
         update.callbackQuery?.let { callback ->
             ensurePlayer(callback.from.id, callback.from.firstName, callback.from.languageCode)
+            val replayCallback = callback.data.orEmpty().startsWith("replay:")
+            if (replayCallback) telegram.answerCallback(callback.id)
             handleCallback(callback)
-            telegram.answerCallback(callback.id)
+            if (!replayCallback) telegram.answerCallback(callback.id)
             return
         }
 
@@ -111,6 +118,8 @@ class GameService(
             data.startsWith("deploy:") -> showObjectives(callback.from.id, callback.from.firstName, chatId, data)
             data.startsWith("objective:") -> showTactics(callback.from.id, callback.from.firstName, chatId, data)
             data.startsWith("fight:") -> resolveBattle(callback.from.id, callback.from.firstName, chatId, data)
+            data.startsWith("replay:b:") -> sendPersonalReplay(callback.from.id, chatId, data.removePrefix("replay:b:"))
+            data.startsWith("replay:w:") -> sendWeeklyReplay(callback.from.id, chatId, data.removePrefix("replay:w:"))
             data.startsWith("shop:view:") -> shopDetails(callback.from.id, chatId, data.substringAfterLast(':'))
             data.startsWith("shop:buy:") -> acquireUnit(callback.from.id, chatId, data.removePrefix("shop:buy:"), false)
             data.startsWith("shop:craft:") -> acquireUnit(callback.from.id, chatId, data.removePrefix("shop:craft:"), true)
@@ -540,7 +549,53 @@ class GameService(
             appendLine(GameI18n.t(language, "equipment_returned_lost", casualties.survived, casualties.lost))
             appendLine("${GameI18n.t(language, "streak")}: ${fresh.currentStreak}$levelUp")
         }
-        telegram.sendMessage(chatId, report.trim(), actionKeyboard(language))
+        telegram.sendMessage(chatId, report.trim(), replayKeyboard(language, "replay:b:$battleId"))
+    }
+
+    private fun sendPersonalReplay(telegramId: Long, chatId: Long, rawBattleId: String) {
+        val language = language(telegramId)
+        val battleId = runCatching { UUID.fromString(rawBattleId) }.getOrNull()
+            ?: return telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(language))
+        telegram.sendMessage(chatId, GameI18n.t(language, "replay_rendering"))
+        runCatching { replays.preparePersonal(telegramId, battleId) }
+            .onSuccess { replay ->
+                telegram.sendAnimation(
+                    chatId,
+                    replay.url,
+                    GameI18n.t(language, "replay_caption"),
+                    replay.width,
+                    replay.height,
+                    replay.durationSeconds,
+                    actionKeyboard(language),
+                )
+            }
+            .onFailure { error ->
+                logger.warn("Could not render personal replay {} for player {}", battleId, telegramId, error)
+                telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(language))
+            }
+    }
+
+    private fun sendWeeklyReplay(telegramId: Long, chatId: Long, rawMatchupId: String) {
+        val language = language(telegramId)
+        val matchupId = runCatching { UUID.fromString(rawMatchupId) }.getOrNull()
+            ?: return telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(language))
+        telegram.sendMessage(chatId, GameI18n.t(language, "replay_rendering"))
+        runCatching { replays.prepareWeekly(player(telegramId).allianceCode, matchupId) }
+            .onSuccess { replay ->
+                telegram.sendAnimation(
+                    chatId,
+                    replay.url,
+                    GameI18n.t(language, "weekly_replay_caption"),
+                    replay.width,
+                    replay.height,
+                    replay.durationSeconds,
+                    actionKeyboard(language),
+                )
+            }
+            .onFailure { error ->
+                logger.warn("Could not render weekly replay {} for player {}", matchupId, telegramId, error)
+                telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(language))
+            }
     }
 
     private fun staleSelection(chatId: Long) {
@@ -888,8 +943,14 @@ class GameService(
                 GameI18n.t(language, "weekly_map_image_caption"),
             )
         }
-        telegram.sendMessage(chatId, campaigns.frontText(allianceCode, language), actionKeyboard(language))
+        val keyboard = campaigns.frontReplayId(allianceCode)?.let { replayKeyboard(language, "replay:w:$it") }
+            ?: actionKeyboard(language)
+        telegram.sendMessage(chatId, campaigns.frontText(allianceCode, language), keyboard)
     }
+
+    private fun replayKeyboard(language: GameLanguage, callbackData: String): InlineKeyboardMarkup = InlineKeyboardMarkup(
+        listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "replay_button"), callbackData))) + actionKeyboard(language).inlineKeyboard,
+    )
 
     private fun ensurePlayer(telegramId: Long, firstName: String, telegramLanguage: String? = null) {
         val inferred = GameLanguage.fromTelegram(telegramLanguage).code

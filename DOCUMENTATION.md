@@ -11,7 +11,7 @@ The deployed MVP has two runtime surfaces:
 - Telegram Bot commands, callback queries, and inline alliance-selection buttons
 - Spring Boot backend as the authority for gameplay and economy
 
-PostgreSQL stores players and their explicit locale/nickname settings, level-derived command capacity, daily reward state, processed Telegram updates, owned/reserved/destroyed personal units, three combat-group presets, equipment audit records, personal battles and their immutable group/map/opponent/tier snapshots, ordered spatial event JSON, campaign weeks and matchups, cumulative country ratings, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs drive the weekly campaign; daily rewards are claimed explicitly through the bot. Mini App, graphical replay visualization, equipment modules, and branching technologies remain future milestones.
+PostgreSQL stores players and their explicit locale/nickname settings, level-derived command capacity, daily reward state, processed Telegram updates, owned/reserved/destroyed personal units, three combat-group presets, equipment audit records, personal battles and their immutable group/map/opponent/tier snapshots, ordered spatial event JSON, campaign weeks and matchups, cumulative country ratings, contributions, weekly rewards, notification outbox entries, and wallet ledger entries. Scheduled jobs drive the weekly campaign; daily rewards are claimed explicitly through the bot. The backend renders saved events as on-demand MP4 replays; Mini App playback, equipment modules, and branching technologies remain future milestones.
 
 ### Identity, locale, and alliance selection
 
@@ -34,7 +34,7 @@ PostgreSQL stores players and their explicit locale/nickname settings, level-der
 7. Ground units capture an uncontested objective after its configured number of consecutive steps. Existing control remains until an opponent completes the same process, so defenders may contest or retake it. Aircraft do not capture objectives.
 8. The battle ends when one side holds all important objectives, one army has no combat-capable units, or the 48-step safety boundary routes the weaker remaining army by objective control and hit points.
 9. One transaction invalidates the offer, removes destroyed owned units, returns survivors to their presets, applies XP/Credits/Materials, recalculates level and capacity, and records the result, reward components, losses, force tier, deployed CP totals, snapshots, and typed spatial events. A standard first-tier win pays 20 Credits plus one Credit and 10 XP per destroyed enemy CP before difficulty/tier and active country bonuses.
-10. The bot presents objective control and selected highlights. A graphical replay UI remains planned; it will consume the stored spatial events rather than recalculate combat.
+10. The result includes a replay callback. On demand, the replay adapter reads the stored map/group/event snapshots, interpolates movement, draws fire, damage, losses, and objective control, encodes H.264 MP4 with FFmpeg, and sends the signed media URL through Telegram. Rendering never reruns combat.
 
 ### Personal equipment
 
@@ -53,7 +53,7 @@ PostgreSQL stores players and their explicit locale/nickname settings, level-der
 2. Every country receives a seed-derived random NPC equipment group that totals 10–25 CP. Players use `/contribute` to commit or replace their active personal group. Its concrete owned-unit IDs are reserved until resolution, preventing simultaneous use in personal battles.
 3. Contributions lock at Sunday 15:00 in `Europe/Belgrade`.
 4. The aggregate engine combines the NPC composition and player equipment snapshots, preserving equipment class, upgrade level, and contributing player when it deploys armor, artillery, reconnaissance, air, and support formations.
-5. One of ten individually composed 15×21 versioned offset-grid weekly maps supplies several coherent terrain regions, three distinct edge entries per side, a connected road network, and five capture points. `/front` sends the pre-rendered upright rectangular map image. Movement, finite range, direct-fire line of sight, indirect artillery, cover, capture, loss, and recapture resolve deterministically for at most 96 turns.
+5. One of ten individually composed 15×21 versioned offset-grid weekly maps supplies several coherent terrain regions, three distinct edge entries per side, a connected road network, and five capture points. `/front` sends the pre-rendered upright rectangular map image. Movement, finite range, direct-fire line of sight, indirect artillery, cover, capture, loss, and recapture resolve deterministically for at most 96 turns. Engine v5 persists stable formation IDs, starting positions, movement, hits, destruction, and objective events so `/front` can offer an accurate aggregate replay after resolution.
 6. Current objective ownership scores by capture time; losing an objective removes its prior score. Destroyed enemy power and a configured fraction of allied surviving power complete the battle score. All-objective control and army destruction end early. At timeout, remaining power decides first, followed by objective and total score tie-breaks.
 7. Both countries add their battle score to cumulative rating, so losing a single battle never wipes prior standing. The next week reorders all countries from that rating.
 8. One transaction stores map/input/result snapshots, score components, rating transitions and typed events, deterministically distributes casualties within each contributor-owned formation, returns survivors, removes losses, and issues one ledger-backed reward per contributor. A winning contributor starts at 90 Credits and 600 XP; final blows and capture participation add individually audited bonuses. The winning country receives a seven-day ×1.2 multiplier for Credits and XP earned from personal battles and `/daily`. A durable notification outbox is delivered after commit and retried independently.
@@ -70,7 +70,7 @@ PostgreSQL stores players and their explicit locale/nickname settings, level-der
 | `matchmaking` | Operation offers, opponent snapshots, difficulty bands |
 | `battle-engine` | Versioned deterministic personal and aggregate simulations |
 | `campaign` | Weekly matchups, campaign assets, deficits, contributions, rewards |
-| `replay` | Ordered `BattleEvent` storage and delivery |
+| `replay` | Snapshot/event projection, frame rendering, MP4 encoding, signed delivery, and bounded cache |
 | `jobs` | Daily reset, snapshot refresh, campaign lifecycle, cleanup, rendering |
 | `admin` | Protected catalog, balance, campaign, and operational controls |
 
@@ -87,7 +87,7 @@ Every completed battle should retain:
 - result summary
 - ordered events with logical ticks and typed payloads
 
-The current personal engine contract is version 7; weekly spatial resolution is version 4. Versions 6/3 introduced odd-row offset coordinates so rectangular image adjacency, movement distance, pathfinding, range, and line of sight share one geometry. Versions 7/4 retain that geometry while snapshotting the compact reward breakdown and contributor ownership/performance. After resolution the personal engine stores the battle seed and hash, commander-level snapshot, full player and generated opponent groups, map/version snapshot, group version, selected location/biome/difficulty/enemy archetype, deployment entry, first objective, both behavior doctrines, final objective control, typed movement/fire/capture events, end reason, rewards, and owned-unit casualty totals. Operation offers are bound to the player, game date, single-use offer version, and preset version; an old inline button cannot replay a battle or silently use a changed group.
+The current personal engine contract is version 7; weekly spatial resolution is version 5. Versions 6/3 introduced odd-row offset coordinates so rectangular image adjacency, movement distance, pathfinding, range, and line of sight share one geometry. Personal v7 retains that geometry while snapshotting the compact reward breakdown; weekly v5 adds replay-grade formation identity, starting positions, movement, and hit events while retaining contributor ownership/performance. After resolution the personal engine stores the battle seed and hash, commander-level snapshot, full player and generated opponent groups, map/version snapshot, group version, selected location/biome/difficulty/enemy archetype, deployment entry, first objective, both behavior doctrines, final objective control, typed movement/fire/capture events, end reason, rewards, and owned-unit casualty totals. Operation offers are bound to the player, game date, single-use offer version, and preset version; an old selection button cannot silently use a changed group.
 
 The same engine version, seed, input snapshot, and configuration must reproduce the same outcome and event order. Replay clients may interpolate animations, but they may not invent gameplay outcomes.
 
@@ -127,7 +127,7 @@ Final endpoint shapes should be captured in an OpenAPI document alongside implem
 
 ## Scheduling
 
-Daily and weekly work is implemented as explicit, persisted state transitions rather than assumptions based only on wall-clock time. `/daily` locks the player row and records the Belgrade calendar date, reward streak, total claims, and actual ledgered reward after any active country multiplier, so duplicate updates cannot grant twice. The current campaign jobs open Monday matchups, resolve at Sunday 15:00 Belgrade time, activate the winner's persisted seven-day economy bonus, recover an overdue unresolved week after restart, and retry notification delivery. Operation generation, richer strength updates, video rendering, and retention cleanup remain planned.
+Daily and weekly work is implemented as explicit, persisted state transitions rather than assumptions based only on wall-clock time. `/daily` locks the player row and records the Belgrade calendar date, reward streak, total claims, and actual ledgered reward after any active country multiplier, so duplicate updates cannot grant twice. The current campaign jobs open Monday matchups, resolve at Sunday 15:00 Belgrade time, activate the winner's persisted seven-day economy bonus, recover an overdue unresolved week after restart, and retry notification delivery. Replay rendering is lazy and synchronized per battle; generated files are removed from the bounded local cache after the configured retention window.
 
 Campaign rows, matchup rows, and player reward rows have stable uniqueness boundaries, so retries cannot resolve a week or grant a reward twice. Timestamps are stored in UTC while the schedule is calculated in the configured IANA game timezone, preserving 15:00 through daylight-saving changes.
 
@@ -138,7 +138,8 @@ The planned Docker Compose topology contains:
 - `frontline-backend`: Spring Boot application
 - `frontline-db`: PostgreSQL 16+
 - `frontline-miniapp`: static Mini App build served by Nginx or the backend
-- `frontline-renderer`: Node/Chromium/FFmpeg worker, optional for the earliest MVP
+- in-process `replay`: Java2D frame compositor plus FFmpeg in the backend image
+- `frontline-renderer`: optional future extraction when render load justifies a separate worker
 - `frontline-proxy`: reverse proxy and TLS termination where required
 
 Local, staging, and production environments should share image definitions while using separate secrets, databases, Telegram bots, and public URLs.

@@ -29,6 +29,12 @@ class WeeklyBattleEngineTest {
         assertThat(first.winnerCode).isIn("RS", "BR")
         assertThat(first.contributionPerformance.map { it.playerId }).containsExactly(101, 202)
         assertThat(first.formations.mapNotNull { it.contributorPlayerId }).contains(101, 202)
+        assertThat(first.formations.map { it.id }).doesNotHaveDuplicates().allMatch { it.isNotBlank() }
+        assertThat(first.formations).allMatch { it.initialPosition != null }
+        assertThat(first.events).anyMatch { it.type == WeeklyEventType.FORMATION_MOVED && it.from != it.to }
+        assertThat(first.events).anyMatch {
+            it.type == WeeklyEventType.FORMATION_HIT && it.formationId != null && it.targetFormationId != null && it.amount > 0
+        }
         first.contributionPerformance.forEach { performance ->
             assertThat(performance.destroyedPower).isEqualTo(
                 first.events.filter {
