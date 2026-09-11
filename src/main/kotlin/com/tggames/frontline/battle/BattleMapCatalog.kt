@@ -38,11 +38,14 @@ enum class TerrainType(
 }
 
 data class HexCoord(val q: Int, val r: Int) {
+    /** Legacy axial distance retained for version 1-3 map snapshots. */
     fun distanceTo(other: HexCoord): Int {
         val ds = (-q - r) - (-other.q - other.r)
         return max(max(abs(q - other.q), abs(r - other.r)), abs(ds))
     }
 }
+
+enum class GridLayout { AXIAL, ODD_R_OFFSET }
 
 data class MapCellOverride(
     val q: Int,
@@ -73,6 +76,7 @@ data class BattleMapDefinition(
     val biomes: List<String>,
     val width: Int,
     val height: Int,
+    val gridLayout: GridLayout = GridLayout.AXIAL,
     val baseTerrain: TerrainType,
     val biomeBaseTerrains: Map<String, TerrainType> = emptyMap(),
     val cells: List<MapCellOverride>,
@@ -88,19 +92,82 @@ data class BattleMapDefinition(
 
     fun elevationAt(position: HexCoord): Int = overrides[position]?.elevation ?: 0
 
-    fun neighbors(position: HexCoord): List<HexCoord> = DIRECTIONS
+    fun neighbors(position: HexCoord): List<HexCoord> = directionsFor(position)
         .map { HexCoord(position.q + it.q, position.r + it.r) }
         .filter(::contains)
+
+    fun distanceBetween(first: HexCoord, second: HexCoord): Int {
+        val a = axial(first)
+        val b = axial(second)
+        val ds = (-a.q - a.r) - (-b.q - b.r)
+        return max(max(abs(a.q - b.q), abs(a.r - b.r)), abs(ds))
+    }
+
+    fun lineBetween(from: HexCoord, to: HexCoord): List<HexCoord> {
+        val distance = distanceBetween(from, to)
+        if (distance == 0) return listOf(from)
+        val a = axial(from)
+        val b = axial(to)
+        val ay = -a.q - a.r
+        val by = -b.q - b.r
+        return (0..distance).map { step ->
+            val xNumerator = a.q * (distance - step) + b.q * step
+            val yNumerator = ay * (distance - step) + by * step
+            val zNumerator = a.r * (distance - step) + b.r * step
+            cubeRound(xNumerator, yNumerator, zNumerator, distance)
+        }
+    }
 
     fun resolvedFor(biome: String): BattleMapDefinition = copy(
         biomes = listOf(biome),
         baseTerrain = biomeBaseTerrains[biome] ?: baseTerrain,
     )
 
+    private fun directionsFor(position: HexCoord): List<HexCoord> = when (gridLayout) {
+        GridLayout.AXIAL -> AXIAL_DIRECTIONS
+        GridLayout.ODD_R_OFFSET -> if (position.r and 1 == 0) EVEN_ROW_DIRECTIONS else ODD_ROW_DIRECTIONS
+    }
+
+    private fun axial(position: HexCoord): HexCoord = when (gridLayout) {
+        GridLayout.AXIAL -> position
+        GridLayout.ODD_R_OFFSET -> HexCoord(position.q - (position.r - (position.r and 1)) / 2, position.r)
+    }
+
+    private fun fromAxial(position: HexCoord): HexCoord = when (gridLayout) {
+        GridLayout.AXIAL -> position
+        GridLayout.ODD_R_OFFSET -> HexCoord(position.q + (position.r - (position.r and 1)) / 2, position.r)
+    }
+
+    private fun cubeRound(xNumerator: Int, yNumerator: Int, zNumerator: Int, denominator: Int): HexCoord {
+        var x = roundDiv(xNumerator, denominator)
+        var y = roundDiv(yNumerator, denominator)
+        var z = roundDiv(zNumerator, denominator)
+        val xError = abs(x * denominator - xNumerator)
+        val yError = abs(y * denominator - yNumerator)
+        val zError = abs(z * denominator - zNumerator)
+        when {
+            xError >= yError && xError >= zError -> x = -y - z
+            yError >= zError -> y = -x - z
+            else -> z = -x - y
+        }
+        return fromAxial(HexCoord(x, z))
+    }
+
+    private fun roundDiv(numerator: Int, denominator: Int): Int =
+        if (numerator >= 0) (numerator + denominator / 2) / denominator else -((-numerator + denominator / 2) / denominator)
+
     companion object {
-        private val DIRECTIONS = listOf(
+        private val AXIAL_DIRECTIONS = listOf(
             HexCoord(1, 0), HexCoord(1, -1), HexCoord(0, -1),
             HexCoord(-1, 0), HexCoord(-1, 1), HexCoord(0, 1),
+        )
+        private val EVEN_ROW_DIRECTIONS = listOf(
+            HexCoord(1, 0), HexCoord(0, -1), HexCoord(-1, -1),
+            HexCoord(-1, 0), HexCoord(-1, 1), HexCoord(0, 1),
+        )
+        private val ODD_ROW_DIRECTIONS = listOf(
+            HexCoord(1, 0), HexCoord(1, -1), HexCoord(0, -1),
+            HexCoord(-1, 0), HexCoord(0, 1), HexCoord(1, 1),
         )
     }
 }
@@ -135,9 +202,15 @@ fun BattleMapDefinition.hasNaturalTerrainTransitions(): Boolean {
         for (q in 0 until width) {
             val position = HexCoord(q, r)
             val terrain = terrainAt(position)
-            val neighbors = neighbors(position).map(::terrainAt)
-            if (terrain == TerrainType.COAST && (TerrainType.WATER !in neighbors || neighbors.none { it !in setOf(TerrainType.WATER, TerrainType.COAST) })) return false
-            if (neighbors.any { setOf(terrain, it) in forbidden }) return false
+            val neighborTerrains = neighbors(position).map(::terrainAt)
+            if (terrain == TerrainType.COAST) {
+                val nearbyTerrains = neighbors(position).asSequence()
+                    .flatMap { neighbors(it).asSequence() }
+                    .map(::terrainAt)
+                    .toSet() + neighborTerrains
+                if (TerrainType.WATER !in nearbyTerrains || nearbyTerrains.none { it !in setOf(TerrainType.WATER, TerrainType.COAST) }) return false
+            }
+            if (neighborTerrains.any { setOf(terrain, it) in forbidden }) return false
         }
     }
     return true
@@ -211,7 +284,7 @@ class BattleMapCatalog(objectMapper: ObjectMapper) {
         }
         return resolved.copy(
             id = assignment.id,
-            version = 3,
+            version = template.version,
             baseTerrain = if (assignment.biome == "побережье") TerrainType.PLAIN else resolved.baseTerrain,
             cells = naturalCells,
             playerEntries = template.playerEntries.map(::entry),

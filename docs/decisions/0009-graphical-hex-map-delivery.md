@@ -1,5 +1,7 @@
 # ADR 0009: Graphical Hex-Map Delivery
 
+Partially superseded by [ADR 0011](0011-rectangular-tactical-map-geometry.md) for coordinate layout, map composition, edge markers, and seam handling.
+
 ## Status
 
 Accepted

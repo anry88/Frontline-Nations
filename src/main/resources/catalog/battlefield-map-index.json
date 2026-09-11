@@ -1,26 +1,170 @@
 [
-  { "id": "carpathian-pass", "location": "Карпатский перевал", "biome": "горы", "templateId": "mountain-pass", "variant": "IDENTITY" },
-  { "id": "danube-valley", "location": "Дунайская долина", "biome": "речная долина", "templateId": "river-valley", "variant": "IDENTITY" },
-  { "id": "adriatic-coast", "location": "Побережье Адриатики", "biome": "побережье", "templateId": "river-valley", "variant": "ROTATE_180" },
-  { "id": "patagonian-plateau", "location": "Патагонийское плато", "biome": "холмистая местность", "templateId": "mountain-pass", "variant": "MIRROR_HORIZONTAL" },
-  { "id": "sahara-corridor", "location": "Сахарский коридор", "biome": "пустыня", "templateId": "open-front", "variant": "IDENTITY" },
-  { "id": "altai-frontier", "location": "Алтайский рубеж", "biome": "степь", "templateId": "open-front", "variant": "ROTATE_180" },
-  { "id": "polesie-frontier", "location": "Полесский рубеж", "biome": "лес", "templateId": "open-front", "variant": "MIRROR_HORIZONTAL" },
-  { "id": "northern-tundra", "location": "Северная тундра", "biome": "тундра", "templateId": "open-front", "variant": "MIRROR_VERTICAL" },
-  { "id": "gobi-basin", "location": "Гобийская котловина", "biome": "пустыня", "templateId": "open-front", "variant": "MIRROR_HORIZONTAL" },
-  { "id": "nile-delta", "location": "Дельта Нила", "biome": "речная долина", "templateId": "river-valley", "variant": "MIRROR_HORIZONTAL" },
-  { "id": "anatolian-plateau", "location": "Анатолийское плато", "biome": "холмистая местность", "templateId": "mountain-pass", "variant": "ROTATE_180" },
-  { "id": "rhine-plain", "location": "Рейнская равнина", "biome": "равнина", "templateId": "open-front", "variant": "IDENTITY" },
-  { "id": "atlas-foothills", "location": "Предгорья Атласа", "biome": "горы", "templateId": "mountain-pass", "variant": "MIRROR_VERTICAL" },
-  { "id": "amazon-lowlands", "location": "Амазонская низменность", "biome": "джунгли", "templateId": "open-front", "variant": "ROTATE_180" },
-  { "id": "rift-valley", "location": "Великая рифтовая долина", "biome": "степь", "templateId": "open-front", "variant": "MIRROR_VERTICAL" },
-  { "id": "mekong-delta", "location": "Дельта Меконга", "biome": "болота", "templateId": "river-valley", "variant": "MIRROR_VERTICAL" },
-  { "id": "deccan-plateau", "location": "Деканское плато", "biome": "холмистая местность", "templateId": "mountain-pass", "variant": "IDENTITY" },
-  { "id": "andean-pass", "location": "Андский перевал", "biome": "горы", "templateId": "mountain-pass", "variant": "MIRROR_HORIZONTAL" },
-  { "id": "arabian-coast", "location": "Аравийское побережье", "biome": "побережье", "templateId": "river-valley", "variant": "IDENTITY" },
-  { "id": "great-plains", "location": "Великие равнины", "biome": "равнина", "templateId": "open-front", "variant": "ROTATE_180" },
-  { "id": "caucasus-ridge", "location": "Кавказский хребет", "biome": "горы", "templateId": "mountain-pass", "variant": "ROTATE_180" },
-  { "id": "baltic-marshes", "location": "Балтийские болота", "biome": "болота", "templateId": "river-valley", "variant": "ROTATE_180" },
-  { "id": "australian-outback", "location": "Австралийский аутбэк", "biome": "пустыня", "templateId": "open-front", "variant": "IDENTITY" },
-  { "id": "kamchatka-coast", "location": "Камчатское побережье", "biome": "тундра", "templateId": "open-front", "variant": "MIRROR_HORIZONTAL" }
+  {
+    "id": "carpathian-pass",
+    "location": "Карпатский перевал",
+    "biome": "горы",
+    "templateId": "carpathian-pass",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "danube-valley",
+    "location": "Дунайская долина",
+    "biome": "речная долина",
+    "templateId": "danube-valley",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "adriatic-coast",
+    "location": "Побережье Адриатики",
+    "biome": "побережье",
+    "templateId": "adriatic-coast",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "patagonian-plateau",
+    "location": "Патагонийское плато",
+    "biome": "холмистая местность",
+    "templateId": "patagonian-plateau",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "sahara-corridor",
+    "location": "Сахарский коридор",
+    "biome": "пустыня",
+    "templateId": "sahara-corridor",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "altai-frontier",
+    "location": "Алтайский рубеж",
+    "biome": "степь",
+    "templateId": "altai-frontier",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "polesie-frontier",
+    "location": "Полесский рубеж",
+    "biome": "лес",
+    "templateId": "polesie-frontier",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "northern-tundra",
+    "location": "Северная тундра",
+    "biome": "тундра",
+    "templateId": "northern-tundra",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "gobi-basin",
+    "location": "Гобийская котловина",
+    "biome": "пустыня",
+    "templateId": "gobi-basin",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "nile-delta",
+    "location": "Дельта Нила",
+    "biome": "речная долина",
+    "templateId": "nile-delta",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "anatolian-plateau",
+    "location": "Анатолийское плато",
+    "biome": "холмистая местность",
+    "templateId": "anatolian-plateau",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "rhine-plain",
+    "location": "Рейнская равнина",
+    "biome": "равнина",
+    "templateId": "rhine-plain",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "atlas-foothills",
+    "location": "Предгорья Атласа",
+    "biome": "горы",
+    "templateId": "atlas-foothills",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "amazon-lowlands",
+    "location": "Амазонская низменность",
+    "biome": "джунгли",
+    "templateId": "amazon-lowlands",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "rift-valley",
+    "location": "Великая рифтовая долина",
+    "biome": "степь",
+    "templateId": "rift-valley",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "mekong-delta",
+    "location": "Дельта Меконга",
+    "biome": "болота",
+    "templateId": "mekong-delta",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "deccan-plateau",
+    "location": "Деканское плато",
+    "biome": "холмистая местность",
+    "templateId": "deccan-plateau",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "andean-pass",
+    "location": "Андский перевал",
+    "biome": "горы",
+    "templateId": "andean-pass",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "arabian-coast",
+    "location": "Аравийское побережье",
+    "biome": "побережье",
+    "templateId": "arabian-coast",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "great-plains",
+    "location": "Великие равнины",
+    "biome": "равнина",
+    "templateId": "great-plains",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "caucasus-ridge",
+    "location": "Кавказский хребет",
+    "biome": "горы",
+    "templateId": "caucasus-ridge",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "baltic-marshes",
+    "location": "Балтийские болота",
+    "biome": "болота",
+    "templateId": "baltic-marshes",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "australian-outback",
+    "location": "Австралийский аутбэк",
+    "biome": "пустыня",
+    "templateId": "australian-outback",
+    "variant": "IDENTITY"
+  },
+  {
+    "id": "kamchatka-coast",
+    "location": "Камчатское побережье",
+    "biome": "тундра",
+    "templateId": "kamchatka-coast",
+    "variant": "IDENTITY"
+  }
 ]

@@ -207,7 +207,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
     private fun moveFormations(formations: List<FormationState>, objectives: List<ObjectiveState>, map: BattleMapDefinition) {
         formations.filter { it.power > 0 }.forEach { unit ->
             val candidates = objectives.filter { it.owner != unit.side }.ifEmpty { objectives }
-            val goal = candidates.minWithOrNull(compareBy<ObjectiveState> { unit.position.distanceTo(it.position) }.thenBy { it.id }) ?: return@forEach
+            val goal = candidates.minWithOrNull(compareBy<ObjectiveState> { map.distanceBetween(unit.position, it.position) }.thenBy { it.id }) ?: return@forEach
             repeat(unit.movement) { shortestNextStep(unit.position, goal.position, unit.profile, map)?.let { unit.position = it } }
         }
     }
@@ -215,7 +215,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
     private fun fire(side: WeeklySide, formations: List<FormationState>, map: BattleMapDefinition, random: Random, tick: Int, events: MutableList<WeeklyBattleEvent>) {
         formations.filter { it.side == side && it.power > 0 }.sortedBy { it.type.ordinal }.forEach { shooter ->
             val target = formations.filter { it.side != side && it.power > 0 && canAttack(shooter, it, map) }
-                .minWithOrNull(compareBy<FormationState> { shooter.position.distanceTo(it.position) }.thenByDescending { it.power }) ?: return@forEach
+                .minWithOrNull(compareBy<FormationState> { map.distanceBetween(shooter.position, it.position) }.thenByDescending { it.power }) ?: return@forEach
             val base = max(1L, shooter.power * shooter.attackPercent / 1000)
             val protection = map.terrainAt(target.position).cover + target.armor / 12
             val damage = max(1L, base * random.nextInt(85, 116) / 100 * max(3, 10 - protection) / 10)
@@ -226,7 +226,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
     }
 
     private fun canAttack(shooter: FormationState, target: FormationState, map: BattleMapDefinition): Boolean {
-        if (shooter.position.distanceTo(target.position) !in 1..shooter.weaponRange) return false
+        if (map.distanceBetween(shooter.position, target.position) !in 1..shooter.weaponRange) return false
         val targetIsAir = target.profile == MovementProfile.AIR
         val validTarget = when (shooter.fireMode) {
             FireMode.AIR_INTERCEPT, FireMode.AIR_DEFENSE -> targetIsAir
@@ -234,7 +234,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         }
         if (!validTarget) return false
         if (shooter.fireMode == FireMode.INDIRECT || shooter.profile == MovementProfile.AIR) return true
-        return hexLine(shooter.position, target.position).drop(1).dropLast(1).none { map.terrainAt(it).blocksLineOfSight }
+        return map.lineBetween(shooter.position, target.position).drop(1).dropLast(1).none { map.terrainAt(it).blocksLineOfSight }
     }
 
     private fun capture(formations: List<FormationState>, objectives: Collection<ObjectiveState>, tick: Int, balance: WeeklyBalance, events: MutableList<WeeklyBattleEvent>) {
@@ -284,21 +284,6 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
             else listOf(scoreA to scoreB, remainingA to remainingB, objectiveA to objectiveB)
         ordered.firstOrNull { it.first != it.second }?.let { return if (it.first > it.second) WeeklySide.A else WeeklySide.B }
         return if (random.nextBoolean()) WeeklySide.A else WeeklySide.B
-    }
-
-    private fun hexLine(from: HexCoord, to: HexCoord): List<HexCoord> {
-        val count = from.distanceTo(to)
-        if (count == 0) return listOf(from)
-        fun cube(coord: HexCoord) = Triple(coord.q.toDouble(), (-coord.q - coord.r).toDouble(), coord.r.toDouble())
-        val a = cube(from); val b = cube(to)
-        return (0..count).map { i ->
-            val t = i.toDouble() / count
-            val x = a.first + (b.first - a.first) * t; val y = a.second + (b.second - a.second) * t; val z = a.third + (b.third - a.third) * t
-            var rx = kotlin.math.round(x); var ry = kotlin.math.round(y); var rz = kotlin.math.round(z)
-            val dx = kotlin.math.abs(rx - x); val dy = kotlin.math.abs(ry - y); val dz = kotlin.math.abs(rz - z)
-            if (dx > dy && dx > dz) rx = -ry - rz else if (dy > dz) ry = -rx - rz else rz = -rx - ry
-            HexCoord(rx.toInt(), rz.toInt())
-        }
     }
 
     private fun deriveSeed(serverSalt: String, key: String): Long {

@@ -409,7 +409,7 @@ class GameService(
             VALUES (
                 :id, :playerId, :victory, :playerPower, :enemyPower,
                 :xp, :credits, 0, :materials,
-                :battleSeed, :commanderLevel, :seedHash, 5, :location, :biome, :difficulty,
+                :battleSeed, :commanderLevel, :seedHash, 6, :location, :biome, :difficulty,
                 :enemy, :tactic, :rounds, CAST(:events AS jsonb),
                 :groupId, CAST(:groupSnapshot AS jsonb), :groupVersion, :compositionPower, 0, 0,
                 :mapId, :mapVersion, :deploymentEntry, :primaryObjective,

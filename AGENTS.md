@@ -46,10 +46,11 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/main/resources/catalog/equipment-catalog.json`: localized unit costs, roles, statistics, unlocks, and icon paths.
 - `src/main/resources/static/assets/units/`: generated fictional equipment-class icons served by the backend.
 - `src/main/resources/db/migration/V5__personal_equipment_and_battle_groups.sql`: inventory, presets, audit history, and battle snapshots.
-- `src/main/kotlin/com/tggames/frontline/battle/`: versioned personal engines, data-driven axial maps, deterministic movement/fire/capture events, and legacy replay support.
+- `src/main/kotlin/com/tggames/frontline/battle/`: versioned personal engines, rectangular odd-row offset maps with legacy axial compatibility, deterministic movement/fire/capture events, and legacy replay support.
 - `src/main/resources/catalog/battle-maps.json`: versioned 9×12 terrain maps, entries, and important objectives.
 - `src/main/resources/static/assets/maps/`: generated hex/object blocks plus 24 personal and 10 weekly square PNG maps.
-- `scripts/render-battle-map-assets.py`: deterministic atlas normalization, terrain-transition, connected-road, objective-placement, blocked-rim, and map-stitching pipeline.
+- `scripts/generate-map-catalogs.py`: deterministic authored-anchor generator for distinct personal and weekly terrain/road layouts.
+- `scripts/render-battle-map-assets.py`: deterministic full-bleed tile normalization, terrain-transition, connected-road, unique edge-marker, objective-placement, blocked-rim, and upright square-image pipeline.
 - `src/main/resources/db/migration/V6__spatial_personal_battles.sql`: map/route/opponent snapshots, spatial events, final objective state, and end reason.
 - `src/main/kotlin/com/tggames/frontline/progression/`: command-capacity expansion and force-tier rules.
 - `src/main/resources/catalog/force-tiers.json`: level gates, capacity ceilings, costs, and reward multipliers through 1,000 CP.

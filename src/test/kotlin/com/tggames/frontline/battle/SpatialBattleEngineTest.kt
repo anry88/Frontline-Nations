@@ -47,7 +47,7 @@ class SpatialBattleEngineTest {
     @Test
     fun `aircraft movement and weapons do not cover the whole map`() {
         val map = maps.forBiome("равнина")
-        val diameter = HexCoord(0, 0).distanceTo(HexCoord(map.width - 1, map.height - 1))
+        val diameter = map.distanceBetween(HexCoord(0, 0), HexCoord(map.width - 1, map.height - 1))
 
         listOf("ATTACK_AIRCRAFT", "FIGHTER").forEach { code ->
             val profile = equipment.require(code).spatial

@@ -9,7 +9,6 @@ import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets
 import java.util.PriorityQueue
 import java.util.UUID
-import kotlin.math.abs
 import kotlin.random.Random
 
 enum class BattleSide { PLAYER, ENEMY }
@@ -321,7 +320,7 @@ class SpatialBattleEngine(
             val primary = if (unit.side == BattleSide.PLAYER) playerPlan.objectiveId else enemyPrimaryObjective
             val objective = chooseObjective(unit, primary, controls, map)
             val goal = if (unit.snapshot.movementProfile == MovementProfile.AIR) {
-                enemies.minWithOrNull(compareBy<UnitState> { unit.position.distanceTo(it.position) }.thenBy { it.snapshot.id })?.position
+                enemies.minWithOrNull(compareBy<UnitState> { map.distanceBetween(unit.position, it.position) }.thenBy { it.snapshot.id })?.position
             } else {
                 objective?.position
             } ?: return@forEach
@@ -349,8 +348,8 @@ class SpatialBattleEngine(
     ): Boolean {
         if (availableTargets(unit, enemies, allies, map).isNotEmpty()) return true
         val onObjective = controls.values.firstOrNull { it.definition.position == unit.position }
-        if (tactic == Tactic.DEFENSE && onObjective?.owner == unit.side && enemies.any { unit.position.distanceTo(it.position) <= unit.snapshot.sightRange + 2 }) return true
-        if (tactic == Tactic.AMBUSH && map.terrainAt(unit.position).cover > 0 && enemies.any { unit.position.distanceTo(it.position) <= unit.snapshot.weaponRange + 2 }) return true
+        if (tactic == Tactic.DEFENSE && onObjective?.owner == unit.side && enemies.any { map.distanceBetween(unit.position, it.position) <= unit.snapshot.sightRange + 2 }) return true
+        if (tactic == Tactic.AMBUSH && map.terrainAt(unit.position).cover > 0 && enemies.any { map.distanceBetween(unit.position, it.position) <= unit.snapshot.weaponRange + 2 }) return true
         return false
     }
 
@@ -363,7 +362,7 @@ class SpatialBattleEngine(
         val primary = controls[primaryId]
         if (primary != null && primary.owner != unit.side) return primary.definition
         return controls.values.filter { it.owner != unit.side }
-            .minWithOrNull(compareBy<ObjectiveCaptureState> { unit.position.distanceTo(it.definition.position) }.thenBy { it.definition.id })
+            .minWithOrNull(compareBy<ObjectiveCaptureState> { map.distanceBetween(unit.position, it.definition.position) }.thenBy { it.definition.id })
             ?.definition
             ?: map.objectives.firstOrNull()
     }
@@ -375,11 +374,11 @@ class SpatialBattleEngine(
         map: BattleMapDefinition,
         tactic: Tactic,
     ): HexCoord {
-        val nearest = enemies.minByOrNull { unit.position.distanceTo(it.position) }
-        if (nearest != null && unit.position.distanceTo(nearest.position) < unit.snapshot.minimumRange) {
+        val nearest = enemies.minByOrNull { map.distanceBetween(unit.position, it.position) }
+        if (nearest != null && map.distanceBetween(unit.position, nearest.position) < unit.snapshot.minimumRange) {
             return map.neighbors(unit.position)
                 .filter { map.terrainAt(it).movementCost(unit.snapshot.movementProfile) != null }
-                .maxWithOrNull(compareBy<HexCoord> { it.distanceTo(nearest.position) }.thenByDescending { it.q }.thenByDescending { it.r })
+                .maxWithOrNull(compareBy<HexCoord> { map.distanceBetween(it, nearest.position) }.thenByDescending { it.q }.thenByDescending { it.r })
                 ?: unit.position
         }
         return destinationAlongPath(unit, goal, enemies, map, tactic)
@@ -425,7 +424,7 @@ class SpatialBattleEngine(
         while (frontier.isNotEmpty()) {
             val current = frontier.remove()
             if (current.cost != costs[current.position]) continue
-            if (current.position == goal || (goal in blocked && current.position.distanceTo(goal) == 1)) {
+            if (current.position == goal || (goal in blocked && map.distanceBetween(current.position, goal) == 1)) {
                 reached = current.position
                 break
             }
@@ -477,7 +476,7 @@ class SpatialBattleEngine(
             val allies = units.filter { it.side == shooter.side && it.operational }
             val enemies = units.filter { it.side != shooter.side && it.operational }
             val tactic = tacticFor(shooter.side, playerTactic, enemyTactic)
-            val target = selectTarget(shooter, availableTargets(shooter, enemies, allies, map), tactic) ?: return@forEach
+            val target = selectTarget(shooter, availableTargets(shooter, enemies, allies, map), tactic, map) ?: return@forEach
             val hitChance = hitChance(shooter, target, allies, map)
             if (random.nextInt(100) >= hitChance) {
                 events += SpatialBattleEvent(
@@ -508,7 +507,7 @@ class SpatialBattleEngine(
         allies: List<UnitState>,
         map: BattleMapDefinition,
     ): List<UnitState> = enemies.filter { target ->
-        val distance = shooter.position.distanceTo(target.position)
+        val distance = map.distanceBetween(shooter.position, target.position)
         val range = effectiveRange(shooter, target)
         if (distance !in effectiveMinimumRange(shooter, target)..range) return@filter false
         when (shooter.snapshot.fireMode) {
@@ -530,19 +529,19 @@ class SpatialBattleEngine(
         else shooter.snapshot.minimumRange
 
     private fun spottedBy(allies: List<UnitState>, target: UnitState, map: BattleMapDefinition): Boolean = allies.any { observer ->
-        val distance = observer.position.distanceTo(target.position)
+        val distance = map.distanceBetween(observer.position, target.position)
         distance <= observer.snapshot.sightRange &&
             (observer.snapshot.movementProfile == MovementProfile.AIR || target.snapshot.movementProfile == MovementProfile.AIR || lineOfSight(map, observer.position, target.position))
     }
 
-    private fun selectTarget(shooter: UnitState, candidates: List<UnitState>, tactic: Tactic): UnitState? {
+    private fun selectTarget(shooter: UnitState, candidates: List<UnitState>, tactic: Tactic, map: BattleMapDefinition): UnitState? {
         if (candidates.isEmpty()) return null
         val airFirst = if (shooter.snapshot.fireMode in setOf(FireMode.AIR_INTERCEPT, FireMode.AIR_DEFENSE)) {
             candidates.filter { it.snapshot.movementProfile == MovementProfile.AIR }.ifEmpty { candidates }
         } else candidates
         val comparator = when (tactic) {
-            Tactic.ASSAULT -> compareBy<UnitState> { it.hitPoints }.thenBy { shooter.position.distanceTo(it.position) }
-            Tactic.DEFENSE -> compareBy<UnitState> { shooter.position.distanceTo(it.position) }.thenByDescending { it.snapshot.attack }
+            Tactic.ASSAULT -> compareBy<UnitState> { it.hitPoints }.thenBy { map.distanceBetween(shooter.position, it.position) }
+            Tactic.DEFENSE -> compareBy<UnitState> { map.distanceBetween(shooter.position, it.position) }.thenByDescending { it.snapshot.attack }
             Tactic.AMBUSH -> compareByDescending<UnitState> { it.snapshot.attack }.thenBy { it.hitPoints }
             Tactic.MANEUVER -> compareBy<UnitState> { if (it.snapshot.fireMode in setOf(FireMode.INDIRECT, FireMode.AIR_DEFENSE)) 0 else 1 }.thenBy { it.hitPoints }
             Tactic.RECON -> compareBy<UnitState> { if ("RECON" in it.snapshot.roles) 0 else 1 }.thenBy { it.hitPoints }
@@ -551,7 +550,7 @@ class SpatialBattleEngine(
     }
 
     private fun hitChance(shooter: UnitState, target: UnitState, allies: List<UnitState>, map: BattleMapDefinition): Int {
-        val observerRecon = allies.filter { it.position.distanceTo(target.position) <= it.snapshot.sightRange }.maxOfOrNull { it.snapshot.recon } ?: 0
+        val observerRecon = allies.filter { map.distanceBetween(it.position, target.position) <= it.snapshot.sightRange }.maxOfOrNull { it.snapshot.recon } ?: 0
         val base = when (shooter.snapshot.fireMode) {
             FireMode.INDIRECT -> 48 + observerRecon / 5
             FireMode.AIR_TO_GROUND -> 55 + observerRecon / 6
@@ -600,42 +599,7 @@ class SpatialBattleEngine(
     }
 
     private fun lineOfSight(map: BattleMapDefinition, from: HexCoord, to: HexCoord): Boolean =
-        hexLine(from, to).drop(1).dropLast(1).none { map.terrainAt(it).blocksLineOfSight }
-
-    internal fun hexLine(from: HexCoord, to: HexCoord): List<HexCoord> {
-        val distance = from.distanceTo(to)
-        if (distance == 0) return listOf(from)
-        val ax = from.q
-        val az = from.r
-        val ay = -ax - az
-        val bx = to.q
-        val bz = to.r
-        val by = -bx - bz
-        return (0..distance).map { step ->
-            val xNumerator = ax * (distance - step) + bx * step
-            val yNumerator = ay * (distance - step) + by * step
-            val zNumerator = az * (distance - step) + bz * step
-            cubeRound(xNumerator, yNumerator, zNumerator, distance)
-        }
-    }
-
-    private fun cubeRound(xNumerator: Int, yNumerator: Int, zNumerator: Int, denominator: Int): HexCoord {
-        var x = roundDiv(xNumerator, denominator)
-        var y = roundDiv(yNumerator, denominator)
-        var z = roundDiv(zNumerator, denominator)
-        val xError = abs(x * denominator - xNumerator)
-        val yError = abs(y * denominator - yNumerator)
-        val zError = abs(z * denominator - zNumerator)
-        when {
-            xError >= yError && xError >= zError -> x = -y - z
-            yError >= zError -> y = -x - z
-            else -> z = -x - y
-        }
-        return HexCoord(x, z)
-    }
-
-    private fun roundDiv(numerator: Int, denominator: Int): Int =
-        if (numerator >= 0) (numerator + denominator / 2) / denominator else -((-numerator + denominator / 2) / denominator)
+        map.lineBetween(from, to).drop(1).dropLast(1).none { map.terrainAt(it).blocksLineOfSight }
 
     private fun tacticFor(side: BattleSide, player: Tactic, enemy: Tactic): Tactic = if (side == BattleSide.PLAYER) player else enemy
 
