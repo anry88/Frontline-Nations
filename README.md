@@ -15,7 +15,7 @@ Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
 - `/army` or `/hangar` — switch between three presets and select equipment within the CP limit
 - `/shop` — inspect illustrated equipment cards and buy or craft a unit
 - `/upgrade` — improve an owned unit from level 1 to 5
-- `/daily` — claim 9,450+ Credits, grow a 100-day streak, and receive a random unlocked unit at the maximum streak
+- `/daily` — claim 9,000–18,000 Credits, grow a 100-day streak, and receive a random unlocked unit at the maximum streak
 - `/profile` — inspect alliance, level progress, battle record, resources, capacity, and reward streak
 - `/front` — inspect the current matchup, intelligence, countdown, or published result
 - `/contribute` — commit the active equipment group until the Sunday battle; surviving units return and destroyed units are lost
@@ -42,7 +42,7 @@ New accounts infer their initial language from Telegram and receive language-rel
 
 Players may launch unlimited operations. The bot sends a pre-rendered square 9×12 hex-sector image with three entry points, illustrated strategic objects, connected roads, natural terrain transitions, and a visibly blocked outer rim. The player orders the active group through an entry toward its first objective and selects a movement/target-priority doctrine. The deterministic engine moves individual units, resolves spotting and finite-range fire, and tracks multi-step objective capture and recapture for at most 48 steps. A battle ends when one side controls every objective or the opposing army is destroyed or routed. Operations award commander XP, Credits, and Materials. Surviving equipment returns to its presets; units reduced to zero HP are removed from the usable inventory and recorded as battle losses.
 
-`/daily` replaces the old battle-order refill. Day one grants 9,450 Credits, exactly three current starter-group replacement costs. Each consecutive claim adds 95 Credits, reaching 18,855 Credits on day 100. A missed Belgrade game day resets the streak. Day 100 and every consecutive day after it retain the maximum reward and add one deterministic random unit from the commander's unlocked catalog.
+`/daily` replaces the old battle-order refill. Day one grants a rounded 9,000 Credits, approximately three current starter-group replacement costs. Consecutive claims grow smoothly to exactly 18,000 Credits on day 100. A missed Belgrade game day resets the streak. Day 100 and every consecutive day after it retain the maximum reward and add one deterministic random unit from the commander's unlocked catalog.
 
 ### Weekly campaigns
 

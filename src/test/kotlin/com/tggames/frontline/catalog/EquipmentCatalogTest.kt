@@ -31,8 +31,9 @@ class EquipmentCatalogTest {
     }
 
     @Test
-    fun `daily base reward buys three starter groups`() {
+    fun `rounded daily base reward stays close to three starter groups`() {
         val starterCost = listOf("MBT", "MBT", "ARTILLERY", "RECON_VEHICLE").sumOf { catalog.require(it).buyCredits }
-        assertThat(DailyRewardPolicy.BASE_CREDITS).isEqualTo(starterCost.toLong() * 3)
+        assertThat(DailyRewardPolicy.BASE_CREDITS).isEqualTo(9_000L)
+        assertThat(starterCost.toLong() * 3 - DailyRewardPolicy.BASE_CREDITS).isLessThanOrEqualTo(starterCost.toLong() * 3 / 20)
     }
 }
