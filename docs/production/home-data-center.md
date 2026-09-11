@@ -25,7 +25,7 @@ Build the image using the `hdc` Docker context, copy `compose.yml` and a product
 
 The app joins the existing external `hdc-tunnel` network with alias `frontline-nations-prod-app`. Configure the Cloudflare Tunnel public hostname to send `frontline-nations.tg-games.com` to `http://frontline-nations-prod-app:8080`.
 
-After the public health endpoint succeeds, run `scripts/set-telegram-webhook.sh` from a shell containing the production secrets. The script installs the command menu, bot name, descriptions, generated avatar from `assets/brand/`, and the webhook.
+After the public health endpoint succeeds, run `scripts/set-telegram-webhook.sh` from a shell containing the production secrets. On the Windows HDC host, use `scripts/set-telegram-webhook.ps1 -EnvFile D:\Apps\FrontlineNations\env\prod.env`; it reads secrets in place and synchronizes the webhook and localized command menus without copying the environment file. The Bash script also installs the bot name, descriptions, and generated avatar from `assets/brand/`.
 
 ## Verification
 
