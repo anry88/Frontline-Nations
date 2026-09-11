@@ -5,7 +5,6 @@ import com.tggames.frontline.battle.BattleMapDefinition
 import com.tggames.frontline.battle.BattleSide
 import com.tggames.frontline.battle.BattleEngine
 import com.tggames.frontline.battle.DeploymentPlan
-import com.tggames.frontline.battle.HexCoord
 import com.tggames.frontline.battle.OperationOffer
 import com.tggames.frontline.battle.SpatialBattleEvent
 import com.tggames.frontline.battle.SpatialEndReason
@@ -238,10 +237,6 @@ class GameService(
             appendLine("🗺️ ${GameI18n.t(language, map.nameKey)}")
             appendLine("${GameI18n.battlefield(language, operation.battlefield.location)} · ${GameI18n.biome(language, operation.battlefield.biome)}")
             appendLine()
-            appendLine(mapDiagram(map))
-            appendLine(GameI18n.t(language, "map_legend"))
-            appendLine(GameI18n.t(language, "map_legend_open"))
-            appendLine()
             map.objectives.forEachIndexed { index, objective ->
                 appendLine("${index + 1} — ${GameI18n.t(language, objective.nameKey)} · ${GameI18n.t(language, "capture_steps", objective.captureSteps)}")
             }
@@ -257,7 +252,12 @@ class GameService(
                 ),
             )
         } + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "other_operations"), "nav:battle")))
-        telegram.sendMessage(chatId, text, InlineKeyboardMarkup(buttons))
+        telegram.sendPhoto(
+            chatId,
+            properties.publicBaseUrl.trimEnd('/') + "/assets/maps/personal/${map.id}.png",
+            text,
+            InlineKeyboardMarkup(buttons),
+        )
     }
 
     private fun showObjectives(telegramId: Long, firstName: String, chatId: Long, callbackData: String) {
@@ -408,7 +408,7 @@ class GameService(
             VALUES (
                 :id, :playerId, :victory, :playerPower, :enemyPower,
                 :xp, :credits, :research, :materials,
-                :battleSeed, :commanderLevel, :seedHash, 4, :location, :biome, :difficulty,
+                :battleSeed, :commanderLevel, :seedHash, 5, :location, :biome, :difficulty,
                 :enemy, :tactic, :rounds, CAST(:events AS jsonb),
                 :groupId, CAST(:groupSnapshot AS jsonb), :groupVersion, :compositionPower, 0, 0,
                 :mapId, :mapVersion, :deploymentEntry, :primaryObjective,
@@ -820,8 +820,8 @@ class GameService(
         }
         val snapshot = inventory.battleSnapshot(inventory.army(telegramId))
         val outcome = campaigns.contribute(telegramId, player.allianceCode, snapshot, language)
-        val front = campaigns.frontText(player.allianceCode, language)
-        telegram.sendMessage(chatId, "${outcome.message}\n\n$front", actionKeyboard(language))
+        telegram.sendMessage(chatId, outcome.message)
+        sendFront(player.allianceCode, language, chatId)
     }
 
     private fun profileText(telegramId: Long, firstName: String? = null): String {
@@ -852,7 +852,18 @@ class GameService(
         ensurePlayer(telegramId, firstName)
         val player = player(telegramId)
         val language = GameLanguage.fromStored(player.language)
-        telegram.sendMessage(chatId, campaigns.frontText(player.allianceCode, language), actionKeyboard(language))
+        sendFront(player.allianceCode, language, chatId)
+    }
+
+    private fun sendFront(allianceCode: String?, language: GameLanguage, chatId: Long) {
+        campaigns.frontMapPath(allianceCode)?.let { path ->
+            telegram.sendPhoto(
+                chatId,
+                properties.publicBaseUrl.trimEnd('/') + path,
+                GameI18n.t(language, "weekly_map_image_caption"),
+            )
+        }
+        telegram.sendMessage(chatId, campaigns.frontText(allianceCode, language), actionKeyboard(language))
     }
 
     private fun ensurePlayer(telegramId: Long, firstName: String, telegramLanguage: String? = null) {
@@ -1057,18 +1068,6 @@ class GameService(
     private fun languageByChat(chatId: Long): GameLanguage = jdbc.sql("SELECT language FROM players WHERE telegram_id = :id")
         .param("id", chatId).query(String::class.java).optional()
         .map(GameLanguage::fromStored).orElse(GameLanguage.EN)
-
-    private fun mapDiagram(map: BattleMapDefinition): String {
-        val objectives = map.objectives.withIndex().associate { it.value.position to (it.index + 1).toString() }
-        val entries = map.playerEntries.withIndex().associate { it.value.position to ('A'.code + it.index).toChar().toString() }
-        return (0 until map.height).joinToString("\n") { r ->
-            val indent = if (r % 2 == 1) " " else ""
-            indent + (0 until map.width).joinToString(" ") { q ->
-                val position = HexCoord(q, r)
-                objectives[position] ?: entries[position] ?: map.terrainAt(position).symbol
-            }
-        }
-    }
 
     private fun spatialHighlights(
         language: GameLanguage,

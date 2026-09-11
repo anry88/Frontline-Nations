@@ -668,7 +668,7 @@ class SpatialBattleEngine(
     }
 
     companion object {
-        const val MAX_STEPS = 24
+        const val MAX_STEPS = 48
         private const val SPATIAL_SEED_MASK = 0x5A17C0DE4B9L
     }
 }

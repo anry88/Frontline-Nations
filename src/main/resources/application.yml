@@ -35,7 +35,7 @@ frontline:
     resolve-cron: ${CAMPAIGN_RESOLVE_CRON:0 0 15 * * SUN}
     retry-cron: ${CAMPAIGN_RETRY_CRON:0 5/10 * * * *}
     open-cron: ${CAMPAIGN_OPEN_CRON:0 5 0 * * MON}
-    max-ticks: ${CAMPAIGN_MAX_TICKS:48}
+    max-ticks: ${CAMPAIGN_MAX_TICKS:96}
     objective-base-points: ${CAMPAIGN_OBJECTIVE_BASE_POINTS:1000}
     objective-decay-per-tick: ${CAMPAIGN_OBJECTIVE_DECAY_PER_TICK:15}
     objective-min-points: ${CAMPAIGN_OBJECTIVE_MIN_POINTS:200}

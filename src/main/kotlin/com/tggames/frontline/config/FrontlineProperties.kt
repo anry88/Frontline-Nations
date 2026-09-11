@@ -19,7 +19,7 @@ data class FrontlineProperties(
         val resolveCron: String = "0 0 15 * * SUN",
         val retryCron: String = "0 5/10 * * * *",
         val openCron: String = "0 5 0 * * MON",
-        val maxTicks: Int = 48,
+        val maxTicks: Int = 96,
         val objectiveBasePoints: Int = 1_000,
         val objectiveDecayPerTick: Int = 15,
         val objectiveMinPoints: Int = 200,

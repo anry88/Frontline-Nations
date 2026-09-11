@@ -105,7 +105,55 @@ data class BattleMapDefinition(
     }
 }
 
-enum class MapVariant { IDENTITY, ROTATE_180, TRANSPOSE, TRANSPOSE_ROTATE_180 }
+fun BattleMapDefinition.withObjectiveSites(): BattleMapDefinition {
+    val prepared = cells.associateBy { it.position }.toMutableMap()
+    val flatTerrain = when (baseTerrain) {
+        TerrainType.PLAIN, TerrainType.DESERT, TerrainType.TUNDRA, TerrainType.COAST -> baseTerrain
+        else -> TerrainType.PLAIN
+    }
+    objectives.forEach { objective ->
+        val current = terrainAt(objective.position)
+        val required = when (objective.nameKey) {
+            "objective_signal_tower", "objective_radar" -> TerrainType.HILL
+            "objective_central_crossing", "objective_north_crossing", "objective_south_crossing" -> TerrainType.ROAD
+            "objective_airfield" -> flatTerrain
+            "objective_supply_depot", "objective_command_post" -> if (current == TerrainType.ROAD) current else flatTerrain
+            else -> current
+        }
+        prepared[objective.position] = MapCellOverride(objective.position.q, objective.position.r, required)
+    }
+    return copy(cells = prepared.values.sortedWith(compareBy<MapCellOverride> { it.r }.thenBy { it.q }))
+}
+
+fun BattleMapDefinition.hasNaturalTerrainTransitions(): Boolean {
+    val forbidden = setOf(
+        setOf(TerrainType.DESERT, TerrainType.TUNDRA),
+        setOf(TerrainType.DESERT, TerrainType.COAST),
+        setOf(TerrainType.TUNDRA, TerrainType.COAST),
+    )
+    for (r in 0 until height) {
+        for (q in 0 until width) {
+            val position = HexCoord(q, r)
+            val terrain = terrainAt(position)
+            val neighbors = neighbors(position).map(::terrainAt)
+            if (terrain == TerrainType.COAST && (TerrainType.WATER !in neighbors || neighbors.none { it !in setOf(TerrainType.WATER, TerrainType.COAST) })) return false
+            if (neighbors.any { setOf(terrain, it) in forbidden }) return false
+        }
+    }
+    return true
+}
+
+fun BattleMapDefinition.hasSuitableObjectiveSites(): Boolean = objectives.all { objective ->
+    when (objective.nameKey) {
+        "objective_signal_tower", "objective_radar" -> terrainAt(objective.position) == TerrainType.HILL
+        "objective_central_crossing", "objective_north_crossing", "objective_south_crossing" -> terrainAt(objective.position) == TerrainType.ROAD
+        "objective_airfield" -> terrainAt(objective.position) in setOf(TerrainType.PLAIN, TerrainType.DESERT, TerrainType.TUNDRA, TerrainType.COAST)
+        "objective_supply_depot", "objective_command_post" -> terrainAt(objective.position) in setOf(TerrainType.ROAD, TerrainType.PLAIN, TerrainType.DESERT, TerrainType.TUNDRA, TerrainType.COAST)
+        else -> true
+    }
+}
+
+enum class MapVariant { IDENTITY, ROTATE_180, MIRROR_HORIZONTAL, MIRROR_VERTICAL }
 
 data class BattlefieldMapAssignment(
     val id: String,
@@ -137,14 +185,11 @@ class BattleMapCatalog(objectMapper: ObjectMapper) {
         val template = requireNotNull(templates.firstOrNull { it.id == assignment.templateId }) {
             "Unknown map template ${assignment.templateId}"
         }
-        require(template.width == template.height || assignment.variant in setOf(MapVariant.IDENTITY, MapVariant.ROTATE_180)) {
-            "Transpose variants require a square template"
-        }
         fun transform(position: HexCoord): HexCoord = when (assignment.variant) {
             MapVariant.IDENTITY -> position
             MapVariant.ROTATE_180 -> HexCoord(template.width - 1 - position.q, template.height - 1 - position.r)
-            MapVariant.TRANSPOSE -> HexCoord(position.r, position.q)
-            MapVariant.TRANSPOSE_ROTATE_180 -> HexCoord(template.width - 1 - position.r, template.height - 1 - position.q)
+            MapVariant.MIRROR_HORIZONTAL -> HexCoord(template.width - 1 - position.q, position.r)
+            MapVariant.MIRROR_VERTICAL -> HexCoord(position.q, template.height - 1 - position.r)
         }
         fun entry(entry: DeploymentEntry): DeploymentEntry {
             val position = transform(entry.position)
@@ -157,27 +202,49 @@ class BattleMapCatalog(objectMapper: ObjectMapper) {
             }
             return entry.copy(nameKey = nameKey, position = position)
         }
-        return template.resolvedFor(assignment.biome).copy(
+        val resolved = template.resolvedFor(assignment.biome)
+        val transformedCells = template.cells.map { it.copy(q = transform(it.position).q, r = transform(it.position).r) }
+        val naturalCells = when {
+            assignment.biome == "побережье" -> coastalBanks(template, transformedCells)
+            resolved.baseTerrain == TerrainType.DESERT -> transformedCells.filterNot { it.terrain == TerrainType.FOREST }
+            else -> transformedCells
+        }
+        return resolved.copy(
             id = assignment.id,
-            version = 2,
-            cells = template.cells.map { it.copy(q = transform(it.position).q, r = transform(it.position).r) },
+            version = 3,
+            baseTerrain = if (assignment.biome == "побережье") TerrainType.PLAIN else resolved.baseTerrain,
+            cells = naturalCells,
             playerEntries = template.playerEntries.map(::entry),
             enemyEntries = template.enemyEntries.map(::entry),
             objectives = template.objectives.map { it.copy(position = transform(it.position)) },
             biomeBaseTerrains = emptyMap(),
-        )
+        ).withObjectiveSites()
+    }
+
+    private fun coastalBanks(template: BattleMapDefinition, cells: List<MapCellOverride>): List<MapCellOverride> {
+        val occupied = cells.associateBy { it.position }
+        val bankCells = cells.asSequence()
+            .filter { it.terrain == TerrainType.WATER }
+            .flatMap { water -> template.neighbors(water.position).asSequence() }
+            .filterNot(occupied::containsKey)
+            .distinct()
+            .map { MapCellOverride(it.q, it.r, TerrainType.COAST) }
+            .toList()
+        return cells + bankCells
     }
 
     private fun validate(definitions: List<BattleMapDefinition>) {
         require(definitions.isNotEmpty()) { "Battle map catalog cannot be empty" }
         require(definitions.map { it.id }.distinct().size == definitions.size) { "Battle map ids must be unique" }
         definitions.forEach { map ->
-            require(map.version > 0 && map.width in 5..20 && map.height in 5..20)
+            require(map.version > 0 && map.width == 9 && map.height == 12) { "${map.id} must be 9×12" }
             require(map.biomes.isNotEmpty()) { "${map.id} must cover at least one biome" }
             require(map.cells.map { it.position }.distinct().size == map.cells.size) { "${map.id} has duplicate cells" }
             require(map.playerEntries.size >= 3 && map.enemyEntries.isNotEmpty()) { "${map.id} needs deployment entries" }
             require(map.objectives.size >= 2) { "${map.id} needs multiple objectives" }
             require(map.objectives.map { it.position }.distinct().size == map.objectives.size) { "${map.id} has duplicate objectives" }
+            require(map.hasNaturalTerrainTransitions()) { "${map.id} has an unnatural terrain transition" }
+            require(map.hasSuitableObjectiveSites()) { "${map.id} has an objective on unsuitable terrain" }
             (map.cells.map { it.position } + map.playerEntries.map { it.position } + map.enemyEntries.map { it.position } + map.objectives.map { it.position })
                 .forEach { require(map.contains(it)) { "${map.id} contains an out-of-bounds coordinate: $it" } }
             (map.playerEntries + map.enemyEntries).forEach {

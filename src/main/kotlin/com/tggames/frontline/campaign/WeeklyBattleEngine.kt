@@ -19,7 +19,7 @@ data class WeeklyUnitContribution(val code: String, val level: Int, val quantity
 data class AllianceForce(val code: String, val units: List<WeeklyUnitContribution>, val contributors: Int, val contributedPower: Long)
 
 data class WeeklyBalance(
-    val maxTicks: Int = 48,
+    val maxTicks: Int = 96,
     val objectiveBasePoints: Int = 1_000,
     val objectiveDecayPerTick: Int = 15,
     val objectiveMinPoints: Int = 200,

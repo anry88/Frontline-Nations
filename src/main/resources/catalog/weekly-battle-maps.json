@@ -1,103 +1,2786 @@
 [
   {
-    "id": "grand-river-crossing", "version": 1, "nameKey": "weekly_map_grand_river", "biomes": ["weekly"],
-    "width": 13, "height": 11, "baseTerrain": "PLAIN", "cells": [
-      {"q":6,"r":0,"terrain":"WATER"},{"q":6,"r":1,"terrain":"WATER"},{"q":6,"r":2,"terrain":"ROAD"},{"q":6,"r":3,"terrain":"WATER"},{"q":6,"r":4,"terrain":"WATER"},{"q":6,"r":5,"terrain":"ROAD"},{"q":6,"r":6,"terrain":"WATER"},{"q":6,"r":7,"terrain":"WATER"},{"q":6,"r":8,"terrain":"ROAD"},{"q":6,"r":9,"terrain":"WATER"},{"q":6,"r":10,"terrain":"WATER"},
-      {"q":1,"r":5,"terrain":"ROAD"},{"q":2,"r":5,"terrain":"ROAD"},{"q":3,"r":5,"terrain":"ROAD"},{"q":4,"r":5,"terrain":"ROAD"},{"q":5,"r":5,"terrain":"ROAD"},{"q":7,"r":5,"terrain":"ROAD"},{"q":8,"r":5,"terrain":"ROAD"},{"q":9,"r":5,"terrain":"ROAD"},{"q":10,"r":5,"terrain":"ROAD"},{"q":11,"r":5,"terrain":"ROAD"}
+    "id": "grand-river-crossing",
+    "version": 2,
+    "nameKey": "weekly_map_grand_river",
+    "biomes": [
+      "weekly"
     ],
-    "playerEntries": [{"id":"A1","nameKey":"entry_west_road","position":{"q":0,"r":2}},{"id":"A2","nameKey":"entry_west_road","position":{"q":0,"r":5}},{"id":"A3","nameKey":"entry_west_road","position":{"q":0,"r":8}}],
-    "enemyEntries": [{"id":"B1","nameKey":"entry_east_route","position":{"q":12,"r":2}},{"id":"B2","nameKey":"entry_east_route","position":{"q":12,"r":5}},{"id":"B3","nameKey":"entry_east_route","position":{"q":12,"r":8}}],
-    "objectives": [{"id":"command","nameKey":"objective_command_post","position":{"q":3,"r":2},"captureSteps":3},{"id":"bridge-north","nameKey":"objective_north_crossing","position":{"q":6,"r":2},"captureSteps":3},{"id":"bridge-center","nameKey":"objective_central_crossing","position":{"q":6,"r":5},"captureSteps":4},{"id":"bridge-south","nameKey":"objective_south_crossing","position":{"q":6,"r":8},"captureSteps":3},{"id":"depot","nameKey":"objective_supply_depot","position":{"q":9,"r":8},"captureSteps":3}]
+    "width": 15,
+    "height": 21,
+    "baseTerrain": "PLAIN",
+    "cells": [
+      {
+        "q": 7,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 7,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 7,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 7,
+        "r": 4,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 6,
+        "terrain": "WATER"
+      },
+      {
+        "q": 7,
+        "r": 7,
+        "terrain": "WATER"
+      },
+      {
+        "q": 7,
+        "r": 8,
+        "terrain": "WATER"
+      },
+      {
+        "q": 1,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 2,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 3,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 5,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 8,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 11,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 12,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 13,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 12,
+        "terrain": "WATER"
+      },
+      {
+        "q": 7,
+        "r": 13,
+        "terrain": "WATER"
+      },
+      {
+        "q": 7,
+        "r": 14,
+        "terrain": "WATER"
+      },
+      {
+        "q": 7,
+        "r": 16,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 18,
+        "terrain": "WATER"
+      },
+      {
+        "q": 7,
+        "r": 19,
+        "terrain": "WATER"
+      },
+      {
+        "q": 7,
+        "r": 20,
+        "terrain": "WATER"
+      }
+    ],
+    "playerEntries": [
+      {
+        "id": "A1",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 4
+        }
+      },
+      {
+        "id": "A2",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 10
+        }
+      },
+      {
+        "id": "A3",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 16
+        }
+      }
+    ],
+    "enemyEntries": [
+      {
+        "id": "B1",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 4
+        }
+      },
+      {
+        "id": "B2",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 10
+        }
+      },
+      {
+        "id": "B3",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 16
+        }
+      }
+    ],
+    "objectives": [
+      {
+        "id": "command",
+        "nameKey": "objective_command_post",
+        "position": {
+          "q": 4,
+          "r": 4
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "bridge-north",
+        "nameKey": "objective_north_crossing",
+        "position": {
+          "q": 7,
+          "r": 4
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "bridge-center",
+        "nameKey": "objective_central_crossing",
+        "position": {
+          "q": 7,
+          "r": 10
+        },
+        "captureSteps": 4
+      },
+      {
+        "id": "bridge-south",
+        "nameKey": "objective_south_crossing",
+        "position": {
+          "q": 7,
+          "r": 16
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "depot",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 10,
+          "r": 16
+        },
+        "captureSteps": 3
+      }
+    ]
   },
   {
-    "id": "highland-corridor", "version": 1, "nameKey": "weekly_map_highland", "biomes": ["weekly"],
-    "width": 13, "height": 11, "baseTerrain": "HILL", "cells": [
-      {"q":2,"r":1,"terrain":"MOUNTAIN","elevation":3},{"q":3,"r":1,"terrain":"MOUNTAIN","elevation":3},{"q":4,"r":2,"terrain":"MOUNTAIN","elevation":3},{"q":8,"r":8,"terrain":"MOUNTAIN","elevation":3},{"q":9,"r":9,"terrain":"MOUNTAIN","elevation":3},{"q":10,"r":9,"terrain":"MOUNTAIN","elevation":3},
-      {"q":1,"r":5,"terrain":"ROAD"},{"q":2,"r":5,"terrain":"ROAD"},{"q":3,"r":5,"terrain":"ROAD"},{"q":4,"r":5,"terrain":"ROAD"},{"q":5,"r":5,"terrain":"ROAD"},{"q":6,"r":5,"terrain":"ROAD"},{"q":7,"r":5,"terrain":"ROAD"},{"q":8,"r":5,"terrain":"ROAD"},{"q":9,"r":5,"terrain":"ROAD"},{"q":10,"r":5,"terrain":"ROAD"},{"q":11,"r":5,"terrain":"ROAD"}
+    "id": "highland-corridor",
+    "version": 2,
+    "nameKey": "weekly_map_highland",
+    "biomes": [
+      "weekly"
     ],
-    "playerEntries": [{"id":"A1","nameKey":"entry_west_road","position":{"q":0,"r":2}},{"id":"A2","nameKey":"entry_west_road","position":{"q":0,"r":5}},{"id":"A3","nameKey":"entry_west_road","position":{"q":0,"r":8}}],
-    "enemyEntries": [{"id":"B1","nameKey":"entry_east_route","position":{"q":12,"r":2}},{"id":"B2","nameKey":"entry_east_route","position":{"q":12,"r":5}},{"id":"B3","nameKey":"entry_east_route","position":{"q":12,"r":8}}],
-    "objectives": [{"id":"radar","nameKey":"objective_radar","position":{"q":3,"r":3},"captureSteps":3},{"id":"ridge-north","nameKey":"objective_north_crossing","position":{"q":6,"r":2},"captureSteps":3},{"id":"pass","nameKey":"objective_central_crossing","position":{"q":6,"r":5},"captureSteps":4},{"id":"ridge-south","nameKey":"objective_south_crossing","position":{"q":6,"r":8},"captureSteps":3},{"id":"command","nameKey":"objective_command_post","position":{"q":9,"r":7},"captureSteps":3}]
+    "width": 15,
+    "height": 21,
+    "baseTerrain": "HILL",
+    "cells": [
+      {
+        "q": 2,
+        "r": 2,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 3,
+        "r": 2,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 4,
+        "r": 2,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 5,
+        "r": 4,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 1,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 2,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 3,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 5,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 8,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 11,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 12,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 13,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 16,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 10,
+        "r": 18,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 11,
+        "r": 18,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 12,
+        "r": 18,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      }
+    ],
+    "playerEntries": [
+      {
+        "id": "A1",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 4
+        }
+      },
+      {
+        "id": "A2",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 10
+        }
+      },
+      {
+        "id": "A3",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 16
+        }
+      }
+    ],
+    "enemyEntries": [
+      {
+        "id": "B1",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 4
+        }
+      },
+      {
+        "id": "B2",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 10
+        }
+      },
+      {
+        "id": "B3",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 16
+        }
+      }
+    ],
+    "objectives": [
+      {
+        "id": "radar",
+        "nameKey": "objective_radar",
+        "position": {
+          "q": 4,
+          "r": 6
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "ridge-north",
+        "nameKey": "objective_north_crossing",
+        "position": {
+          "q": 7,
+          "r": 4
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "pass",
+        "nameKey": "objective_central_crossing",
+        "position": {
+          "q": 7,
+          "r": 10
+        },
+        "captureSteps": 4
+      },
+      {
+        "id": "ridge-south",
+        "nameKey": "objective_south_crossing",
+        "position": {
+          "q": 7,
+          "r": 16
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "command",
+        "nameKey": "objective_command_post",
+        "position": {
+          "q": 10,
+          "r": 14
+        },
+        "captureSteps": 3
+      }
+    ]
   },
   {
-    "id": "desert-trident", "version": 1, "nameKey": "weekly_map_desert", "biomes": ["weekly"],
-    "width": 13, "height": 11, "baseTerrain": "DESERT", "cells": [
-      {"q":1,"r":5,"terrain":"ROAD"},{"q":2,"r":5,"terrain":"ROAD"},{"q":3,"r":5,"terrain":"ROAD"},{"q":4,"r":4,"terrain":"ROAD"},{"q":5,"r":3,"terrain":"ROAD"},{"q":6,"r":2,"terrain":"ROAD"},{"q":4,"r":5,"terrain":"ROAD"},{"q":5,"r":5,"terrain":"ROAD"},{"q":6,"r":5,"terrain":"ROAD"},{"q":7,"r":5,"terrain":"ROAD"},{"q":8,"r":5,"terrain":"ROAD"},{"q":9,"r":5,"terrain":"ROAD"},{"q":10,"r":5,"terrain":"ROAD"},{"q":11,"r":5,"terrain":"ROAD"},{"q":5,"r":7,"terrain":"ROAD"},{"q":6,"r":8,"terrain":"ROAD"},{"q":8,"r":6,"terrain":"ROAD"},
-      {"q":3,"r":1,"terrain":"HILL","elevation":2},{"q":9,"r":9,"terrain":"HILL","elevation":2}
+    "id": "desert-trident",
+    "version": 2,
+    "nameKey": "weekly_map_desert",
+    "biomes": [
+      "weekly"
     ],
-    "playerEntries": [{"id":"A1","nameKey":"entry_west_road","position":{"q":0,"r":2}},{"id":"A2","nameKey":"entry_west_road","position":{"q":0,"r":5}},{"id":"A3","nameKey":"entry_west_road","position":{"q":0,"r":8}}],
-    "enemyEntries": [{"id":"B1","nameKey":"entry_east_route","position":{"q":12,"r":2}},{"id":"B2","nameKey":"entry_east_route","position":{"q":12,"r":5}},{"id":"B3","nameKey":"entry_east_route","position":{"q":12,"r":8}}],
-    "objectives": [{"id":"well-west","nameKey":"objective_supply_depot","position":{"q":3,"r":5},"captureSteps":3},{"id":"north","nameKey":"objective_radar","position":{"q":6,"r":2},"captureSteps":3},{"id":"center","nameKey":"objective_command_post","position":{"q":6,"r":5},"captureSteps":4},{"id":"south","nameKey":"objective_airfield","position":{"q":6,"r":8},"captureSteps":3},{"id":"well-east","nameKey":"objective_supply_depot","position":{"q":9,"r":5},"captureSteps":3}]
+    "width": 15,
+    "height": 21,
+    "baseTerrain": "DESERT",
+    "cells": [
+      {
+        "q": 4,
+        "r": 2,
+        "terrain": "HILL",
+        "elevation": 2
+      },
+      {
+        "q": 7,
+        "r": 4,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 5,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 6,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 5,
+        "r": 7,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 5,
+        "r": 8,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 9,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 5,
+        "r": 9,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 1,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 2,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 3,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 5,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 8,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 11,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 12,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 13,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 11,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 12,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 14,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 16,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 18,
+        "terrain": "HILL",
+        "elevation": 2
+      }
+    ],
+    "playerEntries": [
+      {
+        "id": "A1",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 4
+        }
+      },
+      {
+        "id": "A2",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 10
+        }
+      },
+      {
+        "id": "A3",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 16
+        }
+      }
+    ],
+    "enemyEntries": [
+      {
+        "id": "B1",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 4
+        }
+      },
+      {
+        "id": "B2",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 10
+        }
+      },
+      {
+        "id": "B3",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 16
+        }
+      }
+    ],
+    "objectives": [
+      {
+        "id": "well-west",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 4,
+          "r": 10
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "north",
+        "nameKey": "objective_radar",
+        "position": {
+          "q": 7,
+          "r": 4
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "center",
+        "nameKey": "objective_command_post",
+        "position": {
+          "q": 7,
+          "r": 10
+        },
+        "captureSteps": 4
+      },
+      {
+        "id": "south",
+        "nameKey": "objective_airfield",
+        "position": {
+          "q": 7,
+          "r": 16
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "well-east",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 10,
+          "r": 10
+        },
+        "captureSteps": 3
+      }
+    ]
   },
   {
-    "id": "forest-basin", "version": 1, "nameKey": "weekly_map_forest", "biomes": ["weekly"],
-    "width": 13, "height": 11, "baseTerrain": "FOREST", "cells": [
-      {"q":0,"r":2,"terrain":"ROAD"},{"q":1,"r":2,"terrain":"ROAD"},{"q":2,"r":2,"terrain":"ROAD"},{"q":3,"r":3,"terrain":"PLAIN"},{"q":4,"r":4,"terrain":"ROAD"},{"q":5,"r":5,"terrain":"ROAD"},{"q":6,"r":5,"terrain":"PLAIN"},{"q":7,"r":5,"terrain":"ROAD"},{"q":8,"r":6,"terrain":"ROAD"},{"q":9,"r":7,"terrain":"PLAIN"},{"q":10,"r":8,"terrain":"ROAD"},{"q":11,"r":8,"terrain":"ROAD"},{"q":12,"r":8,"terrain":"ROAD"},
-      {"q":6,"r":2,"terrain":"PLAIN"},{"q":6,"r":8,"terrain":"PLAIN"},{"q":0,"r":5,"terrain":"ROAD"},{"q":12,"r":5,"terrain":"ROAD"}
+    "id": "forest-basin",
+    "version": 2,
+    "nameKey": "weekly_map_forest",
+    "biomes": [
+      "weekly"
     ],
-    "playerEntries": [{"id":"A1","nameKey":"entry_west_road","position":{"q":0,"r":2}},{"id":"A2","nameKey":"entry_west_road","position":{"q":0,"r":5}},{"id":"A3","nameKey":"entry_west_road","position":{"q":0,"r":8}}],
-    "enemyEntries": [{"id":"B1","nameKey":"entry_east_route","position":{"q":12,"r":2}},{"id":"B2","nameKey":"entry_east_route","position":{"q":12,"r":5}},{"id":"B3","nameKey":"entry_east_route","position":{"q":12,"r":8}}],
-    "objectives": [{"id":"west-clearing","nameKey":"objective_supply_depot","position":{"q":3,"r":3},"captureSteps":3},{"id":"north-clearing","nameKey":"objective_radar","position":{"q":6,"r":2},"captureSteps":3},{"id":"basin","nameKey":"objective_command_post","position":{"q":6,"r":5},"captureSteps":4},{"id":"south-clearing","nameKey":"objective_airfield","position":{"q":6,"r":8},"captureSteps":3},{"id":"east-clearing","nameKey":"objective_supply_depot","position":{"q":9,"r":7},"captureSteps":3}]
+    "width": 15,
+    "height": 21,
+    "baseTerrain": "FOREST",
+    "cells": [
+      {
+        "q": 0,
+        "r": 4,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 1,
+        "r": 4,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 2,
+        "r": 4,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 4,
+        "terrain": "PLAIN"
+      },
+      {
+        "q": 4,
+        "r": 6,
+        "terrain": "PLAIN"
+      },
+      {
+        "q": 5,
+        "r": 8,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 0,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 10,
+        "terrain": "PLAIN"
+      },
+      {
+        "q": 8,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 14,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 12,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 14,
+        "terrain": "PLAIN"
+      },
+      {
+        "q": 7,
+        "r": 16,
+        "terrain": "PLAIN"
+      },
+      {
+        "q": 12,
+        "r": 16,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 13,
+        "r": 16,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 14,
+        "r": 16,
+        "terrain": "ROAD"
+      }
+    ],
+    "playerEntries": [
+      {
+        "id": "A1",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 4
+        }
+      },
+      {
+        "id": "A2",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 10
+        }
+      },
+      {
+        "id": "A3",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 16
+        }
+      }
+    ],
+    "enemyEntries": [
+      {
+        "id": "B1",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 4
+        }
+      },
+      {
+        "id": "B2",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 10
+        }
+      },
+      {
+        "id": "B3",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 16
+        }
+      }
+    ],
+    "objectives": [
+      {
+        "id": "west-clearing",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 4,
+          "r": 6
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "north-clearing",
+        "nameKey": "objective_radar",
+        "position": {
+          "q": 7,
+          "r": 4
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "basin",
+        "nameKey": "objective_command_post",
+        "position": {
+          "q": 7,
+          "r": 10
+        },
+        "captureSteps": 4
+      },
+      {
+        "id": "south-clearing",
+        "nameKey": "objective_airfield",
+        "position": {
+          "q": 7,
+          "r": 16
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "east-clearing",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 10,
+          "r": 14
+        },
+        "captureSteps": 3
+      }
+    ]
   },
   {
-    "id": "coastal-breach", "version": 1, "nameKey": "weekly_map_coastal", "biomes": ["weekly"],
-    "width": 13, "height": 11, "baseTerrain": "COAST", "cells": [
-      {"q":2,"r":0,"terrain":"WATER"},{"q":3,"r":0,"terrain":"WATER"},{"q":4,"r":0,"terrain":"WATER"},{"q":8,"r":10,"terrain":"WATER"},{"q":9,"r":10,"terrain":"WATER"},{"q":10,"r":10,"terrain":"WATER"},
-      {"q":1,"r":5,"terrain":"ROAD"},{"q":2,"r":5,"terrain":"ROAD"},{"q":3,"r":5,"terrain":"ROAD"},{"q":4,"r":5,"terrain":"ROAD"},{"q":5,"r":5,"terrain":"ROAD"},{"q":6,"r":5,"terrain":"ROAD"},{"q":7,"r":5,"terrain":"ROAD"},{"q":8,"r":5,"terrain":"ROAD"},{"q":9,"r":5,"terrain":"ROAD"},{"q":10,"r":5,"terrain":"ROAD"},{"q":11,"r":5,"terrain":"ROAD"}
+    "id": "coastal-breach",
+    "version": 2,
+    "nameKey": "weekly_map_coastal",
+    "biomes": [
+      "weekly"
     ],
-    "playerEntries": [{"id":"A1","nameKey":"entry_west_road","position":{"q":0,"r":2}},{"id":"A2","nameKey":"entry_west_road","position":{"q":0,"r":5}},{"id":"A3","nameKey":"entry_west_road","position":{"q":0,"r":8}}],
-    "enemyEntries": [{"id":"B1","nameKey":"entry_east_route","position":{"q":12,"r":2}},{"id":"B2","nameKey":"entry_east_route","position":{"q":12,"r":5}},{"id":"B3","nameKey":"entry_east_route","position":{"q":12,"r":8}}],
-    "objectives": [{"id":"port-west","nameKey":"objective_supply_depot","position":{"q":3,"r":3},"captureSteps":3},{"id":"radar","nameKey":"objective_radar","position":{"q":6,"r":2},"captureSteps":3},{"id":"harbor","nameKey":"objective_command_post","position":{"q":6,"r":5},"captureSteps":4},{"id":"airfield","nameKey":"objective_airfield","position":{"q":6,"r":8},"captureSteps":3},{"id":"port-east","nameKey":"objective_supply_depot","position":{"q":9,"r":7},"captureSteps":3}]
+    "width": 15,
+    "height": 21,
+    "baseTerrain": "PLAIN",
+    "cells": [
+      {
+        "q": 0,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 1,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 2,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 3,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 4,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 5,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 6,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 7,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 8,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 9,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 10,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 11,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 12,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 13,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 14,
+        "r": 0,
+        "terrain": "WATER"
+      },
+      {
+        "q": 0,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 1,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 2,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 3,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 4,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 5,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 6,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 7,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 8,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 9,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 10,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 11,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 12,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 13,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 14,
+        "r": 1,
+        "terrain": "WATER"
+      },
+      {
+        "q": 0,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 1,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 2,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 3,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 4,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 5,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 6,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 7,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 8,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 9,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 10,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 11,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 12,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 13,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 14,
+        "r": 2,
+        "terrain": "WATER"
+      },
+      {
+        "q": 0,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 1,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 2,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 3,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 4,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 5,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 6,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 7,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 8,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 9,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 10,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 11,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 12,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 13,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 14,
+        "r": 3,
+        "terrain": "WATER"
+      },
+      {
+        "q": 0,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 1,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 2,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 3,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 4,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 5,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 6,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 7,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 8,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 9,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 10,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 11,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 12,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 13,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 14,
+        "r": 4,
+        "terrain": "COAST"
+      },
+      {
+        "q": 1,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 2,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 3,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 5,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 8,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 11,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 12,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 13,
+        "r": 10,
+        "terrain": "ROAD"
+      }
+    ],
+    "playerEntries": [
+      {
+        "id": "A1",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 4
+        }
+      },
+      {
+        "id": "A2",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 10
+        }
+      },
+      {
+        "id": "A3",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 16
+        }
+      }
+    ],
+    "enemyEntries": [
+      {
+        "id": "B1",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 4
+        }
+      },
+      {
+        "id": "B2",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 10
+        }
+      },
+      {
+        "id": "B3",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 16
+        }
+      }
+    ],
+    "objectives": [
+      {
+        "id": "port-west",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 4,
+          "r": 6
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "radar",
+        "nameKey": "objective_radar",
+        "position": {
+          "q": 7,
+          "r": 4
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "harbor",
+        "nameKey": "objective_command_post",
+        "position": {
+          "q": 7,
+          "r": 10
+        },
+        "captureSteps": 4
+      },
+      {
+        "id": "airfield",
+        "nameKey": "objective_airfield",
+        "position": {
+          "q": 7,
+          "r": 16
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "port-east",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 10,
+          "r": 14
+        },
+        "captureSteps": 3
+      }
+    ]
   },
   {
-    "id": "tundra-line", "version": 1, "nameKey": "weekly_map_tundra", "biomes": ["weekly"],
-    "width": 13, "height": 11, "baseTerrain": "TUNDRA", "cells": [
-      {"q":2,"r":3,"terrain":"HILL","elevation":2},{"q":3,"r":3,"terrain":"HILL","elevation":2},{"q":9,"r":7,"terrain":"HILL","elevation":2},{"q":10,"r":7,"terrain":"HILL","elevation":2},
-      {"q":0,"r":5,"terrain":"ROAD"},{"q":1,"r":5,"terrain":"ROAD"},{"q":2,"r":5,"terrain":"ROAD"},{"q":3,"r":5,"terrain":"ROAD"},{"q":4,"r":5,"terrain":"ROAD"},{"q":5,"r":5,"terrain":"ROAD"},{"q":6,"r":5,"terrain":"ROAD"},{"q":7,"r":5,"terrain":"ROAD"},{"q":8,"r":5,"terrain":"ROAD"},{"q":9,"r":5,"terrain":"ROAD"},{"q":10,"r":5,"terrain":"ROAD"},{"q":11,"r":5,"terrain":"ROAD"},{"q":12,"r":5,"terrain":"ROAD"}
+    "id": "tundra-line",
+    "version": 2,
+    "nameKey": "weekly_map_tundra",
+    "biomes": [
+      "weekly"
     ],
-    "playerEntries": [{"id":"A1","nameKey":"entry_west_road","position":{"q":0,"r":2}},{"id":"A2","nameKey":"entry_west_road","position":{"q":0,"r":5}},{"id":"A3","nameKey":"entry_west_road","position":{"q":0,"r":8}}],
-    "enemyEntries": [{"id":"B1","nameKey":"entry_east_route","position":{"q":12,"r":2}},{"id":"B2","nameKey":"entry_east_route","position":{"q":12,"r":5}},{"id":"B3","nameKey":"entry_east_route","position":{"q":12,"r":8}}],
-    "objectives": [{"id":"west-station","nameKey":"objective_supply_depot","position":{"q":3,"r":2},"captureSteps":3},{"id":"north-array","nameKey":"objective_radar","position":{"q":6,"r":2},"captureSteps":3},{"id":"central-line","nameKey":"objective_command_post","position":{"q":6,"r":5},"captureSteps":4},{"id":"south-array","nameKey":"objective_airfield","position":{"q":6,"r":8},"captureSteps":3},{"id":"east-station","nameKey":"objective_supply_depot","position":{"q":9,"r":8},"captureSteps":3}]
+    "width": 15,
+    "height": 21,
+    "baseTerrain": "TUNDRA",
+    "cells": [
+      {
+        "q": 2,
+        "r": 6,
+        "terrain": "HILL",
+        "elevation": 2
+      },
+      {
+        "q": 3,
+        "r": 6,
+        "terrain": "HILL",
+        "elevation": 2
+      },
+      {
+        "q": 4,
+        "r": 6,
+        "terrain": "HILL",
+        "elevation": 2
+      },
+      {
+        "q": 0,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 1,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 2,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 3,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 5,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 8,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 11,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 12,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 13,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 14,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 14,
+        "terrain": "HILL",
+        "elevation": 2
+      },
+      {
+        "q": 11,
+        "r": 14,
+        "terrain": "HILL",
+        "elevation": 2
+      },
+      {
+        "q": 12,
+        "r": 14,
+        "terrain": "HILL",
+        "elevation": 2
+      }
+    ],
+    "playerEntries": [
+      {
+        "id": "A1",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 4
+        }
+      },
+      {
+        "id": "A2",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 10
+        }
+      },
+      {
+        "id": "A3",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 16
+        }
+      }
+    ],
+    "enemyEntries": [
+      {
+        "id": "B1",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 4
+        }
+      },
+      {
+        "id": "B2",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 10
+        }
+      },
+      {
+        "id": "B3",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 16
+        }
+      }
+    ],
+    "objectives": [
+      {
+        "id": "west-station",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 4,
+          "r": 4
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "north-array",
+        "nameKey": "objective_radar",
+        "position": {
+          "q": 7,
+          "r": 4
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "central-line",
+        "nameKey": "objective_command_post",
+        "position": {
+          "q": 7,
+          "r": 10
+        },
+        "captureSteps": 4
+      },
+      {
+        "id": "south-array",
+        "nameKey": "objective_airfield",
+        "position": {
+          "q": 7,
+          "r": 16
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "east-station",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 10,
+          "r": 16
+        },
+        "captureSteps": 3
+      }
+    ]
   },
   {
-    "id": "marsh-causeway", "version": 1, "nameKey": "weekly_map_marsh", "biomes": ["weekly"],
-    "width": 13, "height": 11, "baseTerrain": "SWAMP", "cells": [
-      {"q":0,"r":2,"terrain":"ROAD"},{"q":1,"r":2,"terrain":"ROAD"},{"q":2,"r":2,"terrain":"ROAD"},{"q":3,"r":2,"terrain":"ROAD"},{"q":4,"r":3,"terrain":"ROAD"},{"q":5,"r":4,"terrain":"ROAD"},{"q":6,"r":5,"terrain":"ROAD"},{"q":7,"r":5,"terrain":"ROAD"},{"q":8,"r":5,"terrain":"ROAD"},{"q":9,"r":6,"terrain":"ROAD"},{"q":10,"r":7,"terrain":"ROAD"},{"q":11,"r":8,"terrain":"ROAD"},{"q":12,"r":8,"terrain":"ROAD"},
-      {"q":0,"r":5,"terrain":"ROAD"},{"q":1,"r":5,"terrain":"ROAD"},{"q":2,"r":5,"terrain":"ROAD"},{"q":3,"r":5,"terrain":"ROAD"},{"q":4,"r":5,"terrain":"ROAD"},{"q":5,"r":5,"terrain":"ROAD"},{"q":9,"r":5,"terrain":"ROAD"},{"q":10,"r":5,"terrain":"ROAD"},{"q":11,"r":5,"terrain":"ROAD"},{"q":12,"r":5,"terrain":"ROAD"}
+    "id": "marsh-causeway",
+    "version": 2,
+    "nameKey": "weekly_map_marsh",
+    "biomes": [
+      "weekly"
     ],
-    "playerEntries": [{"id":"A1","nameKey":"entry_west_road","position":{"q":0,"r":2}},{"id":"A2","nameKey":"entry_west_road","position":{"q":0,"r":5}},{"id":"A3","nameKey":"entry_west_road","position":{"q":0,"r":8}}],
-    "enemyEntries": [{"id":"B1","nameKey":"entry_east_route","position":{"q":12,"r":2}},{"id":"B2","nameKey":"entry_east_route","position":{"q":12,"r":5}},{"id":"B3","nameKey":"entry_east_route","position":{"q":12,"r":8}}],
-    "objectives": [{"id":"west-road","nameKey":"objective_supply_depot","position":{"q":3,"r":2},"captureSteps":3},{"id":"north-post","nameKey":"objective_radar","position":{"q":6,"r":2},"captureSteps":3},{"id":"causeway","nameKey":"objective_central_crossing","position":{"q":6,"r":5},"captureSteps":4},{"id":"south-post","nameKey":"objective_airfield","position":{"q":6,"r":8},"captureSteps":3},{"id":"east-road","nameKey":"objective_supply_depot","position":{"q":9,"r":7},"captureSteps":3}]
+    "width": 15,
+    "height": 21,
+    "baseTerrain": "SWAMP",
+    "cells": [
+      {
+        "q": 0,
+        "r": 4,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 1,
+        "r": 4,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 2,
+        "r": 4,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 3,
+        "r": 4,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 4,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 5,
+        "r": 6,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 8,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 5,
+        "r": 9,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 9,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 0,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 1,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 2,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 3,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 5,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 8,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 11,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 12,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 13,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 14,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 11,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 11,
+        "r": 11,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 12,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 12,
+        "r": 14,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 13,
+        "r": 16,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 14,
+        "r": 16,
+        "terrain": "ROAD"
+      }
+    ],
+    "playerEntries": [
+      {
+        "id": "A1",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 4
+        }
+      },
+      {
+        "id": "A2",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 10
+        }
+      },
+      {
+        "id": "A3",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 16
+        }
+      }
+    ],
+    "enemyEntries": [
+      {
+        "id": "B1",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 4
+        }
+      },
+      {
+        "id": "B2",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 10
+        }
+      },
+      {
+        "id": "B3",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 16
+        }
+      }
+    ],
+    "objectives": [
+      {
+        "id": "west-road",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 4,
+          "r": 4
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "north-post",
+        "nameKey": "objective_radar",
+        "position": {
+          "q": 7,
+          "r": 4
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "causeway",
+        "nameKey": "objective_central_crossing",
+        "position": {
+          "q": 7,
+          "r": 10
+        },
+        "captureSteps": 4
+      },
+      {
+        "id": "south-post",
+        "nameKey": "objective_airfield",
+        "position": {
+          "q": 7,
+          "r": 16
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "east-road",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 10,
+          "r": 14
+        },
+        "captureSteps": 3
+      }
+    ]
   },
   {
-    "id": "steppe-encirclement", "version": 1, "nameKey": "weekly_map_steppe", "biomes": ["weekly"],
-    "width": 13, "height": 11, "baseTerrain": "PLAIN", "cells": [
-      {"q":3,"r":2,"terrain":"HILL","elevation":2},{"q":4,"r":2,"terrain":"HILL","elevation":2},{"q":8,"r":8,"terrain":"HILL","elevation":2},{"q":9,"r":8,"terrain":"HILL","elevation":2},{"q":6,"r":1,"terrain":"FOREST"},{"q":6,"r":9,"terrain":"FOREST"},
-      {"q":2,"r":5,"terrain":"ROAD"},{"q":3,"r":5,"terrain":"ROAD"},{"q":4,"r":5,"terrain":"ROAD"},{"q":5,"r":5,"terrain":"ROAD"},{"q":6,"r":5,"terrain":"ROAD"},{"q":7,"r":5,"terrain":"ROAD"},{"q":8,"r":5,"terrain":"ROAD"},{"q":9,"r":5,"terrain":"ROAD"},{"q":10,"r":5,"terrain":"ROAD"}
+    "id": "steppe-encirclement",
+    "version": 2,
+    "nameKey": "weekly_map_steppe",
+    "biomes": [
+      "weekly"
     ],
-    "playerEntries": [{"id":"A1","nameKey":"entry_west_road","position":{"q":0,"r":2}},{"id":"A2","nameKey":"entry_west_road","position":{"q":0,"r":5}},{"id":"A3","nameKey":"entry_west_road","position":{"q":0,"r":8}}],
-    "enemyEntries": [{"id":"B1","nameKey":"entry_east_route","position":{"q":12,"r":2}},{"id":"B2","nameKey":"entry_east_route","position":{"q":12,"r":5}},{"id":"B3","nameKey":"entry_east_route","position":{"q":12,"r":8}}],
-    "objectives": [{"id":"west-hill","nameKey":"objective_radar","position":{"q":3,"r":2},"captureSteps":3},{"id":"north","nameKey":"objective_airfield","position":{"q":6,"r":2},"captureSteps":3},{"id":"center","nameKey":"objective_command_post","position":{"q":6,"r":5},"captureSteps":4},{"id":"south","nameKey":"objective_supply_depot","position":{"q":6,"r":8},"captureSteps":3},{"id":"east-hill","nameKey":"objective_radar","position":{"q":9,"r":8},"captureSteps":3}]
+    "width": 15,
+    "height": 21,
+    "baseTerrain": "PLAIN",
+    "cells": [
+      {
+        "q": 7,
+        "r": 2,
+        "terrain": "FOREST"
+      },
+      {
+        "q": 4,
+        "r": 4,
+        "terrain": "HILL",
+        "elevation": 2
+      },
+      {
+        "q": 5,
+        "r": 4,
+        "terrain": "HILL",
+        "elevation": 2
+      },
+      {
+        "q": 2,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 3,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 5,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 8,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 11,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 12,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 16,
+        "terrain": "HILL",
+        "elevation": 2
+      },
+      {
+        "q": 10,
+        "r": 16,
+        "terrain": "HILL",
+        "elevation": 2
+      },
+      {
+        "q": 7,
+        "r": 18,
+        "terrain": "FOREST"
+      }
+    ],
+    "playerEntries": [
+      {
+        "id": "A1",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 4
+        }
+      },
+      {
+        "id": "A2",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 10
+        }
+      },
+      {
+        "id": "A3",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 16
+        }
+      }
+    ],
+    "enemyEntries": [
+      {
+        "id": "B1",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 4
+        }
+      },
+      {
+        "id": "B2",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 10
+        }
+      },
+      {
+        "id": "B3",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 16
+        }
+      }
+    ],
+    "objectives": [
+      {
+        "id": "west-hill",
+        "nameKey": "objective_radar",
+        "position": {
+          "q": 4,
+          "r": 4
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "north",
+        "nameKey": "objective_airfield",
+        "position": {
+          "q": 7,
+          "r": 4
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "center",
+        "nameKey": "objective_command_post",
+        "position": {
+          "q": 7,
+          "r": 10
+        },
+        "captureSteps": 4
+      },
+      {
+        "id": "south",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 7,
+          "r": 16
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "east-hill",
+        "nameKey": "objective_radar",
+        "position": {
+          "q": 10,
+          "r": 16
+        },
+        "captureSteps": 3
+      }
+    ]
   },
   {
-    "id": "canyon-network", "version": 1, "nameKey": "weekly_map_canyon", "biomes": ["weekly"],
-    "width": 13, "height": 11, "baseTerrain": "DESERT", "cells": [
-      {"q":5,"r":0,"terrain":"MOUNTAIN","elevation":3},{"q":5,"r":1,"terrain":"MOUNTAIN","elevation":3},{"q":5,"r":3,"terrain":"MOUNTAIN","elevation":3},{"q":5,"r":4,"terrain":"MOUNTAIN","elevation":3},{"q":5,"r":6,"terrain":"MOUNTAIN","elevation":3},{"q":5,"r":7,"terrain":"MOUNTAIN","elevation":3},{"q":5,"r":9,"terrain":"MOUNTAIN","elevation":3},{"q":5,"r":10,"terrain":"MOUNTAIN","elevation":3},
-      {"q":5,"r":2,"terrain":"ROAD"},{"q":5,"r":5,"terrain":"ROAD"},{"q":5,"r":8,"terrain":"ROAD"},{"q":1,"r":5,"terrain":"ROAD"},{"q":2,"r":5,"terrain":"ROAD"},{"q":3,"r":5,"terrain":"ROAD"},{"q":4,"r":5,"terrain":"ROAD"},{"q":6,"r":5,"terrain":"ROAD"},{"q":7,"r":5,"terrain":"ROAD"},{"q":8,"r":5,"terrain":"ROAD"},{"q":9,"r":5,"terrain":"ROAD"},{"q":10,"r":5,"terrain":"ROAD"},{"q":11,"r":5,"terrain":"ROAD"}
+    "id": "canyon-network",
+    "version": 2,
+    "nameKey": "weekly_map_canyon",
+    "biomes": [
+      "weekly"
     ],
-    "playerEntries": [{"id":"A1","nameKey":"entry_west_road","position":{"q":0,"r":2}},{"id":"A2","nameKey":"entry_west_road","position":{"q":0,"r":5}},{"id":"A3","nameKey":"entry_west_road","position":{"q":0,"r":8}}],
-    "enemyEntries": [{"id":"B1","nameKey":"entry_east_route","position":{"q":12,"r":2}},{"id":"B2","nameKey":"entry_east_route","position":{"q":12,"r":5}},{"id":"B3","nameKey":"entry_east_route","position":{"q":12,"r":8}}],
-    "objectives": [{"id":"west-fork","nameKey":"objective_supply_depot","position":{"q":3,"r":3},"captureSteps":3},{"id":"north-gap","nameKey":"objective_north_crossing","position":{"q":5,"r":2},"captureSteps":3},{"id":"central-gap","nameKey":"objective_command_post","position":{"q":5,"r":5},"captureSteps":4},{"id":"south-gap","nameKey":"objective_south_crossing","position":{"q":5,"r":8},"captureSteps":3},{"id":"east-fork","nameKey":"objective_radar","position":{"q":9,"r":7},"captureSteps":3}]
+    "width": 15,
+    "height": 21,
+    "baseTerrain": "DESERT",
+    "cells": [
+      {
+        "q": 6,
+        "r": 0,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 6,
+        "r": 1,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 6,
+        "r": 2,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 6,
+        "r": 4,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 6,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 6,
+        "r": 7,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 6,
+        "r": 8,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 1,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 2,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 3,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 5,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 8,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 11,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 12,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 13,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 12,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 6,
+        "r": 13,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 6,
+        "r": 14,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 6,
+        "r": 16,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 18,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 6,
+        "r": 19,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      },
+      {
+        "q": 6,
+        "r": 20,
+        "terrain": "MOUNTAIN",
+        "elevation": 3
+      }
+    ],
+    "playerEntries": [
+      {
+        "id": "A1",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 4
+        }
+      },
+      {
+        "id": "A2",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 10
+        }
+      },
+      {
+        "id": "A3",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 16
+        }
+      }
+    ],
+    "enemyEntries": [
+      {
+        "id": "B1",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 4
+        }
+      },
+      {
+        "id": "B2",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 10
+        }
+      },
+      {
+        "id": "B3",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 16
+        }
+      }
+    ],
+    "objectives": [
+      {
+        "id": "west-fork",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 4,
+          "r": 6
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "north-gap",
+        "nameKey": "objective_north_crossing",
+        "position": {
+          "q": 6,
+          "r": 4
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "central-gap",
+        "nameKey": "objective_command_post",
+        "position": {
+          "q": 6,
+          "r": 10
+        },
+        "captureSteps": 4
+      },
+      {
+        "id": "south-gap",
+        "nameKey": "objective_south_crossing",
+        "position": {
+          "q": 6,
+          "r": 16
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "east-fork",
+        "nameKey": "objective_radar",
+        "position": {
+          "q": 10,
+          "r": 14
+        },
+        "captureSteps": 3
+      }
+    ]
   },
   {
-    "id": "industrial-front", "version": 1, "nameKey": "weekly_map_industrial", "biomes": ["weekly"],
-    "width": 13, "height": 11, "baseTerrain": "PLAIN", "cells": [
-      {"q":0,"r":5,"terrain":"ROAD"},{"q":1,"r":5,"terrain":"ROAD"},{"q":2,"r":5,"terrain":"ROAD"},{"q":3,"r":5,"terrain":"ROAD"},{"q":4,"r":5,"terrain":"ROAD"},{"q":5,"r":5,"terrain":"ROAD"},{"q":6,"r":5,"terrain":"ROAD"},{"q":7,"r":5,"terrain":"ROAD"},{"q":8,"r":5,"terrain":"ROAD"},{"q":9,"r":5,"terrain":"ROAD"},{"q":10,"r":5,"terrain":"ROAD"},{"q":11,"r":5,"terrain":"ROAD"},{"q":12,"r":5,"terrain":"ROAD"},
-      {"q":3,"r":1,"terrain":"ROAD"},{"q":3,"r":2,"terrain":"ROAD"},{"q":3,"r":3,"terrain":"ROAD"},{"q":3,"r":4,"terrain":"ROAD"},{"q":3,"r":6,"terrain":"ROAD"},{"q":3,"r":7,"terrain":"ROAD"},{"q":3,"r":8,"terrain":"ROAD"},{"q":3,"r":9,"terrain":"ROAD"},{"q":9,"r":1,"terrain":"ROAD"},{"q":9,"r":2,"terrain":"ROAD"},{"q":9,"r":3,"terrain":"ROAD"},{"q":9,"r":4,"terrain":"ROAD"},{"q":9,"r":6,"terrain":"ROAD"},{"q":9,"r":7,"terrain":"ROAD"},{"q":9,"r":8,"terrain":"ROAD"},{"q":9,"r":9,"terrain":"ROAD"},
-      {"q":6,"r":2,"terrain":"HILL","elevation":1},{"q":6,"r":8,"terrain":"HILL","elevation":1}
+    "id": "industrial-front",
+    "version": 2,
+    "nameKey": "weekly_map_industrial",
+    "biomes": [
+      "weekly"
     ],
-    "playerEntries": [{"id":"A1","nameKey":"entry_west_road","position":{"q":0,"r":2}},{"id":"A2","nameKey":"entry_west_road","position":{"q":0,"r":5}},{"id":"A3","nameKey":"entry_west_road","position":{"q":0,"r":8}}],
-    "enemyEntries": [{"id":"B1","nameKey":"entry_east_route","position":{"q":12,"r":2}},{"id":"B2","nameKey":"entry_east_route","position":{"q":12,"r":5}},{"id":"B3","nameKey":"entry_east_route","position":{"q":12,"r":8}}],
-    "objectives": [{"id":"west-yard","nameKey":"objective_supply_depot","position":{"q":3,"r":3},"captureSteps":3},{"id":"north-plant","nameKey":"objective_radar","position":{"q":6,"r":2},"captureSteps":3},{"id":"junction","nameKey":"objective_command_post","position":{"q":6,"r":5},"captureSteps":4},{"id":"south-plant","nameKey":"objective_airfield","position":{"q":6,"r":8},"captureSteps":3},{"id":"east-yard","nameKey":"objective_supply_depot","position":{"q":9,"r":7},"captureSteps":3}]
+    "width": 15,
+    "height": 21,
+    "baseTerrain": "PLAIN",
+    "cells": [
+      {
+        "q": 4,
+        "r": 2,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 2,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 3,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 3,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 4,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 4,
+        "terrain": "HILL",
+        "elevation": 1
+      },
+      {
+        "q": 10,
+        "r": 4,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 5,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 5,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 6,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 6,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 7,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 7,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 8,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 8,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 3,
+        "r": 9,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 9,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 9,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 9,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 0,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 1,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 2,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 3,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 5,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 6,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 8,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 9,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 11,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 12,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 13,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 14,
+        "r": 10,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 11,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 11,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 11,
+        "r": 11,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 12,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 12,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 13,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 13,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 14,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 14,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 15,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 15,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 16,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 7,
+        "r": 16,
+        "terrain": "HILL",
+        "elevation": 1
+      },
+      {
+        "q": 10,
+        "r": 16,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 17,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 17,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 4,
+        "r": 18,
+        "terrain": "ROAD"
+      },
+      {
+        "q": 10,
+        "r": 18,
+        "terrain": "ROAD"
+      }
+    ],
+    "playerEntries": [
+      {
+        "id": "A1",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 4
+        }
+      },
+      {
+        "id": "A2",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 10
+        }
+      },
+      {
+        "id": "A3",
+        "nameKey": "entry_west_road",
+        "position": {
+          "q": 0,
+          "r": 16
+        }
+      }
+    ],
+    "enemyEntries": [
+      {
+        "id": "B1",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 4
+        }
+      },
+      {
+        "id": "B2",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 10
+        }
+      },
+      {
+        "id": "B3",
+        "nameKey": "entry_east_route",
+        "position": {
+          "q": 14,
+          "r": 16
+        }
+      }
+    ],
+    "objectives": [
+      {
+        "id": "west-yard",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 4,
+          "r": 6
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "north-plant",
+        "nameKey": "objective_radar",
+        "position": {
+          "q": 7,
+          "r": 4
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "junction",
+        "nameKey": "objective_command_post",
+        "position": {
+          "q": 7,
+          "r": 10
+        },
+        "captureSteps": 4
+      },
+      {
+        "id": "south-plant",
+        "nameKey": "objective_airfield",
+        "position": {
+          "q": 7,
+          "r": 16
+        },
+        "captureSteps": 3
+      },
+      {
+        "id": "east-yard",
+        "nameKey": "objective_supply_depot",
+        "position": {
+          "q": 10,
+          "r": 14
+        },
+        "captureSteps": 3
+      }
+    ]
   }
 ]

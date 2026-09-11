@@ -40,13 +40,13 @@ New accounts infer their initial language from Telegram and receive language-rel
 
 ### Daily operations
 
-Players receive a limited number of Combat Orders and choose one of several operations. The bot shows a compact 7×7 sector map with three entry points and three important objectives; the player orders the active group through an entry toward its first objective and selects a movement/target-priority doctrine. The deterministic engine moves individual units, resolves spotting and finite-range fire, and tracks multi-step objective capture and recapture. A battle ends when one side controls every objective or the opposing army is destroyed or routed. Operations award commander XP, credits, research points, and materials.
+Players receive a limited number of Combat Orders and choose one of several operations. The bot sends a pre-rendered square 9×12 hex-sector image with three entry points, illustrated strategic objects, connected roads, natural terrain transitions, and a visibly blocked outer rim. The player orders the active group through an entry toward its first objective and selects a movement/target-priority doctrine. The deterministic engine moves individual units, resolves spotting and finite-range fire, and tracks multi-step objective capture and recapture for at most 48 steps. A battle ends when one side controls every objective or the opposing army is destroyed or routed. Operations award commander XP, credits, research points, and materials.
 
 ### Weekly campaigns
 
 All 250 countries and territories enter 125 weekly pairings. With an empty table they are sorted by English name and paired adjacently; later rounds sort by cumulative battle rating, with English name as the stable tie-break. Contributions remain open until Sunday at 15:00 in the `Europe/Belgrade` timezone.
 
-Each country receives a deterministic random NPC group whose actual equipment fits the first 10–25 CP category. Players reinforce their country only with snapshots of their own active equipment groups; no Credits or equipment are spent. Each matchup uses one of ten versioned 13×11 maps with five capture points and five aggregate formation classes per side. Formations move across terrain and use finite weapon ranges; artillery can fire indirectly, while aircraft still cannot strike across the whole map. A captured point grants more score when secured early. Losing it removes its retained score, and a later recapture is worth less. Destroyed enemy power and surviving allied power also score. Capturing all five points or destroying the opposing army ends the battle early; at the 48-turn limit, remaining force decides the winner first. Rating accumulates each side's battle score instead of replacing it, preventing one defeat from erasing a leading country's season.
+Each country receives a deterministic random NPC group whose actual equipment fits the first 10–25 CP category. Players reinforce their country only with snapshots of their own active equipment groups; no Credits or equipment are spent. Each matchup uses one of ten pre-rendered, versioned 15×21 hex maps with five illustrated capture points and five aggregate formation classes per side. Formations move across terrain and use finite weapon ranges; artillery can fire indirectly, while aircraft still cannot strike across the whole map. A captured point grants more score when secured early. Losing it removes its retained score, and a later recapture is worth less. Destroyed enemy power and surviving allied power also score. Capturing all five points or destroying the opposing army ends the battle early; at the 96-turn limit, remaining force decides the winner first. Rating accumulates each side's battle score instead of replacing it, preventing one defeat from erasing a leading country's season.
 
 ### Progression
 
@@ -87,8 +87,9 @@ See [DOCUMENTATION.md](DOCUMENTATION.md) for module boundaries and data flow.
 src/           Spring Boot application, migration, and tests
 compose.yml    Application and PostgreSQL containers
 scripts/       Telegram and deployment helpers
-assets/        Brand assets, including the Telegram avatar
+assets/        Brand assets and generated source atlases
 src/main/resources/static/assets/units/  Generated equipment-class icons
+src/main/resources/static/assets/maps/   Generated terrain/object blocks and immutable square battle-map PNGs
 docs/          Product, architecture, and repository guidance
 Documents/     Source specifications and retained project materials
 ```
@@ -105,6 +106,7 @@ Mini App and replay-renderer directories will be added only when those milestone
 - [Spatial personal battles decision](docs/decisions/0006-spatial-personal-battles.md)
 - [Command capacity and force tiers decision](docs/decisions/0007-command-capacity-and-force-tiers.md)
 - [Ranked spatial weekly campaigns decision](docs/decisions/0008-ranked-spatial-weekly-campaigns.md)
+- [Graphical hex-map delivery decision](docs/decisions/0009-graphical-hex-map-delivery.md)
 - [Contributor guide](CONTRIBUTING.md)
 - [Agent guide](AGENTS.md)
 - [GitHub About metadata](docs/github-about.md)

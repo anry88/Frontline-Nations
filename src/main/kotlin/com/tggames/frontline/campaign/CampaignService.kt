@@ -123,6 +123,26 @@ class CampaignService(
     }
 
     @Transactional
+    fun frontMapPath(allianceCode: String?): String? {
+        if (allianceCode == null) return null
+        val period = ensureCurrentWeek()
+        val mapId = jdbc.sql(
+            """
+            SELECT COALESCE(map_id, battlefield)
+              FROM campaign_matchups
+             WHERE week_key = :week AND (alliance_a = :alliance OR alliance_b = :alliance)
+             ORDER BY pair_index
+             LIMIT 1
+            """.trimIndent(),
+        ).param("week", period.weekKey)
+            .param("alliance", allianceCode)
+            .query(String::class.java)
+            .optional()
+            .orElse(null)
+        return mapId?.takeIf { mapCatalog.find(it) != null }?.let { "/assets/maps/weekly/$it.png" }
+    }
+
+    @Transactional
     fun resolveDueCampaigns(): Int {
         ensureCurrentWeek()
         val due = jdbc.sql(
@@ -169,7 +189,10 @@ class CampaignService(
         ensureAllianceRatings()
         val existing = jdbc.sql("SELECT COUNT(*) FROM campaign_matchups WHERE week_key = :week")
             .param("week", period.weekKey).query(Int::class.java).single()
-        if (existing > 0) return
+        if (existing > 0) {
+            refreshOpenMapSnapshots(period.weekKey)
+            return
+        }
         val ratings = jdbc.sql("SELECT alliance_code, rating FROM alliance_ratings")
             .query { rs, _ -> rs.getString("alliance_code") to rs.getLong("rating") }.list().toMap()
         CampaignRanking.pairs(ratings).forEachIndexed { pairIndex, pair ->
@@ -194,6 +217,25 @@ class CampaignService(
                 .param("maxTicks", properties.campaign.maxTicks)
                 .param("allianceA", allianceA)
                 .param("allianceB", allianceB)
+                .update()
+        }
+    }
+
+    private fun refreshOpenMapSnapshots(weekKey: String) {
+        mapCatalog.maps.forEach { map ->
+            jdbc.sql(
+                """
+                UPDATE campaign_matchups
+                   SET map_version = :mapVersion,
+                       map_snapshot_json = CAST(:mapSnapshot AS jsonb),
+                       max_ticks = :maxTicks
+                 WHERE week_key = :week AND map_id = :mapId AND resolved_at IS NULL
+                """.trimIndent(),
+            ).param("week", weekKey)
+                .param("mapId", map.id)
+                .param("mapVersion", map.version)
+                .param("mapSnapshot", objectMapper.writeValueAsString(map))
+                .param("maxTicks", properties.campaign.maxTicks)
                 .update()
         }
     }
@@ -232,7 +274,7 @@ class CampaignService(
                 map,
                 forceA,
                 forceB,
-                campaignBalance(),
+                campaignBalance(matchup.maxTicks),
             )
             val ratingBeforeA = lockRating(matchup.allianceA)
             val ratingBeforeB = lockRating(matchup.allianceB)
@@ -484,7 +526,7 @@ class CampaignService(
 
     private fun matchupRows(weekKey: String): List<MatchupRow> = jdbc.sql(
         """
-        SELECT m.id, m.pair_index, m.battlefield, m.map_id, m.alliance_a, m.alliance_b,
+        SELECT m.id, m.pair_index, m.battlefield, m.map_id, m.max_ticks, m.alliance_a, m.alliance_b,
                m.contribution_a, m.contribution_b, m.npc_bonus_a, m.npc_bonus_b,
                m.score_a, m.score_b, m.objective_score_a, m.objective_score_b,
                m.destroyed_score_a, m.destroyed_score_b, m.survivor_score_a, m.survivor_score_b,
@@ -503,6 +545,7 @@ class CampaignService(
                 pairIndex = rs.getInt("pair_index"),
                 battlefield = rs.getString("battlefield"),
                 mapId = rs.getString("map_id"),
+                maxTicks = rs.getInt("max_ticks"),
                 allianceA = rs.getString("alliance_a"),
                 allianceB = rs.getString("alliance_b"),
                 contributionA = rs.getLong("contribution_a"),
@@ -547,8 +590,7 @@ class CampaignService(
             val map = mapCatalog.require(matchup.mapId ?: matchup.battlefield)
             appendLine("🗺 ${GameI18n.t(language, map.nameKey)} · ${map.width}×${map.height}")
             appendLine("${AllianceCatalog.option(ownCode, language).label} vs ${AllianceCatalog.option(enemyCode, language).label}")
-            appendLine("5 ${campaignText(language, "capture points", "точек захвата")} · ${properties.campaign.maxTicks} ${campaignText(language, "turn limit", "ходов максимум")}")
-            appendLine(mapCatalog.diagram(map))
+            appendLine("5 ${campaignText(language, "capture points", "точек захвата")} · ${matchup.maxTicks} ${campaignText(language, "turn limit", "ходов максимум")}")
             appendLine()
             appendLine(campaignText(language, "Your confirmed power: $ownPower", "Ваш подтверждённый вклад: $ownPower"))
             appendLine("${GameI18n.t(language, "intel")}: $signal.")
@@ -577,7 +619,7 @@ class CampaignService(
             appendLine(campaignText(language, "Surviving force", "Уцелевшая техника") + ": ${matchup.survivorScoreA} / ${matchup.survivorScoreB}")
             appendLine(campaignText(language, "Remaining power", "Оставшаяся сила") + ": ${matchup.remainingPowerA} / ${matchup.remainingPowerB}")
             appendLine(campaignText(language, "Rating", "Рейтинг") + ": ${matchup.ratingBeforeA}→${matchup.ratingAfterA} / ${matchup.ratingBeforeB}→${matchup.ratingAfterB}")
-            appendLine(campaignText(language, "Duration", "Длительность") + ": ${matchup.completedTicks} / ${properties.campaign.maxTicks}")
+            appendLine(campaignText(language, "Duration", "Длительность") + ": ${matchup.completedTicks} / ${matchup.maxTicks}")
             appendLine()
             append(highlights)
         }
@@ -641,10 +683,10 @@ class CampaignService(
     private fun campaignText(language: GameLanguage, english: String, russian: String): String =
         if (language == GameLanguage.RU) russian else english
 
-    private fun campaignBalance(): WeeklyBalance {
+    private fun campaignBalance(maxTicks: Int): WeeklyBalance {
         val c = properties.campaign
         return WeeklyBalance(
-            c.maxTicks,
+            maxTicks,
             c.objectiveBasePoints,
             c.objectiveDecayPerTick,
             c.objectiveMinPoints,
@@ -660,6 +702,7 @@ private data class MatchupRow(
     val pairIndex: Int,
     val battlefield: String,
     val mapId: String?,
+    val maxTicks: Int,
     val allianceA: String,
     val allianceB: String,
     val contributionA: Long,

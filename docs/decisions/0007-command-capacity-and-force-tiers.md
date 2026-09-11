@@ -23,6 +23,6 @@ Simulating every owned vehicle as an independent spatial actor would make high-t
 
 ## Consequences
 
-Research Points now have an explicit progression sink and commander XP remains relevant as the gate to larger echelons. Players can expand from a starter detachment to a corps without forcing hundreds of spatial actors onto a 7×7 map. Stored formation quantities and both deployed CP totals remain part of the deterministic battle snapshot and audit trail.
+Research Points now have an explicit progression sink and commander XP remains relevant as the gate to larger echelons. Players can expand from a starter detachment to a corps without forcing hundreds of spatial actors onto the tactical map. Stored formation quantities and both deployed CP totals remain part of the deterministic battle snapshot and audit trail.
 
-The aggregation deliberately gives one route and target order to all identical units in a formation. Future mass-battle work may split formations into multiple task groups, but it must use a new engine version and retain historical engine-v4 behavior.
+The aggregation deliberately gives one route and target order to all identical units in a formation. Future mass-battle work may split formations into multiple task groups, but it must use a new engine version and retain historical engine behavior.
