@@ -29,6 +29,8 @@ Personal engine version 8 prevents mutual-ambush deadlocks: an ambush formation 
 
 Personal engine version 9 caps catalog movement at four road hexes per step, while guaranteeing one-cell progress through any terrain the unit profile can traverse. A defensive formation no longer remains stationary on a controlled objective when an enemy can fire on it and it has no available target in return. Arsenal detail cards show the current wallet, and army equipment controls retain a fixed minus/plus column pair by using inert callbacks for unavailable actions.
 
+Personal engine version 10 prevents mutual defensive deadlocks outside spotting and weapon range. A defensive formation may hold a controlled objective without an available target only while its side leads in objective control. A tied or trailing side resumes movement toward an unsecured objective.
+
 ## Consequences
 
 The active group now has observable movement, range, reconnaissance, terrain, and target-selection behavior. A deployment route can win or lose an otherwise equal battle, and captured ground can change hands during the same operation.

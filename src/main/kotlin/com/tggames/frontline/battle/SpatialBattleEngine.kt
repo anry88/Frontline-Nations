@@ -349,12 +349,15 @@ class SpatialBattleEngine(
     ): Boolean {
         if (availableTargets(unit, enemies, allies, map).isNotEmpty()) return true
         val onObjective = controls.values.firstOrNull { it.definition.position == unit.position }
+        val hasStrategicLead = controls.values.count { it.owner == unit.side } >
+            controls.values.count { it.owner != null && it.owner != unit.side }
         val threatenedWithoutReply = enemies.any { enemy ->
             unit in availableTargets(enemy, listOf(unit), enemies, map)
         }
         if (
             tactic == Tactic.DEFENSE &&
             onObjective?.owner == unit.side &&
+            hasStrategicLead &&
             !threatenedWithoutReply &&
             enemies.any { map.distanceBetween(unit.position, it.position) <= unit.snapshot.sightRange + 2 }
         ) return true

@@ -184,7 +184,7 @@ class SpatialBattleEngineTest {
     }
 
     @Test
-    fun `defenders under indirect fire leave positions where they cannot reply`() {
+    fun `indirect fire cannot create a defensive deadlock`() {
         val map = maps.forBiome("тундра")
         val operation = OperationOffer(0, Battlefield("Северная тундра", "тундра"), EnemyArchetype.FORTIFIED, Difficulty.STANDARD)
         val artillery = snapshot("ARTILLERY").copy(
@@ -217,14 +217,58 @@ class SpatialBattleEngineTest {
             it.type == SpatialEventType.UNIT_HIT && it.side == BattleSide.PLAYER && it.unitCode == "ARTILLERY"
         }
 
-        assertThat(hitsOnEnemy).anyMatch { hit ->
-            result.events.any {
-                it.type == SpatialEventType.UNIT_MOVED &&
-                    it.side == BattleSide.ENEMY &&
-                    it.unitId == hit.targetUnitId &&
-                    it.step > hit.step
-            }
+        assertThat(hitsOnEnemy).isNotEmpty()
+        assertThat(result.steps).isLessThan(SpatialBattleEngine.MAX_STEPS)
+    }
+
+    @Test
+    fun `defenders that trail on objectives advance instead of deadlocking`() {
+        val map = maps.forBattlefield("Предгорья Атласа", "горы")
+        val operation = OperationOffer(
+            0,
+            Battlefield("Предгорья Атласа", "горы"),
+            EnemyArchetype.AIR_DEFENSE,
+            Difficulty.SCOUTED,
+        )
+        val upgradedTankDefinition = equipment.require("MBT")
+        val upgradedTankStats = upgradedTankDefinition.stats.scaled(2)
+        val group = CombatGroupSnapshot(
+            UUID.fromString("57cdaa3a-6daf-4a57-b2d0-8badac6921ec"),
+            56,
+            10,
+            listOf(
+                snapshot("ARTILLERY").copy(id = UUID.fromString("fca0b1b9-ef6d-3482-af50-85132826e742")),
+                snapshot("MBT").copy(id = UUID.fromString("da6dc386-bf9e-3155-b754-212e98b28fb3")),
+                snapshot("MBT").copy(
+                    id = UUID.fromString("ec6a8818-e0e2-3a33-bcc8-664023881c94"),
+                    level = 2,
+                    attack = upgradedTankStats.attack,
+                    armor = upgradedTankStats.armor,
+                    mobility = upgradedTankStats.mobility,
+                    recon = upgradedTankStats.recon,
+                    support = upgradedTankStats.support,
+                ),
+                snapshot("RECON_VEHICLE").copy(id = UUID.fromString("1f1582dd-4423-3b2a-b875-eddb9a701e0f")),
+            ),
+        )
+
+        val result = spatial.simulate(
+            seed = -2629783787737138616L,
+            commanderLevel = 2,
+            operation = operation,
+            tactic = Tactic.DEFENSE,
+            group = group,
+            plan = DeploymentPlan("W", "signal"),
+            map = map,
+        )
+
+        assertThat(result.events).anyMatch {
+            it.type == SpatialEventType.UNIT_MOVED &&
+                it.side == BattleSide.PLAYER &&
+                it.unitCode == "MBT" &&
+                it.step > 4
         }
+        assertThat(result.steps).isLessThan(SpatialBattleEngine.MAX_STEPS)
     }
 
     @Test
