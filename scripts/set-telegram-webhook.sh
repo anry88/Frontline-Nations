@@ -72,14 +72,14 @@ fi
 
 if ! curl --fail --silent --show-error \
   --request POST \
-  --data-urlencode 'description=Асинхронная стратегия: короткие операции, развитие командира и общий недельный фронт альянсов.' \
+  --data-urlencode 'description=An asynchronous strategy game with tactical operations, commander progression, and massive weekly battles between countries.' \
   "$api_url/setMyDescription" >/dev/null; then
   printf 'Warning: Telegram profile description update was rate-limited or rejected.\n' >&2
 fi
 
 if ! curl --fail --silent --show-error \
   --request POST \
-  --data-urlencode 'short_description=Командуй армией и усиливай свой альянс.' \
+  --data-urlencode 'short_description=Build your army and lead your country to victory.' \
   "$api_url/setMyShortDescription" >/dev/null; then
   printf 'Warning: Telegram short description update was rate-limited or rejected.\n' >&2
 fi

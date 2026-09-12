@@ -85,6 +85,11 @@ foreach ($language in $languages) {
 }
 
 $webhookUrl = "$publicBaseUrl/bot"
+$botDescription = 'An asynchronous strategy game with tactical operations, commander progression, and massive weekly battles between countries.'
+$botShortDescription = 'Build your army and lead your country to victory.'
+Invoke-Telegram 'setMyName' @{ name = 'Frontline Nations' } | Out-Null
+Invoke-Telegram 'setMyDescription' @{ description = $botDescription } | Out-Null
+Invoke-Telegram 'setMyShortDescription' @{ short_description = $botShortDescription } | Out-Null
 Invoke-Telegram 'setWebhook' @{
     url = $webhookUrl
     secret_token = $webhookSecret
@@ -94,6 +99,12 @@ Invoke-Telegram 'setWebhook' @{
 $webhookInfo = Invoke-Telegram 'getWebhookInfo'
 if (-not $webhookInfo.ok -or $webhookInfo.result.url -ne $webhookUrl) {
     throw 'Telegram webhook verification failed'
+}
+$description = Invoke-Telegram 'getMyDescription'
+$shortDescription = Invoke-Telegram 'getMyShortDescription'
+if (-not $description.ok -or $description.result.description -ne $botDescription -or
+    -not $shortDescription.ok -or $shortDescription.result.short_description -ne $botShortDescription) {
+    throw 'Telegram bot description verification failed'
 }
 foreach ($language in $languages) {
     $menu = Invoke-Telegram 'getMyCommands' @{ language_code = $language }

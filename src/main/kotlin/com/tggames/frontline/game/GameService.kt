@@ -96,8 +96,9 @@ class GameService(
         val user = message.from ?: return
         val command = message.text.orEmpty().trim().substringBefore('@').substringBefore(' ').lowercase()
         val argument = message.text.orEmpty().trim().substringAfter(' ', "").trim()
-        val registrationSource = if (command == "/start" && argument.isNotBlank()) "referral" else "telegram"
-        ensurePlayer(user.id, user.firstName, user.languageCode, registrationSource)
+        val registrationReferral = if (command == "/start") GameMetrics.normalizeRegistrationReferral(argument) else null
+        val registrationSource = if (registrationReferral != null) "referral" else "telegram"
+        ensurePlayer(user.id, user.firstName, user.languageCode, registrationSource, registrationReferral)
         val language = language(user.id)
 
         message.successfulPayment?.let { payment ->
@@ -1369,13 +1370,15 @@ class GameService(
         firstName: String,
         telegramLanguage: String? = null,
         registrationSource: String = "telegram",
+        registrationReferral: String? = null,
     ) {
         val inferred = GameLanguage.fromTelegram(telegramLanguage).code
         val source = GameMetrics.normalizeRegistrationSource(registrationSource)
+        val referral = if (source == "referral") GameMetrics.normalizeRegistrationReferral(registrationReferral) ?: "other" else null
         val created = jdbc.sql(
             """
-            INSERT INTO players(telegram_id, first_name, language, telegram_language, registration_source)
-            VALUES (:id, :firstName, :language, :telegramLanguage, :registrationSource)
+            INSERT INTO players(telegram_id, first_name, language, telegram_language, registration_source, registration_referral)
+            VALUES (:id, :firstName, :language, :telegramLanguage, :registrationSource, :registrationReferral)
             ON CONFLICT (telegram_id) DO NOTHING
             """.trimIndent(),
         ).param("id", telegramId)
@@ -1383,6 +1386,7 @@ class GameService(
             .param("language", inferred)
             .param("telegramLanguage", telegramLanguage?.take(16))
             .param("registrationSource", source)
+            .param("registrationReferral", referral)
             .update()
         if (created == 0) {
             jdbc.sql(

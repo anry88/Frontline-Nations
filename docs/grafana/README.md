@@ -7,7 +7,7 @@ Prometheus must scrape `GET /actuator/prometheus` on management port `9090` of t
 - event counters for commands, inline-button actions, checkout stages, equipment actions, and personal-battle results;
 - database-backed gauges refreshed once per minute for player activity, registration attribution, Stars payments, equipment transactions, and battle outcomes.
 
-Database gauges remain correct after an application restart. Event panels describe traffic observed by Prometheus and should be read over the selected dashboard time range. Registration sources are deliberately bounded to `telegram` for a direct start and `referral` for a `/start` link carrying a payload; the payload itself is never exported as a metric label.
+Database gauges remain correct after an application restart. Event panels describe traffic observed by Prometheus and should be read over the selected dashboard time range. Registration views use exact database counts rather than summing overlapping counter windows. Direct starts are labelled `telegram`; valid `/start` payloads are normalized to lowercase campaign codes such as `riverking`. At most 24 referral series are exposed per period and the remainder is grouped as `other`.
 
 Recommended scrape configuration:
 

@@ -165,7 +165,7 @@ Local, staging, and production environments should share image definitions while
 
 ## Observability
 
-The backend provides health endpoints, Micrometer/Prometheus runtime metrics, durable wallet/equipment/payment audit records, and database-backed gauges for active players, registration attribution, Stars charges, equipment transactions, and battle outcomes. Event counters cover bot commands, callback actions, checkout stages, equipment actions, and personal battles. The importable Grafana board lives at `docs/grafana/dashboard.json`. Scheduler duration/failures, replay queue failures, and suspicious-request alerting remain the next observability additions.
+The backend provides health endpoints, Micrometer/Prometheus runtime metrics, durable wallet/equipment/payment audit records, and database-backed gauges for active players, concrete normalized referral campaigns, Stars charges, equipment transactions, and battle outcomes. Direct Telegram registrations remain separate; at most 24 referral series per period are exported and the remainder is aggregated as `other`. Event counters cover bot commands, callback actions, checkout stages, equipment actions, and personal battles. The importable Grafana board lives at `docs/grafana/dashboard.json`. Scheduler duration/failures, replay queue failures, and suspicious-request alerting remain the next observability additions.
 
 ## Architecture Evolution
 
