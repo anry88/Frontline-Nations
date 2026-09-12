@@ -5,14 +5,14 @@ import com.tggames.frontline.i18n.GameLanguage
 object StarsMessages {
     fun menu(language: GameLanguage, balance: Long): String = localized(
         language,
-        "⭐ CREDITS FOR TELEGRAM STARS\n\nBalance: $balance Credits\nChoose a package. Each next tier gives about 20% more Credits per Star; the largest has twice the value of the first.",
-        "⭐ CREDITS ЗА TELEGRAM STARS\n\nБаланс: $balance Credits\nВыберите пакет. Каждый следующий уровень даёт примерно на 20% больше Credits за звезду; максимальный вдвое выгоднее первого.",
-        "⭐ CREDITS POR TELEGRAM STARS\n\nSaldo: $balance Credits\nElige un paquete. Cada nivel ofrece cerca de un 20 % más por Star; el mayor duplica el valor del primero.",
-        "⭐ CREDITS POR TELEGRAM STARS\n\nSaldo: $balance Credits\nEscolha um pacote. Cada nível oferece cerca de 20% mais por Star; o maior vale o dobro do primeiro.",
-        "⭐ CREDITS مقابل TELEGRAM STARS\n\nالرصيد: $balance Credits\nاختر حزمة. تمنح كل فئة قيمة أكبر بنحو 20٪ لكل نجمة؛ والحزمة الكبرى ضعف الأولى.",
-        "⭐ CREDITS DENGAN TELEGRAM STARS\n\nSaldo: $balance Credits\nPilih paket. Tiap tingkat memberi sekitar 20% lebih banyak per Star; paket terbesar bernilai dua kali paket pertama.",
-        "⭐ TELEGRAM STARS से CREDITS\n\nबैलेंस: $balance Credits\nपैकेज चुनें। हर अगला स्तर प्रति Star लगभग 20% अधिक देता है; सबसे बड़ा पहले से दोगुना मूल्य देता है।",
-        "⭐ TELEGRAM STARS İLE CREDITS\n\nBakiye: $balance Credits\nBir paket seç. Her kademe Star başına yaklaşık %20 daha fazla verir; en büyük paket ilkinin iki katı değerlidir.",
+        "Balance: $balance Credits\n\nChoose a package:",
+        "Баланс: $balance Credits\n\nВыберите пакет:",
+        "Saldo: $balance Credits\n\nElige un paquete:",
+        "Saldo: $balance Credits\n\nEscolha um pacote:",
+        "الرصيد: $balance Credits\n\nاختر حزمة:",
+        "Saldo: $balance Credits\n\nPilih paket:",
+        "बैलेंस: $balance Credits\n\nपैकेज चुनें:",
+        "Bakiye: $balance Credits\n\nBir paket seç:",
     )
 
     fun packButton(language: GameLanguage, pack: StarsCreditPack): String {

@@ -15,7 +15,7 @@ class GameLanguageTest {
     @Test
     fun `spatial battle interface is translated in every supported language`() {
         val keys = listOf(
-            "map_legend", "map_legend_open", "choose_entry", "choose_objective", "choose_tactic_spatial",
+            "choose_entry", "choose_objective", "choose_tactic_spatial", "operation_choose",
             "objective_control", "end_army_routed", "upgrade", "stat_attack", "stat_armor", "stat_mobility",
             "stat_recon", "stat_support", "stat_map_movement", "stat_weapon_range", "stat_sight", "stat_fire_mode",
         )
@@ -23,6 +23,14 @@ class GameLanguageTest {
         GameLanguage.entries.forEach { language ->
             keys.forEach { key -> assertThat(GameI18n.t(language, key)).isNotBlank() }
         }
+    }
+
+    @Test
+    fun `operation copy describes current rules without obsolete daily limit metadata`() {
+        assertThat(GameI18n.t(GameLanguage.EN, "operation_choose"))
+            .doesNotContainIgnoringCase("daily", "unlimited", "limit")
+        assertThat(GameI18n.t(GameLanguage.RU, "operation_choose"))
+            .doesNotContainIgnoringCase("суточ", "без лимита", "ограничен")
     }
 
     @Test

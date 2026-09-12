@@ -64,8 +64,10 @@ services:
       CAMPAIGN_VICTORY_BONUS_PERCENT: ${CAMPAIGN_VICTORY_BONUS_PERCENT:-120}
       CAMPAIGN_VICTORY_BONUS_DAYS: ${CAMPAIGN_VICTORY_BONUS_DAYS:-7}
       PORT: 8080
+      MANAGEMENT_PORT: 9090
     expose:
       - "8080"
+      - "9090"
     networks:
       default:
       tunnel:

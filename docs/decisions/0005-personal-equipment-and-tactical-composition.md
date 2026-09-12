@@ -12,7 +12,7 @@ The first command-only battles used commander level plus abstract tactic and ter
 
 - Keep a versioned, validated JSON catalog for seven fictional equipment classes: main battle tank, light armor, artillery, attack aircraft, fighter, mobile air defense, and reconnaissance vehicle.
 - Give every player an idempotent starter grant containing three presets and a 10 CP active group with two tanks, one artillery unit, and one reconnaissance vehicle.
-- Store each owned unit separately with level, durability, and acquisition origin. Buying consumes Credits; crafting consumes fewer Credits plus Materials; upgrading consumes both and adds 12% of base statistics per level through level 5.
+- Store each owned unit separately with level, durability, and acquisition origin. Buying consumes Credits. Materials are reserved for upgrades; upgrading consumes Credits and Materials and adds 12% of base statistics per level through level 5. The original crafting path was retired to keep Materials focused on progression.
 - Let players reuse owned units across three presets. Only the active preset enters a battle. Its CP limit grows from 10 to 14 across commander levels.
 - Compute battle power from five unit statistics. Score each tactic against a different weighted profile and explicit role requirements, then apply enemy and terrain counters separately.
 - Bind battle callbacks to the active preset version and persist the complete immutable group snapshot with engine version 3.

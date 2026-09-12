@@ -8,7 +8,7 @@ A player opens the bot, reviews the state of the current campaign, and chooses f
 
 The command-only MVP now implements this strategic slice: five operation offers drawn from 24 named battlefields expose different intelligence and reward multipliers. Each operation uses an individually composed, upright rectangular 9×12 offset-hex sector with coherent terrain regions, one of several front orientations, three distinct edge entries, a unique objective layout, and connected roads with a flanking loop. The bot sends a pre-rendered square map rather than a text diagram. The player assigns the active group an entry, a first objective, and a behavior doctrine. Units then move, spot, fire at finite ranges, capture objectives over consecutive steps, and can contest or retake them. The completed result offers an on-demand MP4 replay of those saved events.
 
-Between battles, players can buy or craft seven personal equipment classes in batches, select available equipment into one of three CP-limited presets, and upgrade individual units through five levels. The arsenal keeps unlocked classes above locked ones and retains the shop context after a purchase; front-reserved machines are omitted from unavailable selection and upgrade actions. Every commander level automatically adds 1 CP, from 10 CP at level 1 to the supported 1,000 CP ceiling. Reaching the next commander level costs `1,000 × current level` XP instead of a flat amount. Research Points and manual capacity purchases are retired. Credits and Credit prices use a compact 1:100 denomination. Destroyed equipment is permanently removed from usable inventory, while survivors return after personal and weekly battles. Modules, branching technologies, repairs, and doctrine perks remain planned.
+Between battles, players can buy seven personal equipment classes for Credits in batches, select available equipment into one of three CP-limited presets, and upgrade individual units through five levels with Credits and Materials. The arsenal keeps unlocked classes above locked ones and retains the shop context after a purchase; front-reserved machines are omitted from unavailable selection and upgrade actions. Every commander level automatically adds 1 CP, from 10 CP at level 1 to the supported 1,000 CP ceiling. Reaching the next commander level costs `1,000 × current level` XP instead of a flat amount. Research Points, crafting, and manual capacity purchases are retired. Credits and Credit prices use a compact 1:100 denomination. Destroyed equipment is permanently removed from usable inventory, while survivors return after personal and weekly battles. Modules, branching technologies, repairs, and doctrine perks remain planned.
 
 ## Strategic Depth
 
@@ -43,8 +43,8 @@ This separation keeps the simulation authoritative and testable while allowing c
 
 The current economy contains three primary resources:
 
-- Credits for equipment replacement, purchases, crafting, and future modules
-- Materials for campaign production and selected upgrades
+- Credits for equipment replacement, purchases, upgrades, and future modules
+- Materials for equipment upgrades
 - XP for commander progression
 
 Players may also buy fixed Credit packages through Telegram Stars: 100/500/2,500/5,000/10,000 Credits cost 20/85/350/600/1,000 Stars. Larger packs progressively improve value, topping out at twice the starter-pack Credits per Star. Native invoices, strict server-side pre-checkout checks, charge-ID idempotency, wallet auditing, and an admin-mediated `/paysupport` refund flow keep the purchase path narrow and recoverable.

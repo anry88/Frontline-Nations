@@ -16,5 +16,5 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=build /workspace/build/libs/frontline-nations-0.1.0.jar app.jar
 USER frontline
-EXPOSE 8080
+EXPOSE 8080 9090
 ENTRYPOINT ["/usr/bin/tini", "-s", "--", "java", "-jar", "/app/app.jar"]

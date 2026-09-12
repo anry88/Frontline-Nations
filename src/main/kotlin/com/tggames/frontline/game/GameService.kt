@@ -27,6 +27,7 @@ import com.tggames.frontline.monetization.StarsCreditCatalog
 import com.tggames.frontline.monetization.StarsMessages
 import com.tggames.frontline.monetization.StarsPaymentService
 import com.tggames.frontline.monetization.SupportCreation
+import com.tggames.frontline.observability.GameMetrics
 import com.tggames.frontline.progression.ForceTier
 import com.tggames.frontline.progression.ForceTierCatalog
 import com.tggames.frontline.progression.CommanderProgression
@@ -62,6 +63,7 @@ class GameService(
     private val replays: ReplayService,
     private val rankings: RankingService,
     private val stars: StarsPaymentService,
+    private val metrics: GameMetrics,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -71,6 +73,7 @@ class GameService(
 
         update.preCheckoutQuery?.let { query ->
             val validation = stars.validate(query)
+            metrics.stars(if (validation.valid) "precheckout_approved" else "precheckout_rejected", StarsCreditCatalog.parsePayload(query.invoicePayload)?.packId)
             telegram.answerPreCheckout(
                 query.id,
                 validation.valid,
@@ -81,6 +84,7 @@ class GameService(
 
         update.callbackQuery?.let { callback ->
             ensurePlayer(callback.from.id, callback.from.firstName, callback.from.languageCode)
+            metrics.callback(callback.data.orEmpty())
             val replayCallback = callback.data.orEmpty().startsWith("replay:")
             if (replayCallback) telegram.answerCallback(callback.id)
             handleCallback(callback)
@@ -90,22 +94,32 @@ class GameService(
 
         val message = update.message ?: return
         val user = message.from ?: return
-        ensurePlayer(user.id, user.firstName, user.languageCode)
+        val command = message.text.orEmpty().trim().substringBefore('@').substringBefore(' ').lowercase()
+        val argument = message.text.orEmpty().trim().substringAfter(' ', "").trim()
+        val registrationSource = if (command == "/start" && argument.isNotBlank()) "referral" else "telegram"
+        ensurePlayer(user.id, user.firstName, user.languageCode, registrationSource)
         val language = language(user.id)
 
         message.successfulPayment?.let { payment ->
             when (val result = stars.deliver(user.id, payment)) {
-                is PaymentDelivery.Delivered -> telegram.sendMessage(
-                    message.chat.id,
-                    StarsMessages.paymentComplete(language, result.pack.credits, result.creditsBalance),
-                    actionKeyboard(user.id, language),
-                )
-                is PaymentDelivery.Duplicate -> telegram.sendMessage(
-                    message.chat.id,
-                    StarsMessages.duplicate(language),
-                    actionKeyboard(user.id, language),
-                )
+                is PaymentDelivery.Delivered -> {
+                    metrics.stars("completed", result.pack.id)
+                    telegram.sendMessage(
+                        message.chat.id,
+                        StarsMessages.paymentComplete(language, result.pack.credits, result.creditsBalance),
+                        actionKeyboard(user.id, language),
+                    )
+                }
+                is PaymentDelivery.Duplicate -> {
+                    metrics.stars("duplicate")
+                    telegram.sendMessage(
+                        message.chat.id,
+                        StarsMessages.duplicate(language),
+                        actionKeyboard(user.id, language),
+                    )
+                }
                 is PaymentDelivery.Invalid -> {
+                    metrics.stars("invalid")
                     logger.warn("Rejected Stars payment for player {}: {}", user.id, result.reason)
                     telegram.sendMessage(message.chat.id, StarsMessages.invalid(language))
                 }
@@ -113,8 +127,7 @@ class GameService(
             return
         }
 
-        val command = message.text.orEmpty().trim().substringBefore('@').substringBefore(' ').lowercase()
-        val argument = message.text.orEmpty().trim().substringAfter(' ', "").trim()
+        if (command.startsWith('/')) metrics.command(command)
 
         if (stars.isAdminContext(message.chat.id, user.id) && command in ADMIN_PAYMENT_COMMANDS) {
             handleAdminPaymentCommand(command, argument, message.chat.id)
@@ -185,8 +198,7 @@ class GameService(
             data.startsWith("replay:b:") -> sendPersonalReplay(callback.from.id, chatId, data.removePrefix("replay:b:"))
             data.startsWith("replay:w:") -> sendWeeklyReplay(callback.from.id, chatId, data.removePrefix("replay:w:"))
             data.startsWith("shop:view:") -> shopDetails(callback.from.id, chatId, data.substringAfterLast(':'))
-            data.startsWith("shop:buy:") -> acquireUnit(callback.from.id, chatId, data.removePrefix("shop:buy:"), false)
-            data.startsWith("shop:craft:") -> acquireUnit(callback.from.id, chatId, data.removePrefix("shop:craft:"), true)
+            data.startsWith("shop:buy:") -> acquireUnit(callback.from.id, chatId, data.removePrefix("shop:buy:"))
             data.startsWith("unit:upgrade-batch:") -> upgradeBatch(callback.from.id, chatId, data.removePrefix("unit:upgrade-batch:"))
             data.startsWith("unit:upgrade:") -> upgradeUnit(callback.from.id, chatId, data.substringAfterLast(':'))
             data.startsWith("army:toggle:") -> toggleUnit(callback.from.id, chatId, data.substringAfterLast(':'))
@@ -282,7 +294,7 @@ class GameService(
                 appendLine("   ${GameI18n.t(language, "intel")} (${GameI18n.intelLevel(language, offer.difficulty)}): ${localizedIntel(language, offer)}")
             }
             appendLine()
-            append(GameI18n.t(language, "operation_choose_unlimited"))
+            append(GameI18n.t(language, "operation_choose"))
         }
         val keyboard = InlineKeyboardMarkup(
             offers.mapIndexed { index, offer ->
@@ -563,6 +575,7 @@ class GameService(
         recordWalletChange(telegramId, "XP", battle.xp.toLong(), "BATTLE_REWARD", battleId)
         recordWalletChange(telegramId, "CREDITS", battle.credits.toLong(), "BATTLE_REWARD", battleId)
         recordWalletChange(telegramId, "MATERIALS", battle.materials.toLong(), "BATTLE_REWARD", battleId)
+        metrics.battle(battle.victory)
 
         val fresh = player(telegramId)
         val entry = spatial.map.playerEntries.first { it.id == spatial.playerPlan.entryId }
@@ -757,7 +770,7 @@ class GameService(
         val language = GameLanguage.fromStored(player.language)
         val text = buildString {
             appendLine(GameI18n.t(language, "shop_title"))
-            appendLine("Credits: ${player.credits} · Materials: ${player.materials}")
+            appendLine("Credits: ${player.credits}")
             appendLine()
             append(GameI18n.t(language, "shop_hint"))
         }
@@ -786,6 +799,7 @@ class GameService(
     private fun sendStarsInvoice(telegramId: Long, chatId: Long, packId: String) {
         val language = language(telegramId)
         val pack = StarsCreditCatalog.find(packId) ?: return starsMenu(telegramId, chatId)
+        metrics.stars("invoice_requested", pack.id)
         telegram.sendInvoice(
             chatId = chatId,
             title = "${pack.credits} Credits",
@@ -877,6 +891,7 @@ class GameService(
         when (command) {
             "/refund" -> when (val result = stars.refund(requestId)) {
                 is AdminSupportResult.Updated -> {
+                    metrics.stars("refunded")
                     telegram.sendMessage(chatId, "Запрос #$requestId: Stars возвращены, Credits списаны.")
                     trySendPaymentSupportMessage(result.playerTelegramId, StarsMessages.refunded(languageByChat(result.playerTelegramId), requestId))
                 }
@@ -926,7 +941,7 @@ class GameService(
         val state = if (player.commanderLevel >= definition.unlockLevel) "✅" else "🔒 ${GameI18n.t(language, "level")} ${definition.unlockLevel}"
         val text = """
             ${definition.emoji} ${definition.name(language)} · $state
-            Credits: ${player.credits} · Materials: ${player.materials}
+            Credits: ${player.credits}
 
             ⚔ ${GameI18n.t(language, "stat_attack")}: ${stats.attack}
             🛡 ${GameI18n.t(language, "stat_armor")}: ${stats.armor}
@@ -940,7 +955,6 @@ class GameService(
             CP: ${definition.cpCost}
 
             ${GameI18n.t(language, "buy")}: ${definition.buyCredits} Credits
-            ${GameI18n.t(language, "craft")}: ${definition.craftCredits} Credits + ${definition.craftMaterials} Materials
             ${GameI18n.t(language, "upgrade_growth")}
         """.trimIndent()
         val keyboard = InlineKeyboardMarkup(listOf(
@@ -949,23 +963,19 @@ class GameService(
                 InlineKeyboardButton("💳 ×5", "shop:buy:${definition.code}:5"),
                 InlineKeyboardButton("💳 ×25", "shop:buy:${definition.code}:25"),
             ),
-            listOf(
-                InlineKeyboardButton("🛠 ${GameI18n.t(language, "craft")} ×1", "shop:craft:${definition.code}:1"),
-                InlineKeyboardButton("🛠 ×5", "shop:craft:${definition.code}:5"),
-                InlineKeyboardButton("🛠 ×25", "shop:craft:${definition.code}:25"),
-            ),
             listOf(InlineKeyboardButton("↩️ ${GameI18n.t(language, "shop")}", "nav:shop")),
         ))
         telegram.sendPhoto(chatId, properties.publicBaseUrl.trimEnd('/') + definition.iconPath, text, keyboard)
     }
 
-    private fun acquireUnit(telegramId: Long, chatId: Long, payload: String, craft: Boolean) {
+    private fun acquireUnit(telegramId: Long, chatId: Long, payload: String) {
         val language = language(telegramId)
         val parts = payload.split(':')
         val code = parts.firstOrNull().orEmpty()
         val quantity = parts.getOrNull(1)?.toIntOrNull() ?: 1
-        val action = inventory.acquire(telegramId, code, craft, quantity)
-        telegram.sendMessage(chatId, actionMessage(action, language))
+        val action = inventory.acquire(telegramId, code, quantity)
+        metrics.equipment("purchase", action.definition?.code ?: code, action.status.name, quantity)
+        telegram.sendMessage(chatId, actionMessage(action, language, "insufficient_credits"))
         shopDetails(telegramId, chatId, code)
     }
 
@@ -1004,6 +1014,7 @@ class GameService(
         val quantity = parts[2].toIntOrNull() ?: return upgradeMenu(telegramId, chatId)
         val language = language(telegramId)
         val action = inventory.upgradeBatch(telegramId, parts[0], level, quantity)
+        metrics.equipment("upgrade", action.definition?.code ?: parts[0], action.status.name, action.quantity)
         telegram.sendMessage(chatId, actionMessage(action, language))
         upgradeMenu(telegramId, chatId)
     }
@@ -1012,6 +1023,7 @@ class GameService(
         val language = language(telegramId)
         val unitId = runCatching { UUID.fromString(rawId) }.getOrNull() ?: return upgradeMenu(telegramId, chatId)
         val action = inventory.upgrade(telegramId, unitId)
+        metrics.equipment("upgrade", action.definition?.code, action.status.name, action.quantity)
         telegram.sendMessage(chatId, actionMessage(action, language))
         upgradeMenu(telegramId, chatId)
     }
@@ -1043,7 +1055,11 @@ class GameService(
         armyMenu(telegramId, chatId)
     }
 
-    private fun actionMessage(action: EquipmentAction, language: GameLanguage): String {
+    private fun actionMessage(
+        action: EquipmentAction,
+        language: GameLanguage,
+        insufficientResourcesKey: String = "insufficient_resources",
+    ): String {
         val name = action.definition?.name(language).orEmpty()
         return when (action.status) {
             EquipmentActionStatus.SUCCESS -> if (action.upgraded && action.quantity > 1) {
@@ -1055,7 +1071,7 @@ class GameService(
             }
             EquipmentActionStatus.LOCKED -> GameI18n.t(language, "equipment_locked", action.definition?.unlockLevel ?: 1)
             EquipmentActionStatus.RESERVED -> GameI18n.t(language, "equipment_reserved")
-            EquipmentActionStatus.INSUFFICIENT_RESOURCES -> GameI18n.t(language, "insufficient_resources")
+            EquipmentActionStatus.INSUFFICIENT_RESOURCES -> GameI18n.t(language, insufficientResourcesKey)
             EquipmentActionStatus.MAX_LEVEL -> GameI18n.t(language, "max_level")
             EquipmentActionStatus.GROUP_FULL -> GameI18n.t(language, "group_full")
             EquipmentActionStatus.NO_AVAILABLE_UNIT -> GameI18n.t(language, "no_available_unit", name)
@@ -1348,24 +1364,44 @@ class GameService(
         listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "replay_button"), callbackData))) + actionKeyboard(telegramId, language).inlineKeyboard,
     )
 
-    private fun ensurePlayer(telegramId: Long, firstName: String, telegramLanguage: String? = null) {
+    private fun ensurePlayer(
+        telegramId: Long,
+        firstName: String,
+        telegramLanguage: String? = null,
+        registrationSource: String = "telegram",
+    ) {
         val inferred = GameLanguage.fromTelegram(telegramLanguage).code
-        jdbc.sql(
+        val source = GameMetrics.normalizeRegistrationSource(registrationSource)
+        val created = jdbc.sql(
             """
-            INSERT INTO players(telegram_id, first_name, language, telegram_language)
-            VALUES (:id, :firstName, :language, :telegramLanguage)
-            ON CONFLICT (telegram_id) DO UPDATE
-               SET first_name = EXCLUDED.first_name,
-                   telegram_language = COALESCE(EXCLUDED.telegram_language, players.telegram_language),
-                   telegram_unavailable_at = NULL,
-                   telegram_unavailable_reason = NULL,
-                   updated_at = CURRENT_TIMESTAMP
+            INSERT INTO players(telegram_id, first_name, language, telegram_language, registration_source)
+            VALUES (:id, :firstName, :language, :telegramLanguage, :registrationSource)
+            ON CONFLICT (telegram_id) DO NOTHING
             """.trimIndent(),
         ).param("id", telegramId)
             .param("firstName", firstName.take(128))
             .param("language", inferred)
             .param("telegramLanguage", telegramLanguage?.take(16))
+            .param("registrationSource", source)
             .update()
+        if (created == 0) {
+            jdbc.sql(
+                """
+                UPDATE players
+                   SET first_name = :firstName,
+                       telegram_language = COALESCE(:telegramLanguage, telegram_language),
+                       telegram_unavailable_at = NULL,
+                       telegram_unavailable_reason = NULL,
+                       updated_at = CURRENT_TIMESTAMP
+                 WHERE telegram_id = :id
+                """.trimIndent(),
+            ).param("id", telegramId)
+                .param("firstName", firstName.take(128))
+                .param("telegramLanguage", telegramLanguage?.take(16))
+                .update()
+        } else {
+            metrics.registration(source)
+        }
         inventory.ensureStarter(telegramId)
     }
 

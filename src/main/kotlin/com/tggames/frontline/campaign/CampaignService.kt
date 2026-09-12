@@ -208,7 +208,7 @@ class CampaignService(
             val pairs = matchups.take(10).joinToString("\n") {
                 "${AllianceCatalog.option(it.allianceA, language).label} — ${AllianceCatalog.option(it.allianceB, language).label}"
             }
-            return "$header\n\n${campaignText(language, "Weekly pairings: ${matchups.size} (first 10 shown)", "Пары недели: ${matchups.size} (показаны первые 10)")}:\n$pairs"
+            return "$header\n\n${campaignText(language, "Featured weekly battles", "Главные битвы недели")}:\n$pairs"
         }
         return if (ownMatchup.status == "RESOLVED") {
             "$header\n\n${resolvedMatchupText(ownMatchup, allianceCode, language)}"

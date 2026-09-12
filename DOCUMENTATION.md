@@ -25,7 +25,7 @@ PostgreSQL stores players and their explicit locale/nickname settings, Telegram 
 
 ### Personal operation
 
-1. The server deterministically generates five operation offers from a catalog of 24 battlefields for a single-use offer version. Operations are unlimited.
+1. The server deterministically generates five operation offers from a catalog of 24 battlefields for a single-use offer version.
 2. The bot shows a named battlefield, biome, risk/reward tier, and tier-dependent intelligence for each offer.
 3. The player maintains one of three reusable presets through `/army`. Command capacity is `level + 9 CP`, capped at the supported 1,000 CP maximum, making heavy armor, artillery, aircraft, air defense, and reconnaissance compete for space at every echelon.
 4. The selected operation resolves to a versioned 9×12 odd-row offset sector map. Map version 5 gives every battlefield an authored deployment orientation and objective arrangement instead of reusing one north/south template; a deterministic graph connects entries and objectives with primary and alternate roads. The bot sends its immutable 1,536×1,536 PNG assembled from generated full-bleed hex terrain and objective blocks, and its coordinates match the server map snapshot.
@@ -39,7 +39,7 @@ PostgreSQL stores players and their explicit locale/nickname settings, Telegram 
 ### Personal equipment
 
 1. A one-time idempotent grant creates three presets and the 10 CP starter force from the source specification.
-2. `/shop` reads the versioned JSON catalog, orders unlocked classes before locked classes, and offers purchase for Credits or crafting for Credits plus Materials while keeping the player in the arsenal flow. Commander level gates later classes. Each class also declares movement profile/points, sight, finite minimum/maximum range, and fire mode.
+2. `/shop` reads the versioned JSON catalog, orders unlocked classes before locked classes, and offers bulk purchase for Credits while keeping the player in the arsenal flow. Materials are spent only on equipment upgrades. Commander level gates later classes. Each class also declares movement profile/points, sight, finite minimum/maximum range, and fire mode.
 3. `/upgrade` spends both resources and scales all base stats by a deterministic integer 12% per level through level 5.
 4. Player balances, wallet ledger rows, owned-unit state, and equipment audit rows change in one transaction.
 5. Generated fictional class icons are served by the backend and sent as Telegram equipment cards. A unit destroyed in either battle mode is soft-deleted from usable inventory while its audit history remains intact.
@@ -165,7 +165,7 @@ Local, staging, and production environments should share image definitions while
 
 ## Observability
 
-The backend should provide structured logs, health/readiness endpoints, metrics, and durable audit records. Initial metrics should cover request latency and errors, active players, battle outcomes, scheduler duration/failures, campaign state, queue/render failures, economy issuance and sinks, and suspicious request rates.
+The backend provides health endpoints, Micrometer/Prometheus runtime metrics, durable wallet/equipment/payment audit records, and database-backed gauges for active players, registration attribution, Stars charges, equipment transactions, and battle outcomes. Event counters cover bot commands, callback actions, checkout stages, equipment actions, and personal battles. The importable Grafana board lives at `docs/grafana/dashboard.json`. Scheduler duration/failures, replay queue failures, and suspicious-request alerting remain the next observability additions.
 
 ## Architecture Evolution
 

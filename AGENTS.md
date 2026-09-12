@@ -38,6 +38,8 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/test/`: deterministic-engine and application tests.
 - `src/main/resources/db/migration/V2__battle_choices_and_progression.sql`: battle metadata, research currency, and commander statistics.
 - `src/main/resources/db/migration/V3__weekly_campaign_battles.sql`: campaign weeks, matchups, results, rewards, and notification outbox.
+- `src/main/resources/db/migration/V14__telegram_stars_credit_purchases.sql`: audited Telegram Stars charges and payment support.
+- `src/main/resources/db/migration/V15__registration_attribution.sql`: bounded direct/referral registration attribution.
 - `src/main/resources/db/migration/V10__destructive_equipment_and_daily_rewards.sql`: daily reward streaks, offer nonces, level-derived capacity migration, equipment reservation, and destruction audit state.
 - `src/main/resources/db/migration/V11__progressive_levels_and_campaign_economy.sql`: compact Credits rebase, progressive XP levels, contributor reward audit, and weekly country bonuses.
 - `src/main/resources/db/migration/V12__front_squads_and_orders.sql`: per-preset weekly contributions, concrete reserved unit IDs, entries, and tactics.
@@ -47,8 +49,10 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/main/kotlin/com/tggames/frontline/progression/CommanderProgression.kt`: authoritative cumulative XP curve and current-level progress.
 - `src/main/resources/db/migration/V4__player_locale_and_nickname.sql`: player locale, Telegram locale hint, nickname, and pending confirmation.
 - `src/main/kotlin/com/tggames/frontline/campaign/`: weekly schedule, pairing, aggregate battle, reward, and notification logic.
+- `src/main/kotlin/com/tggames/frontline/observability/`: low-cardinality Micrometer events and database-backed gauges.
+- `docs/grafana/dashboard.json`: importable production operations dashboard.
 - `src/main/kotlin/com/tggames/frontline/catalog/`: data-driven personal equipment definitions and balance validation.
-- `src/main/kotlin/com/tggames/frontline/inventory/`: starter grants, owned units, presets, purchases, crafting, and upgrades.
+- `src/main/kotlin/com/tggames/frontline/inventory/`: starter grants, owned units, presets, Credit purchases, and upgrades.
 - `src/main/resources/catalog/equipment-catalog.json`: localized unit costs, roles, statistics, unlocks, and icon paths.
 - `src/main/resources/static/assets/units/`: generated fictional equipment-class icons served by the backend.
 - `src/main/resources/db/migration/V5__personal_equipment_and_battle_groups.sql`: inventory, presets, audit history, and battle snapshots.

@@ -277,25 +277,24 @@ class InventoryService(
     }
 
     @Transactional
-    fun acquire(telegramId: Long, code: String, craft: Boolean, quantity: Int = 1): EquipmentAction {
+    fun acquire(telegramId: Long, code: String, quantity: Int = 1): EquipmentAction {
         val definition = catalog.get(code) ?: return EquipmentAction(EquipmentActionStatus.NOT_FOUND)
         if (quantity !in 1..MAX_PURCHASE_QUANTITY) return EquipmentAction(EquipmentActionStatus.NOT_FOUND)
         val commanderLevel = jdbc.sql("SELECT commander_level FROM players WHERE telegram_id = :id FOR UPDATE")
             .param("id", telegramId).query(Int::class.java).single()
         if (commanderLevel < definition.unlockLevel) return EquipmentAction(EquipmentActionStatus.LOCKED, definition = definition)
-        val credits = (if (craft) definition.craftCredits else definition.buyCredits) * quantity
-        val materials = (if (craft) definition.craftMaterials else 0) * quantity
+        val credits = definition.buyCredits * quantity
         val charged = jdbc.sql(
             """
             UPDATE players
-               SET credits = credits - :credits, materials = materials - :materials, updated_at = CURRENT_TIMESTAMP
-             WHERE telegram_id = :id AND credits >= :credits AND materials >= :materials
+               SET credits = credits - :credits, updated_at = CURRENT_TIMESTAMP
+             WHERE telegram_id = :id AND credits >= :credits
             """.trimIndent(),
-        ).param("credits", credits).param("materials", materials).param("id", telegramId).update()
+        ).param("credits", credits).param("id", telegramId).update()
         if (charged == 0) return EquipmentAction(EquipmentActionStatus.INSUFFICIENT_RESOURCES, definition = definition)
 
         val batchId = UUID.randomUUID()
-        val origin = if (craft) "CRAFT" else "PURCHASE"
+        val origin = "PURCHASE"
         val unitIds = (1..quantity).map {
             val unitId = UUID.randomUUID()
             jdbc.sql(
@@ -306,14 +305,13 @@ class InventoryService(
                 unitId,
                 origin,
                 -(credits / quantity).toLong(),
-                -(materials / quantity).toLong(),
+                0,
                 null,
                 1,
             )
             unitId
         }
         recordWallet(telegramId, "CREDITS", -credits.toLong(), origin, batchId)
-        if (materials > 0) recordWallet(telegramId, "MATERIALS", -materials.toLong(), origin, batchId)
         return EquipmentAction(
             EquipmentActionStatus.SUCCESS,
             OwnedUnit(unitIds.first(), definition.code, 1, 100, origin),

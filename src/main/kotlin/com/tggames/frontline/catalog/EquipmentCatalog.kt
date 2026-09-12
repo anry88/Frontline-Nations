@@ -40,8 +40,6 @@ data class EquipmentDefinition(
     val cpCost: Int,
     val unlockLevel: Int,
     val buyCredits: Int,
-    val craftCredits: Int,
-    val craftMaterials: Int,
     val upgradeCredits: Int,
     val upgradeMaterials: Int,
     val stats: UnitStats,
@@ -70,7 +68,7 @@ class EquipmentCatalog(objectMapper: ObjectMapper) {
         require(definitions.map { it.code }.distinct().size == definitions.size) { "Equipment codes must be unique" }
         definitions.forEach {
             require(it.cpCost in 1..5 && it.unlockLevel in 1..50)
-            require(it.buyCredits > 0 && it.craftCredits > 0 && it.craftMaterials > 0)
+            require(it.buyCredits > 0 && it.upgradeCredits > 0 && it.upgradeMaterials > 0)
             require(it.spatial.movementPoints in 1..4)
             require(it.spatial.weaponRange in 1..6)
             require(it.spatial.minimumRange in 1..it.spatial.weaponRange)
