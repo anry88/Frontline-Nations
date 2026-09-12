@@ -80,12 +80,11 @@ services:
       retries: 12
       start_period: 30s
     volumes:
-      - replay-cache:/var/cache/frontline-replays
+      - type: bind
+        source: ${REPLAY_DATA_DIR:?REPLAY_DATA_DIR is required}
+        target: /var/cache/frontline-replays
 
 networks:
   tunnel:
     external: true
     name: ${HDC_TUNNEL_NETWORK:-hdc-tunnel}
-
-volumes:
-  replay-cache:
