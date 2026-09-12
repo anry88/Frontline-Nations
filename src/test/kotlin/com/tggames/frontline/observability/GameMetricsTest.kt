@@ -5,6 +5,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import org.springframework.jdbc.core.simple.JdbcClient
+import org.springframework.jdbc.datasource.DriverManagerDataSource
 
 class GameMetricsTest {
     @Test
@@ -34,5 +35,30 @@ class GameMetricsTest {
         assertThat(GameMetrics.normalizeRegistrationSource("referral")).isEqualTo("referral")
         assertThat(GameMetrics.normalizeRegistrationSource("campaign-secret-value")).isEqualTo("telegram")
         assertThat(GameMetrics.normalizeRegistrationSource(null)).isEqualTo("telegram")
+    }
+
+    @Test
+    fun `database gauges refresh with timestamp cutoffs`() {
+        val dataSource = DriverManagerDataSource("jdbc:h2:mem:game_metrics;MODE=PostgreSQL;DB_CLOSE_DELAY=-1")
+        val jdbc = JdbcClient.create(dataSource)
+        listOf(
+            "CREATE TABLE players(id BIGINT PRIMARY KEY, registration_source VARCHAR(16), created_at TIMESTAMP WITH TIME ZONE, updated_at TIMESTAMP WITH TIME ZONE)",
+            "CREATE TABLE star_payments(id BIGINT PRIMARY KEY, price_stars BIGINT, credits BIGINT, refunded_at TIMESTAMP WITH TIME ZONE)",
+            "CREATE TABLE equipment_transactions(id BIGINT PRIMARY KEY, action VARCHAR(16))",
+            "CREATE TABLE battles(id BIGINT PRIMARY KEY, victory BOOLEAN)",
+            "INSERT INTO players VALUES (1, 'referral', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            "INSERT INTO star_payments VALUES (1, 20, 100, NULL)",
+            "INSERT INTO equipment_transactions VALUES (1, 'PURCHASE')",
+            "INSERT INTO battles VALUES (1, TRUE)",
+        ).forEach { jdbc.sql(it).update() }
+        val registry = SimpleMeterRegistry()
+
+        GameMetrics(registry, jdbc).refreshDatabaseGauges()
+
+        assertThat(registry.get("frontline.players").tag("period", "day").gauge().value()).isEqualTo(1.0)
+        assertThat(registry.get("frontline.registrations").tags("period", "day", "source", "referral").gauge().value()).isEqualTo(1.0)
+        assertThat(registry.get("frontline.stars.payments").tag("status", "paid").gauge().value()).isEqualTo(1.0)
+        assertThat(registry.get("frontline.equipment.transactions").tag("action", "purchase").gauge().value()).isEqualTo(1.0)
+        assertThat(registry.get("frontline.battles").tag("result", "victory").gauge().value()).isEqualTo(1.0)
     }
 }

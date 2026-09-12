@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import java.sql.Timestamp
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -98,7 +99,7 @@ class GameMetrics(
 
     private fun countSince(column: String, cutoff: Instant): Long = jdbc
         .sql("SELECT COUNT(*) FROM players WHERE $column >= :cutoff")
-        .param("cutoff", cutoff)
+        .param("cutoff", Timestamp.from(cutoff))
         .query(Long::class.java)
         .single()
 
@@ -107,7 +108,7 @@ class GameMetrics(
             jdbc.sql("SELECT COUNT(*) FROM players WHERE registration_source = :source")
         } else {
             jdbc.sql("SELECT COUNT(*) FROM players WHERE registration_source = :source AND created_at >= :cutoff")
-                .param("cutoff", cutoff)
+                .param("cutoff", Timestamp.from(cutoff))
         }
         return query.param("source", source).query(Long::class.java).single()
     }

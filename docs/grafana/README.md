@@ -13,7 +13,7 @@ Recommended scrape configuration:
 
 ```yaml
 scrape_configs:
-  - job_name: frontline-nations
+  - job_name: frontline_nations_prod
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: [frontline-nations-prod-app:9090]
