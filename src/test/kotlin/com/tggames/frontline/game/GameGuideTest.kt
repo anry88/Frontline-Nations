@@ -15,4 +15,13 @@ class GameGuideTest {
             }
         }
     }
+
+    @Test
+    fun `weekly schedule is stated in UTC for every language`() {
+        GameLanguage.entries.forEach { language ->
+            val weeklyPage = GameGuide.page(language, 3)
+
+            assertThat(weeklyPage.text).containsAnyOf("15:00", "15.00").contains("UTC")
+        }
+    }
 }

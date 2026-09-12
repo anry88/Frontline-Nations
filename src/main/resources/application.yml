@@ -28,7 +28,7 @@ management:
 
 frontline:
   public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
-  game-timezone: ${GAME_TIMEZONE:Europe/Belgrade}
+  game-timezone: ${GAME_TIMEZONE:UTC}
   battle-server-salt: ${BATTLE_SERVER_SALT:local-development-only}
   telegram:
     bot-token: ${TELEGRAM_BOT_TOKEN:}

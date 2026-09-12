@@ -5,7 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 @ConfigurationProperties("frontline")
 data class FrontlineProperties(
     val publicBaseUrl: String = "http://localhost:8080",
-    val gameTimezone: String = "Europe/Belgrade",
+    val gameTimezone: String = "UTC",
     val battleServerSalt: String = "local-development-only",
     val telegram: Telegram = Telegram(),
     val campaign: Campaign = Campaign(),

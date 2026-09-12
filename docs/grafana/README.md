@@ -5,9 +5,11 @@ Import `dashboard.json` into Grafana and select the Prometheus-compatible dataso
 Prometheus must scrape `GET /actuator/prometheus` on management port `9090` of the application container. The public game and webhook server remains on port `8080`, so the metrics endpoint is not routed through the public domain. The dashboard intentionally combines two kinds of measurements:
 
 - event counters for commands, inline-button actions, checkout stages, equipment actions, and personal-battle results;
-- database-backed gauges refreshed once per minute for player activity, registration attribution, Stars payments, equipment transactions, and battle outcomes.
+- database-backed gauges refreshed once per minute for player activity, player counts by country, registration attribution, Stars payments, equipment transactions, and battle outcomes.
 
 Database gauges remain correct after an application restart. Event panels describe traffic observed by Prometheus and should be read over the selected dashboard time range. Registration views use exact database counts rather than summing overlapping counter windows. Direct starts are labelled `telegram`; valid `/start` payloads are normalized to lowercase campaign codes such as `riverking`. At most 24 referral series are exposed per period and the remainder is grouped as `other`.
+
+The dashboard uses UTC. The country table shows only countries selected by at least one registered player, includes neutral English names and codes from the versioned catalog, and sorts exact database-backed counts from largest to smallest.
 
 Recommended scrape configuration:
 

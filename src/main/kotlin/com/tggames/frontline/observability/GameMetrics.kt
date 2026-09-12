@@ -1,5 +1,7 @@
 package com.tggames.frontline.observability
 
+import com.tggames.frontline.game.AllianceCatalog
+import com.tggames.frontline.i18n.GameLanguage
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
@@ -19,6 +21,7 @@ class GameMetrics(
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val playerGauges = PERIODS.associateWith { period -> gauge("frontline.players", "period", period) }
+    private val countryPlayerGauges = ConcurrentHashMap<CountryGaugeKey, AtomicLong>()
     private val registrationGauges = ConcurrentHashMap<RegistrationGaugeKey, AtomicLong>()
     private val paymentGauges = PAYMENT_STATES.associateWith { status -> gauge("frontline.stars.payments", "status", status) }
     private val starAmountGauges = PAYMENT_STATES.associateWith { status -> gauge("frontline.stars.amount", "status", status, "unit", "stars") }
@@ -67,6 +70,7 @@ class GameMetrics(
             playerGauges.getValue("day").set(countSince("updated_at", now.minus(1, ChronoUnit.DAYS)))
             playerGauges.getValue("week").set(countSince("updated_at", now.minus(7, ChronoUnit.DAYS)))
             playerGauges.getValue("month").set(countSince("updated_at", now.minus(30, ChronoUnit.DAYS)))
+            refreshCountryPlayerGauges()
 
             refreshRegistrationGauges("total", null)
             refreshRegistrationGauges("day", now.minus(1, ChronoUnit.DAYS))
@@ -99,6 +103,40 @@ class GameMetrics(
         .param("cutoff", Timestamp.from(cutoff))
         .query(Long::class.java)
         .single()
+
+    private fun refreshCountryPlayerGauges() {
+        val values = jdbc.sql(
+            """
+            SELECT alliance_code, COUNT(*) AS players
+              FROM players
+             WHERE alliance_code IS NOT NULL
+             GROUP BY alliance_code
+            """.trimIndent(),
+        ).query { result, _ -> result.getString("alliance_code") to result.getLong("players") }
+            .list()
+            .filter { (code, _) -> AllianceCatalog.contains(code) }
+            .associate { (code, count) ->
+                val normalizedCode = code.uppercase()
+                CountryGaugeKey(normalizedCode, AllianceCatalog.name(normalizedCode, GameLanguage.EN)) to count
+            }
+
+        countryPlayerGauges.keys.filter { it !in values }.forEach { key ->
+            countryPlayerGauges.remove(key)?.set(0)
+            registry.find("frontline.players.by.country")
+                .tags("country_code", key.code, "country", key.name)
+                .gauge()
+                ?.let(registry::remove)
+        }
+        values.forEach { (key, value) ->
+            countryPlayerGauges.computeIfAbsent(key) {
+                gauge(
+                    "frontline.players.by.country",
+                    "country_code", key.code,
+                    "country", key.name,
+                )
+            }.set(value)
+        }
+    }
 
     private fun refreshRegistrationGauges(period: String, cutoff: Instant?) {
         val baseSql = """
@@ -211,5 +249,6 @@ class GameMetrics(
     }
 
     private data class RegistrationGaugeKey(val period: String, val source: String, val referral: String)
+    private data class CountryGaugeKey(val code: String, val name: String)
     private data class RegistrationCount(val source: String, val referral: String, val count: Long)
 }

@@ -22,6 +22,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
@@ -75,7 +76,10 @@ class CampaignService(
             """
             INSERT INTO campaign_weeks(week_key, scheduled_at, pairing_version)
             VALUES (:week, :scheduledAt, 2)
-            ON CONFLICT (week_key) DO NOTHING
+            ON CONFLICT (week_key) DO UPDATE
+                SET scheduled_at = EXCLUDED.scheduled_at
+              WHERE campaign_weeks.status = 'OPEN'
+                AND campaign_weeks.scheduled_at > CURRENT_TIMESTAMP
             """.trimIndent(),
         ).param("week", period.weekKey)
             .param("scheduledAt", Timestamp.from(period.resolvesAt.toInstant()))
@@ -200,8 +204,9 @@ class CampaignService(
             matchups.firstOrNull { it.allianceA == code || it.allianceB == code }
         }
         val header = buildString {
+            val resolvesAtUtc = period.resolvesAt.withZoneSameInstant(ZoneOffset.UTC)
             appendLine(campaignText(language, "🌍 WEEKLY FRONT ${period.weekKey}", "🌍 НЕДЕЛЬНЫЙ ФРОНТ ${period.weekKey}"))
-            appendLine(campaignText(language, "⚔️ Battle: Sunday, ${period.resolvesAt.format(DateTimeFormatter.ofPattern("dd.MM HH:mm"))} · Belgrade", "⚔️ Сражение: воскресенье, ${period.resolvesAt.format(DateTimeFormatter.ofPattern("dd.MM в HH:mm"))} · Belgrade"))
+            appendLine(campaignText(language, "⚔️ Battle: Sunday, ${resolvesAtUtc.format(DateTimeFormatter.ofPattern("dd.MM HH:mm"))} UTC", "⚔️ Сражение: воскресенье, ${resolvesAtUtc.format(DateTimeFormatter.ofPattern("dd.MM в HH:mm"))} UTC"))
             append(scheduleStatus(period, matchups.firstOrNull()?.status, language))
         }
         if (ownMatchup == null) {

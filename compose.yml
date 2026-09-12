@@ -38,7 +38,7 @@ services:
       TELEGRAM_ADMIN_CHAT_ID: ${TELEGRAM_ADMIN_CHAT_ID:-0}
       BATTLE_SERVER_SALT: ${BATTLE_SERVER_SALT:?BATTLE_SERVER_SALT is required}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://frontline-nations.tg-games.com}
-      GAME_TIMEZONE: ${GAME_TIMEZONE:-Europe/Belgrade}
+      GAME_TIMEZONE: ${GAME_TIMEZONE:-UTC}
       REPLAY_CACHE_DIRECTORY: ${REPLAY_CACHE_DIRECTORY:-/var/cache/frontline-replays}
       REPLAY_WIDTH: ${REPLAY_WIDTH:-768}
       REPLAY_FPS: ${REPLAY_FPS:-3}
