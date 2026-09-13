@@ -21,6 +21,7 @@ import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
+import java.math.BigDecimal
 import java.nio.charset.StandardCharsets
 import java.sql.Timestamp
 import java.time.Clock
@@ -417,8 +418,16 @@ class CampaignService(
             val map = mapCatalog.maps[Math.floorMod(period.weekKey.hashCode() + pairIndex, mapCatalog.maps.size)]
             jdbc.sql(
                 """
-                INSERT INTO campaign_matchups(id, week_key, pair_index, battlefield, map_id, map_version, map_snapshot_json, max_ticks, alliance_a, alliance_b)
-                VALUES (:id, :week, :pairIndex, :battlefield, :mapId, :mapVersion, CAST(:mapSnapshot AS jsonb), :maxTicks, :allianceA, :allianceB)
+                INSERT INTO campaign_matchups(
+                    id, week_key, pair_index, battlefield, map_id, map_version, map_snapshot_json,
+                    max_ticks, alliance_a, alliance_b, engine_version, rating_version,
+                    rating_minimum_loss_percent, rating_maximum_loss_percent
+                )
+                VALUES (
+                    :id, :week, :pairIndex, :battlefield, :mapId, :mapVersion, CAST(:mapSnapshot AS jsonb),
+                    :maxTicks, :allianceA, :allianceB, :engineVersion, :ratingVersion,
+                    :ratingMinimumLossPercent, :ratingMaximumLossPercent
+                )
                 ON CONFLICT (week_key, pair_index) DO NOTHING
                 """.trimIndent(),
             ).param("id", matchupId)
@@ -431,6 +440,10 @@ class CampaignService(
                 .param("maxTicks", properties.campaign.maxTicks)
                 .param("allianceA", allianceA)
                 .param("allianceB", allianceB)
+                .param("engineVersion", WeeklyBattleEngine.CURRENT_ENGINE_VERSION)
+                .param("ratingVersion", CampaignRanking.CURRENT_RATING_VERSION)
+                .param("ratingMinimumLossPercent", properties.campaign.loserRatingMinimumLossPercent)
+                .param("ratingMaximumLossPercent", properties.campaign.loserRatingMaximumLossPercent)
                 .update()
         }
     }
@@ -441,31 +454,31 @@ class CampaignService(
                 """
                 UPDATE campaign_matchups
                    SET map_version = :mapVersion,
-                       map_snapshot_json = CAST(:mapSnapshot AS jsonb),
-                       max_ticks = :maxTicks
+                       map_snapshot_json = CAST(:mapSnapshot AS jsonb)
                  WHERE week_key = :week AND map_id = :mapId AND resolved_at IS NULL
                 """.trimIndent(),
             ).param("week", weekKey)
                 .param("mapId", map.id)
                 .param("mapVersion", map.version)
                 .param("mapSnapshot", objectMapper.writeValueAsString(map))
-                .param("maxTicks", properties.campaign.maxTicks)
                 .update()
         }
     }
 
     private fun ensureAllianceRatings() {
+        require(properties.campaign.initialRating >= 0)
         val existing = jdbc.sql("SELECT COUNT(*) FROM alliance_ratings").query(Int::class.java).single()
         if (existing == AllianceCatalog.codes.size) return
         AllianceCatalog.codes.forEach { code ->
             jdbc.sql(
                 """
-                INSERT INTO alliance_ratings(alliance_code, english_name)
-                VALUES (:code, :name)
+                INSERT INTO alliance_ratings(alliance_code, english_name, rating)
+                VALUES (:code, :name, :initialRating)
                 ON CONFLICT (alliance_code) DO UPDATE SET english_name = EXCLUDED.english_name
                 """.trimIndent(),
             ).param("code", code)
                 .param("name", AllianceCatalog.name(code, GameLanguage.EN))
+                .param("initialRating", properties.campaign.initialRating)
                 .update()
         }
     }
@@ -494,6 +507,7 @@ class CampaignService(
                         forceA,
                         forceB,
                         campaignBalance(matchup.maxTicks),
+                        matchup.engineVersion,
                     ),
                 )
             },
@@ -507,8 +521,10 @@ class CampaignService(
             ).param("week", weekKey).query(Int::class.java).single()
             if (unresolved == 0) {
                 jdbc.sql(
-                    "UPDATE campaign_weeks SET status = 'RESOLVED', resolved_at = CURRENT_TIMESTAMP WHERE week_key = :week AND status = 'OPEN'",
-                ).param("week", weekKey).update()
+                    "UPDATE campaign_weeks SET status = 'RESOLVED', resolved_at = CURRENT_TIMESTAMP, rating_version = :ratingVersion WHERE week_key = :week AND status = 'OPEN'",
+                ).param("week", weekKey)
+                    .param("ratingVersion", CampaignRanking.CURRENT_RATING_VERSION)
+                    .update()
             }
         }
     }
@@ -527,8 +543,23 @@ class CampaignService(
 
         val ratingBeforeA = lockRating(matchup.allianceA)
         val ratingBeforeB = lockRating(matchup.allianceB)
-        val ratingAfterA = CampaignRanking.updatedRating(ratingBeforeA, result.scoreA)
-        val ratingAfterB = CampaignRanking.updatedRating(ratingBeforeB, result.scoreB)
+        val aWon = result.winnerCode == matchup.allianceA
+        val ratingAfterA = CampaignRanking.updatedRating(
+            ratingBeforeA,
+            result.scoreA,
+            result.scoreB,
+            aWon,
+            matchup.ratingMinimumLossPercent,
+            matchup.ratingMaximumLossPercent,
+        )
+        val ratingAfterB = CampaignRanking.updatedRating(
+            ratingBeforeB,
+            result.scoreB,
+            result.scoreA,
+            !aWon,
+            matchup.ratingMinimumLossPercent,
+            matchup.ratingMaximumLossPercent,
+        )
         jdbc.sql(
             """
                 UPDATE campaign_matchups
@@ -557,7 +588,8 @@ class CampaignService(
                        winner_code = :winner,
                        battle_seed = :seed,
                        seed_hash = :seedHash,
-                       engine_version = 7,
+                       engine_version = :engineVersion,
+                       rating_version = :ratingVersion,
                        events_json = CAST(:events AS jsonb),
                        formations_json = CAST(:formations AS jsonb),
                        objective_state_json = CAST(:objectives AS jsonb),
@@ -592,6 +624,8 @@ class CampaignService(
                 .param("winner", result.winnerCode)
                 .param("seed", result.seed)
                 .param("seedHash", result.seedHash)
+                .param("engineVersion", matchup.engineVersion)
+                .param("ratingVersion", matchup.ratingVersion)
                 .param("events", objectMapper.writeValueAsString(result.events))
                 .param("formations", objectMapper.writeValueAsString(result.formations))
                 .param("objectives", objectMapper.writeValueAsString(result.objectives))
@@ -913,11 +947,15 @@ class CampaignService(
         """
         SELECT m.id, m.pair_index, m.battlefield, m.map_id, m.max_ticks, m.alliance_a, m.alliance_b,
                m.contribution_a, m.contribution_b, m.npc_bonus_a, m.npc_bonus_b,
+               COALESCE((SELECT SUM((unit ->> 'quantity')::INTEGER) FROM jsonb_array_elements(m.npc_snapshot_a) unit), 0) AS npc_units_a,
+               COALESCE((SELECT SUM((unit ->> 'quantity')::INTEGER) FROM jsonb_array_elements(m.npc_snapshot_b) unit), 0) AS npc_units_b,
                m.score_a, m.score_b, m.objective_score_a, m.objective_score_b,
                m.destroyed_score_a, m.destroyed_score_b, m.survivor_score_a, m.survivor_score_b,
                m.remaining_power_a, m.remaining_power_b, m.completed_ticks, m.end_reason,
                m.rating_before_a, m.rating_before_b, m.rating_after_a, m.rating_after_b,
-               m.winner_code, m.events_json, m.resolved_at IS NOT NULL AS resolved,
+               m.winner_code, m.events_json, COALESCE(m.engine_version, 7) AS engine_version,
+               m.rating_version, m.rating_minimum_loss_percent, m.rating_maximum_loss_percent,
+               m.resolved_at IS NOT NULL AS resolved,
                CASE WHEN m.resolved_at IS NOT NULL THEN 'RESOLVED' ELSE w.status END AS status
           FROM campaign_matchups m
           JOIN campaign_weeks w ON w.week_key = m.week_key
@@ -938,6 +976,8 @@ class CampaignService(
                 contributionB = rs.getLong("contribution_b"),
                 npcBonusA = rs.getInt("npc_bonus_a"),
                 npcBonusB = rs.getInt("npc_bonus_b"),
+                npcUnitsA = rs.getInt("npc_units_a"),
+                npcUnitsB = rs.getInt("npc_units_b"),
                 scoreA = rs.getLong("score_a").takeUnless { rs.wasNull() },
                 scoreB = rs.getLong("score_b").takeUnless { rs.wasNull() },
                 objectiveScoreA = rs.getLong("objective_score_a"),
@@ -956,6 +996,10 @@ class CampaignService(
                 ratingAfterB = rs.getLong("rating_after_b").takeUnless { rs.wasNull() },
                 winnerCode = rs.getString("winner_code"),
                 eventsJson = rs.getString("events_json"),
+                engineVersion = rs.getInt("engine_version"),
+                ratingVersion = rs.getInt("rating_version"),
+                ratingMinimumLossPercent = rs.getInt("rating_minimum_loss_percent"),
+                ratingMaximumLossPercent = rs.getInt("rating_maximum_loss_percent"),
                 resolved = rs.getBoolean("resolved"),
                 status = rs.getString("status"),
             )
@@ -1024,7 +1068,14 @@ class CampaignService(
             appendLine(campaignText(language, "Objectives", "Объекты") + ": ${matchup.objectiveScoreA} / ${matchup.objectiveScoreB}")
             appendLine(campaignText(language, "Enemy force destroyed", "Уничтоженная техника") + ": ${matchup.destroyedScoreA} / ${matchup.destroyedScoreB}")
             appendLine(campaignText(language, "Surviving force", "Уцелевшая техника") + ": ${matchup.survivorScoreA} / ${matchup.survivorScoreB}")
-            appendLine(campaignText(language, "Remaining power", "Оставшаяся сила") + ": ${matchup.remainingPowerA} / ${matchup.remainingPowerB}")
+            appendLine(
+                campaignText(language, "NPC garrison", "Гарнизон NPC") +
+                    ": ${matchup.npcUnitsA} · ${matchup.npcBonusA} CP / ${matchup.npcUnitsB} · ${matchup.npcBonusB} CP",
+            )
+            appendLine(
+                campaignText(language, "Remaining combat power", "Оставшаяся боевая мощь") +
+                    ": ${formatCampaignPower(matchup.remainingPowerA)} / ${formatCampaignPower(matchup.remainingPowerB)}",
+            )
             appendLine(campaignText(language, "Rating", "Рейтинг") + ": ${matchup.ratingBeforeA}→${matchup.ratingAfterA} / ${matchup.ratingBeforeB}→${matchup.ratingAfterB}")
             appendLine(campaignText(language, "Duration", "Длительность") + ": ${matchup.completedTicks} / ${matchup.maxTicks}")
             appendLine()
@@ -1076,6 +1127,9 @@ class CampaignService(
         .param("alliance", allianceCode)
         .query(Long::class.java)
         .single()
+
+    private fun formatCampaignPower(power: Long): String =
+        "${BigDecimal.valueOf(power, 2).stripTrailingZeros().toPlainString()} CP"
 
     private fun scheduleStatus(period: CampaignPeriod, status: String?, language: GameLanguage): String {
         if (status == "RESOLVED") return campaignText(language, "Status: results published", "Статус: результаты опубликованы")
@@ -1143,6 +1197,8 @@ private data class MatchupRow(
     val contributionB: Long,
     val npcBonusA: Int,
     val npcBonusB: Int,
+    val npcUnitsA: Int,
+    val npcUnitsB: Int,
     val scoreA: Long?,
     val scoreB: Long?,
     val objectiveScoreA: Long,
@@ -1161,6 +1217,10 @@ private data class MatchupRow(
     val ratingAfterB: Long?,
     val winnerCode: String?,
     val eventsJson: String,
+    val engineVersion: Int,
+    val ratingVersion: Int,
+    val ratingMinimumLossPercent: Int,
+    val ratingMaximumLossPercent: Int,
     val resolved: Boolean,
     val status: String,
 )

@@ -122,9 +122,19 @@ data class WeeklyBattleResult(
 
 @Component
 class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
-    fun resolve(serverSalt: String, weekKey: String, pairIndex: Int, map: BattleMapDefinition, forceA: AllianceForce, forceB: AllianceForce, balance: WeeklyBalance): WeeklyBattleResult {
+    fun resolve(
+        serverSalt: String,
+        weekKey: String,
+        pairIndex: Int,
+        map: BattleMapDefinition,
+        forceA: AllianceForce,
+        forceB: AllianceForce,
+        balance: WeeklyBalance,
+        engineVersion: Int = CURRENT_ENGINE_VERSION,
+    ): WeeklyBattleResult {
         require(forceA.code != forceB.code)
         require(balance.maxTicks > 0)
+        require(engineVersion in LEGACY_ENGINE_VERSION..CURRENT_ENGINE_VERSION)
         val seed = deriveSeed(serverSalt, "$weekKey:$pairIndex:${map.id}:${forceA.code}:${forceB.code}")
         val random = Random(seed)
         val npcA = npcSquad(random, balance)
@@ -162,7 +172,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         val survivorB = remainingB * balance.survivorScorePercent / 100
         val scoreA = objectiveA + destroyedA + survivorA
         val scoreB = objectiveB + destroyedB + survivorB
-        val winnerSide = winner(endReason, remainingA, remainingB, objectiveA, objectiveB, scoreA, scoreB, random)
+        val winnerSide = winner(engineVersion, endReason, remainingA, remainingB, objectiveA, objectiveB, scoreA, scoreB, random)
         val contributorIds = (forceA.units + forceB.units).mapNotNull { it.contributorPlayerId }.distinct().sorted()
         val contributionPerformance = contributorIds.map { playerId ->
             WeeklyContributionPerformance(
@@ -426,11 +436,37 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         return Int.MAX_VALUE
     }
 
-    private fun winner(reason: WeeklyEndReason, remainingA: Long, remainingB: Long, objectiveA: Long, objectiveB: Long, scoreA: Long, scoreB: Long, random: Random): WeeklySide {
-        val ordered = if (reason == WeeklyEndReason.TIME_LIMIT) listOf(remainingA to remainingB, objectiveA to objectiveB, scoreA to scoreB)
-            else listOf(scoreA to scoreB, remainingA to remainingB, objectiveA to objectiveB)
+    internal fun winner(
+        engineVersion: Int,
+        reason: WeeklyEndReason,
+        remainingA: Long,
+        remainingB: Long,
+        objectiveA: Long,
+        objectiveB: Long,
+        scoreA: Long,
+        scoreB: Long,
+        random: Random,
+    ): WeeklySide {
+        val ordered = if (engineVersion <= LEGACY_ENGINE_VERSION) {
+            if (reason == WeeklyEndReason.TIME_LIMIT) {
+                listOf(remainingA to remainingB, objectiveA to objectiveB, scoreA to scoreB)
+            } else {
+                listOf(scoreA to scoreB, remainingA to remainingB, objectiveA to objectiveB)
+            }
+        } else {
+            when (reason) {
+                WeeklyEndReason.TIME_LIMIT -> listOf(scoreA to scoreB, objectiveA to objectiveB, remainingA to remainingB)
+                WeeklyEndReason.ARMY_DESTROYED -> listOf(remainingA to remainingB, scoreA to scoreB, objectiveA to objectiveB)
+                WeeklyEndReason.ALL_OBJECTIVES_CAPTURED -> listOf(objectiveA to objectiveB, scoreA to scoreB, remainingA to remainingB)
+            }
+        }
         ordered.firstOrNull { it.first != it.second }?.let { return if (it.first > it.second) WeeklySide.A else WeeklySide.B }
         return if (random.nextBoolean()) WeeklySide.A else WeeklySide.B
+    }
+
+    companion object {
+        const val LEGACY_ENGINE_VERSION = 7
+        const val CURRENT_ENGINE_VERSION = 8
     }
 
     private fun deriveSeed(serverSalt: String, key: String): Long {

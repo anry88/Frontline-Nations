@@ -1,6 +1,6 @@
 # ADR 0009: Graphical Hex-Map Delivery
 
-Partially superseded by [ADR 0011](0011-rectangular-tactical-map-geometry.md) for coordinate layout, map composition, edge markers, and seam handling.
+Partially superseded by [ADR 0011](0011-rectangular-tactical-map-geometry.md) for coordinate layout, map composition, edge markers, and seam handling, and by [ADR 0018](0018-result-sensitive-campaign-rating.md) for the weekly turn boundary.
 
 ## Status
 

@@ -41,6 +41,7 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/main/resources/db/migration/V14__telegram_stars_credit_purchases.sql`: audited Telegram Stars charges and payment support.
 - `src/main/resources/db/migration/V15__registration_attribution.sql`: bounded direct/referral registration attribution.
 - `src/main/resources/db/migration/V17__front_primary_objectives.sql`: nullable first-objective orders for weekly contributions, preserving active legacy deployments.
+- `src/main/resources/db/migration/V18__result_sensitive_campaign_rating.sql`: engine/rating version snapshots and chronological result-sensitive rating rebuild.
 - `src/main/resources/db/migration/V10__destructive_equipment_and_daily_rewards.sql`: daily reward streaks, offer nonces, level-derived capacity migration, equipment reservation, and destruction audit state.
 - `src/main/resources/db/migration/V11__progressive_levels_and_campaign_economy.sql`: compact Credits rebase, progressive XP levels, contributor reward audit, and weekly country bonuses.
 - `src/main/resources/db/migration/V12__front_squads_and_orders.sql`: per-preset weekly contributions, concrete reserved unit IDs, entries, and tactics.

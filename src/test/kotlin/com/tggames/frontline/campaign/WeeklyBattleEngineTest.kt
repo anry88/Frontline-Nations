@@ -5,6 +5,7 @@ import com.tggames.frontline.catalog.EquipmentCatalog
 import com.tggames.frontline.battle.Tactic
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import kotlin.random.Random
 
 class WeeklyBattleEngineTest {
     private val objectMapper = jacksonObjectMapper()
@@ -69,6 +70,50 @@ class WeeklyBattleEngineTest {
     fun `late capture is worth less but never below floor`() {
         assertThat(engine.capturePoints(1, balance)).isGreaterThan(engine.capturePoints(20, balance))
         assertThat(engine.capturePoints(10_000, balance)).isEqualTo(balance.objectiveMinPoints.toLong())
+    }
+
+    @Test
+    fun `engine version 7 preserves time limit winner ordering for current week`() {
+        val winner = engine.winner(
+            engineVersion = 7,
+            reason = WeeklyEndReason.TIME_LIMIT,
+            remainingA = 2_000,
+            remainingB = 1_000,
+            objectiveA = 500,
+            objectiveB = 1_500,
+            scoreA = 2_000,
+            scoreB = 3_000,
+            random = Random(1),
+        )
+
+        assertThat(winner).isEqualTo(WeeklySide.A)
+    }
+
+    @Test
+    fun `engine version 8 decides time limit by total battle score`() {
+        val winner = engine.winner(
+            engineVersion = 8,
+            reason = WeeklyEndReason.TIME_LIMIT,
+            remainingA = 2_000,
+            remainingB = 1_000,
+            objectiveA = 500,
+            objectiveB = 1_500,
+            scoreA = 2_000,
+            scoreB = 3_000,
+            random = Random(1),
+        )
+
+        assertThat(winner).isEqualTo(WeeklySide.B)
+    }
+
+    @Test
+    fun `engine version 8 keeps decisive end conditions authoritative`() {
+        assertThat(
+            engine.winner(8, WeeklyEndReason.ARMY_DESTROYED, 1, 0, 0, 4_000, 500, 4_500, Random(1)),
+        ).isEqualTo(WeeklySide.A)
+        assertThat(
+            engine.winner(8, WeeklyEndReason.ALL_OBJECTIVES_CAPTURED, 0, 3_000, 4_000, 0, 4_000, 5_000, Random(1)),
+        ).isEqualTo(WeeklySide.A)
     }
 
     @Test

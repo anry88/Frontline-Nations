@@ -2,7 +2,7 @@
 
 ## Status
 
-Superseded in part by ADR 0010
+Superseded in part by ADR 0010 and ADR 0018
 
 ## Context
 

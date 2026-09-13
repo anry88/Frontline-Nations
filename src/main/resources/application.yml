@@ -45,11 +45,14 @@ frontline:
     resolve-cron: ${CAMPAIGN_RESOLVE_CRON:0 0 15 * * SUN}
     retry-cron: ${CAMPAIGN_RETRY_CRON:0 5/10 * * * *}
     open-cron: ${CAMPAIGN_OPEN_CRON:0 5 0 * * MON}
-    max-ticks: ${CAMPAIGN_MAX_TICKS:96}
+    max-ticks: ${CAMPAIGN_MAX_TICKS:120}
     objective-base-points: ${CAMPAIGN_OBJECTIVE_BASE_POINTS:1000}
     objective-decay-per-tick: ${CAMPAIGN_OBJECTIVE_DECAY_PER_TICK:15}
     objective-min-points: ${CAMPAIGN_OBJECTIVE_MIN_POINTS:200}
     survivor-score-percent: ${CAMPAIGN_SURVIVOR_SCORE_PERCENT:50}
+    initial-rating: ${CAMPAIGN_INITIAL_RATING:10000}
+    loser-rating-minimum-loss-percent: ${CAMPAIGN_LOSER_RATING_MINIMUM_LOSS_PERCENT:2}
+    loser-rating-maximum-loss-percent: ${CAMPAIGN_LOSER_RATING_MAXIMUM_LOSS_PERCENT:15}
     npc-min-cp: ${CAMPAIGN_NPC_MIN_CP:10}
     npc-max-cp: ${CAMPAIGN_NPC_MAX_CP:25}
     winner-xp: ${CAMPAIGN_WINNER_XP:600}

@@ -70,14 +70,14 @@ object GameGuide {
             p("Haftalık cephe", "Savaş pazar 15.00 UTC'de çözülür. /contribute ile üç gruba kadar giriş ve taktik seçerek gönder; kilitten önce geri çekebilirsin."),
         ),
         LocalizedPage(
-            p("Score and rewards", "Personal victories and destroyed enemy CP pay Credits and XP. Weekly score comes from held objectives, destroyed enemy force and surviving allied force. Contributors receive team and personal rewards. The winning country gains ×1.2 Credits and XP for seven days. See /rankings."),
-            p("Очки и награды", "В обычных боях Credits и XP дают за победу и уничтоженные CP противника. Недельный счёт складывается из удерживаемых объектов, разгромленной техники и выживших сил. Участники получают общую и личную награду. Победившая страна на семь дней получает ×1,2 Credits и XP. Рейтинги: /rankings."),
-            p("Puntos", "Las victorias y CP destruidos dan Credits y XP. El frente puntúa objetivos, enemigos destruidos y aliados supervivientes. El ganador obtiene ×1,2 durante siete días. /rankings"),
-            p("Pontos", "Vitórias e CP destruídos dão Credits e XP. O front pontua objetivos, inimigos destruídos e aliados sobreviventes. O vencedor recebe ×1,2 por sete dias. /rankings"),
-            p("النقاط", "تمنح الانتصارات وتدمير CP اعتمادات وXP. تحسب الجبهة الأهداف والخسائر والناجين. يحصل الفائز على ×1.2 لسبعة أيام. /rankings"),
-            p("Skor", "Menang dan menghancurkan CP memberi Credits dan XP. Front menilai sasaran, musuh hancur, dan pasukan tersisa. Pemenang mendapat ×1,2 selama tujuh hari. /rankings"),
-            p("अंक", "जीत और नष्ट CP से Credits और XP मिलते हैं। मोर्चे का स्कोर लक्ष्य, नष्ट शत्रु और बचे सहयोगी से बनता है। विजेता को सात दिन ×1.2 मिलता है। /rankings"),
-            p("Puan", "Zafer ve imha edilen CP, Credits ve XP verir. Cephe puanı hedefler, imha ve sağ kalan güçten oluşur. Kazanan yedi gün ×1,2 alır. /rankings"),
+            p("Score and rewards", "Weekly score comes from held objectives, destroyed enemy force and half of surviving allied force. Countries start at 10,000 rating: winners add their score, while losers lose 2–15% according to the score deficit. Contributors receive team and personal rewards. The winner gains ×1.2 Credits and XP for seven days. See /rankings."),
+            p("Очки и награды", "Недельный счёт складывается из удерживаемых объектов, уничтоженной техники и половины выжившей силы. Страны начинают с рейтинга 10 000: победитель добавляет свой счёт, проигравший теряет 2–15% в зависимости от разницы счёта. Участники получают общую и личную награду, победитель — ×1,2 Credits и XP на семь дней. /rankings"),
+            p("Puntos", "El frente puntúa objetivos, enemigos destruidos y la mitad de la fuerza aliada superviviente. Los países empiezan con 10.000: el ganador suma su puntuación y el perdedor pierde 2–15% según la diferencia. El ganador obtiene ×1,2 durante siete días. /rankings"),
+            p("Pontos", "O front pontua objetivos, inimigos destruídos e metade da força aliada sobrevivente. Países começam com 10.000: o vencedor soma a pontuação e o perdedor perde 2–15% conforme a diferença. O vencedor recebe ×1,2 por sete dias. /rankings"),
+            p("النقاط", "تحسب الجبهة الأهداف والقوة المدمرة ونصف القوة الباقية. تبدأ الدول بتصنيف 10,000؛ يضيف الفائز نقاطه ويخسر المهزوم 2–15% حسب فارق النتيجة. يحصل الفائز على ×1.2 لسبعة أيام. /rankings"),
+            p("Skor", "Skor front berasal dari sasaran, musuh hancur, dan separuh kekuatan yang tersisa. Negara mulai dari 10.000: pemenang menambah skor, pihak kalah kehilangan 2–15% sesuai selisih. Pemenang mendapat ×1,2 selama tujuh hari. /rankings"),
+            p("अंक", "मोर्चे का स्कोर लक्ष्य, नष्ट शत्रु और बची शक्ति के आधे से बनता है। देश 10,000 रेटिंग से शुरू करते हैं: विजेता अपना स्कोर जोड़ता है और हारने वाला अंतर के अनुसार 2–15% खोता है। विजेता को सात दिन ×1.2 मिलता है। /rankings"),
+            p("Puan", "Cephe puanı hedefler, imha edilen düşman ve kalan gücün yarısından oluşur. Ülkeler 10.000 ile başlar; kazanan puanını ekler, kaybeden farka göre %2–15 kaybeder. Kazanan yedi gün ×1,2 alır. /rankings"),
         ),
     )
 }
