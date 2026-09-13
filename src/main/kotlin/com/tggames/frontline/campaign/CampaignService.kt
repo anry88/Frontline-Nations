@@ -4,7 +4,9 @@ import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.tggames.frontline.config.FrontlineProperties
 import com.tggames.frontline.battle.CombatGroupSnapshot
+import com.tggames.frontline.battle.BattleMapDefinition
 import com.tggames.frontline.battle.DeploymentEntry
+import com.tggames.frontline.battle.StrategicObjective
 import com.tggames.frontline.battle.Tactic
 import com.tggames.frontline.catalog.EquipmentCatalog
 import com.tggames.frontline.game.AllianceCatalog
@@ -35,9 +37,19 @@ data class FrontContribution(
     val snapshot: CombatGroupSnapshot,
     val entryId: String?,
     val tactic: Tactic,
+    val primaryObjectiveId: String?,
 )
 
-data class FrontDeployment(val entries: List<DeploymentEntry>)
+data class FrontDeployment(
+    val entries: List<DeploymentEntry>,
+    val objectives: List<StrategicObjective>,
+    val entryMarkers: Map<String, String>,
+) {
+    fun entryMarker(entryId: String?): String? = entryId?.let(entryMarkers::get)
+    fun objectiveMarker(objectiveId: String?): String? = objectives.indexOfFirst { it.id == objectiveId }
+        .takeIf { it >= 0 }
+        ?.let { (it + 1).toString() }
+}
 
 data class PendingCampaignNotification(
     val id: Long,
@@ -96,6 +108,7 @@ class CampaignService(
         snapshot: CombatGroupSnapshot,
         unitIds: List<UUID>,
         entryId: String,
+        primaryObjectiveId: String,
         tactic: Tactic,
         language: GameLanguage = GameLanguage.RU,
     ): ContributionOutcome {
@@ -115,6 +128,9 @@ class CampaignService(
             ?: return ContributionOutcome(false, campaignText(language, "No weekly battle was found for your country.", "Для вашей страны не найден недельный бой."))
         if (deployment.entries.none { it.id == entryId }) {
             return ContributionOutcome(false, campaignText(language, "This entry is not available to your side.", "Эта точка входа недоступна вашей стороне."))
+        }
+        if (deployment.objectives.none { it.id == primaryObjectiveId }) {
+            return ContributionOutcome(false, campaignText(language, "This objective is no longer available.", "Эта цель больше недоступна."))
         }
 
         val previous = jdbc.sql(
@@ -140,12 +156,12 @@ class CampaignService(
             INSERT INTO campaign_contributions(
                 week_key, player_telegram_id, alliance_code, credits, power,
                 contribution_type, group_id, group_version, group_snapshot_json,
-                preset_no, deployment_entry, tactic, unit_ids
+                preset_no, deployment_entry, primary_objective, tactic, unit_ids
             )
             VALUES (
                 :week, :playerId, :alliance, NULL, :power,
                 'EQUIPMENT_SNAPSHOT', :groupId, :groupVersion, CAST(:snapshot AS jsonb),
-                :preset, :entry, :tactic, ARRAY[:unitIds]::uuid[]
+                :preset, :entry, :objective, :tactic, ARRAY[:unitIds]::uuid[]
             )
             """.trimIndent(),
         ).param("week", period.weekKey)
@@ -157,6 +173,7 @@ class CampaignService(
             .param("snapshot", objectMapper.writeValueAsString(snapshot))
             .param("preset", presetNo)
             .param("entry", entryId)
+            .param("objective", primaryObjectiveId)
             .param("tactic", tactic.code)
             .param("unitIds", unitIds)
             .update()
@@ -496,7 +513,7 @@ class CampaignService(
                        winner_code = :winner,
                        battle_seed = :seed,
                        seed_hash = :seedHash,
-                       engine_version = 6,
+                       engine_version = 7,
                        events_json = CAST(:events AS jsonb),
                        formations_json = CAST(:formations AS jsonb),
                        objective_state_json = CAST(:objectives AS jsonb),
@@ -784,14 +801,13 @@ class CampaignService(
         ).param("week", weekKey).param("alliance", allianceCode)
             .query { rs, _ -> DeploymentRow(rs.getString("map_id") ?: rs.getString("battlefield"), rs.getString("alliance_a"), rs.getString("alliance_b")) }
             .optional().orElse(null) ?: return null
-        val map = mapCatalog.require(row.mapId)
-        return FrontDeployment(if (row.allianceA == allianceCode) map.playerEntries else map.enemyEntries)
+        return frontDeployment(mapCatalog.require(row.mapId), row.allianceA == allianceCode)
     }
 
     private fun contributions(weekKey: String, playerId: Long): List<FrontContribution> = jdbc.sql(
         """
         SELECT contribution.id, contribution.preset_no, COALESCE(battle_group.name, 'Group ' || contribution.preset_no) AS group_name,
-               contribution.group_snapshot_json, contribution.deployment_entry, contribution.tactic
+               contribution.group_snapshot_json, contribution.deployment_entry, contribution.primary_objective, contribution.tactic
           FROM campaign_contributions contribution
           LEFT JOIN battle_groups battle_group ON battle_group.id = contribution.group_id
          WHERE contribution.week_key = :week AND contribution.player_telegram_id = :player
@@ -807,6 +823,7 @@ class CampaignService(
                 snapshot = objectMapper.readValue(rs.getString("group_snapshot_json"), CombatGroupSnapshot::class.java),
                 entryId = rs.getString("deployment_entry"),
                 tactic = Tactic.fromCode(rs.getString("tactic") ?: "maneuver") ?: Tactic.MANEUVER,
+                primaryObjectiveId = rs.getString("primary_objective"),
             )
         }.list()
 
@@ -820,7 +837,7 @@ class CampaignService(
 
     private fun force(weekKey: String, allianceCode: String): AllianceForce = jdbc.sql(
         """
-        SELECT id, player_telegram_id, power, group_snapshot_json, deployment_entry, tactic
+        SELECT id, player_telegram_id, power, group_snapshot_json, deployment_entry, primary_objective, tactic
           FROM campaign_contributions
          WHERE week_key = :week AND alliance_code = :alliance
            AND contribution_type = 'EQUIPMENT_SNAPSHOT' AND voided_at IS NULL
@@ -835,6 +852,7 @@ class CampaignService(
                 rs.getString("group_snapshot_json"),
                 rs.getString("deployment_entry"),
                 Tactic.fromCode(rs.getString("tactic") ?: "maneuver") ?: Tactic.MANEUVER,
+                rs.getString("primary_objective"),
             )
         }
         .list()
@@ -843,7 +861,7 @@ class CampaignService(
                 allianceCode,
                 rows.flatMap { row ->
                     objectMapper.readValue(row.snapshotJson, CombatGroupSnapshot::class.java).units.map {
-                        WeeklyUnitContribution(it.code, it.level, it.quantity, row.playerId, row.id, row.entryId, row.tactic)
+                        WeeklyUnitContribution(it.code, it.level, it.quantity, row.playerId, row.id, row.entryId, row.tactic, row.primaryObjectiveId)
                     }
                 },
                 rows.size,
@@ -915,6 +933,7 @@ class CampaignService(
         }
         return buildString {
             val map = mapCatalog.require(matchup.mapId ?: matchup.battlefield)
+            val deployment = frontDeployment(map, ownIsA)
             appendLine("🗺 ${GameI18n.t(language, map.nameKey)}")
             appendLine("${AllianceCatalog.option(ownCode, language).label} vs ${AllianceCatalog.option(enemyCode, language).label}")
             appendLine("5 ${campaignText(language, "capture points", "точек захвата")} · ${matchup.maxTicks} ${campaignText(language, "turn limit", "ходов максимум")}")
@@ -927,7 +946,13 @@ class CampaignService(
                     val definition = equipment.require(it.code)
                     "${it.quantity}× ${definition.emoji} ${definition.name(language)} L${it.level}"
                 }
-                appendLine("— ${contribution.groupName}: $composition · ${contribution.entryId ?: "—"} · ${GameI18n.tactic(language, contribution.tactic)}")
+                val entry = deployment.entries.firstOrNull { it.id == contribution.entryId }
+                val objective = deployment.objectives.firstOrNull { it.id == contribution.primaryObjectiveId }
+                val entryText = entry?.let { "${deployment.entryMarker(it.id)} · ${GameI18n.t(language, it.nameKey)}" }
+                    ?: (contribution.entryId ?: "—")
+                val objectiveText = objective?.let { "${deployment.objectiveMarker(it.id)} · ${GameI18n.t(language, it.nameKey)}" }
+                    ?: campaignText(language, "automatic target", "автоматическая цель")
+                appendLine("— ${contribution.groupName}: $composition · $entryText → $objectiveText · ${GameI18n.tactic(language, contribution.tactic)}")
             }
             appendLine("${GameI18n.t(language, "intel")}: $signal.")
             appendLine()
@@ -1040,6 +1065,16 @@ class CampaignService(
     private fun campaignText(language: GameLanguage, english: String, russian: String): String =
         if (language == GameLanguage.RU) russian else english
 
+    private fun frontDeployment(map: BattleMapDefinition, ownIsA: Boolean): FrontDeployment {
+        val entries = if (ownIsA) map.playerEntries else map.enemyEntries
+        val firstMarker = if (ownIsA) 'A' else 'X'
+        return FrontDeployment(
+            entries = entries,
+            objectives = map.objectives,
+            entryMarkers = entries.mapIndexed { index, entry -> entry.id to (firstMarker + index).toString() }.toMap(),
+        )
+    }
+
     private fun campaignBalance(maxTicks: Int): WeeklyBalance {
         val c = properties.campaign
         return WeeklyBalance(
@@ -1102,6 +1137,7 @@ private data class ContributionSnapshotRow(
     val snapshotJson: String,
     val entryId: String?,
     val tactic: Tactic,
+    val primaryObjectiveId: String?,
 )
 
 private data class DeploymentRow(val mapId: String, val allianceA: String, val allianceB: String)

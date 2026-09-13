@@ -21,3 +21,10 @@ The weekly contribution surface exposed one numeric power total and silently rep
 ## Consequences
 
 Reservation and casualty queries must join concrete unit IDs to their source contribution instead of joining every player contribution for the week. Historical rows remain readable with default maneuver orders and automatic entry fallback. Rating and guide callbacks are read-only and do not change authoritative battle state.
+
+## Amendment: map markers and first objectives
+
+- `/contribute` displays the same side-specific entry markers as the rendered weekly map: `A`–`C` for side A and `X`–`Z` for side B. Stable internal entry IDs remain unchanged in storage.
+- Each new contribution stores a side-independent first objective selected from the five numbered map objectives. The formation prioritizes that objective while it is not held by its side, then resumes doctrine-based target selection.
+- Existing active contributions retain their entry and doctrine. Their nullable first objective invokes the previous deterministic automatic-target behavior, so the schema change does not replace, withdraw, or reinterpret deployed units.
+- This behavior is recorded as weekly engine version 7.

@@ -53,6 +53,25 @@ class WeeklyBattleMapCatalogTest {
         }
     }
 
+    @Test
+    fun `front deployment markers match the labels rendered on weekly maps`() {
+        val map = catalog.maps.first()
+        val sideA = FrontDeployment(
+            map.playerEntries,
+            map.objectives,
+            map.playerEntries.mapIndexed { index, entry -> entry.id to ('A' + index).toString() }.toMap(),
+        )
+        val sideB = FrontDeployment(
+            map.enemyEntries,
+            map.objectives,
+            map.enemyEntries.mapIndexed { index, entry -> entry.id to ('X' + index).toString() }.toMap(),
+        )
+
+        assertThat(sideA.entries.map { sideA.entryMarker(it.id) }).containsExactly("A", "B", "C")
+        assertThat(sideB.entries.map { sideB.entryMarker(it.id) }).containsExactly("X", "Y", "Z")
+        assertThat(sideA.objectives.map { sideA.objectiveMarker(it.id) }).containsExactly("1", "2", "3", "4", "5")
+    }
+
     private fun edgeOf(map: BattleMapDefinition, position: HexCoord): String = when {
         position.r == 0 -> "N"
         position.r == map.height - 1 -> "S"

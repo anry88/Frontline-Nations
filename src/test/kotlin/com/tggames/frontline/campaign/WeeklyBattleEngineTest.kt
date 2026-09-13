@@ -78,8 +78,8 @@ class WeeklyBattleEngineTest {
         val forceA = AllianceForce(
             "RS",
             listOf(
-                WeeklyUnitContribution("MBT", 1, 1, 101, 501, firstEntry.id, Tactic.DEFENSE),
-                WeeklyUnitContribution("MBT", 1, 1, 101, 502, lastEntry.id, Tactic.ASSAULT),
+                WeeklyUnitContribution("MBT", 1, 1, 101, 501, firstEntry.id, Tactic.DEFENSE, map.objectives.first().id),
+                WeeklyUnitContribution("MBT", 1, 1, 101, 502, lastEntry.id, Tactic.ASSAULT, map.objectives.last().id),
             ),
             1,
             600,
@@ -91,6 +91,38 @@ class WeeklyBattleEngineTest {
         assertThat(playerFormations.map { it.sourceContributionId }).containsExactlyInAnyOrder(501, 502)
         assertThat(playerFormations.single { it.sourceContributionId == 501L }.initialPosition).isEqualTo(firstEntry.position)
         assertThat(playerFormations.single { it.sourceContributionId == 502L }.initialPosition).isEqualTo(lastEntry.position)
+    }
+
+    @Test
+    fun `selected primary objective controls the contributed formation opening route`() {
+        val entry = map.playerEntries.first()
+        val target = map.objectives.last()
+        val forceA = AllianceForce(
+            "RS",
+            listOf(WeeklyUnitContribution("MBT", 1, 1, 101, 501, entry.id, Tactic.MANEUVER, target.id)),
+            1,
+            300,
+        )
+
+        val result = engine.resolve("secret", "2026-W37", 7, map, forceA, AllianceForce("BR", emptyList(), 0, 0), balance)
+        val firstMove = result.events.first { it.type == WeeklyEventType.FORMATION_MOVED && it.formationId?.contains(":501:") == true }
+
+        assertThat(map.distanceBetween(requireNotNull(firstMove.to), target.position))
+            .isLessThan(map.distanceBetween(requireNotNull(firstMove.from), target.position))
+    }
+
+    @Test
+    fun `legacy contribution without primary objective still resolves`() {
+        val legacy = AllianceForce(
+            "RS",
+            listOf(WeeklyUnitContribution("MBT", 1, 1, 101, 501, map.playerEntries.first().id, Tactic.MANEUVER)),
+            1,
+            300,
+        )
+
+        val result = engine.resolve("secret", "2026-W37", 8, map, legacy, AllianceForce("BR", emptyList(), 0, 0), balance)
+
+        assertThat(result.formations).anyMatch { it.sourceContributionId == 501L }
     }
 
     @Test

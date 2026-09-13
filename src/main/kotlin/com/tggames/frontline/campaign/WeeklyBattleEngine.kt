@@ -25,6 +25,7 @@ data class WeeklyUnitContribution(
     val sourceContributionId: Long? = null,
     val entryId: String? = null,
     val tactic: Tactic = Tactic.MANEUVER,
+    val primaryObjectiveId: String? = null,
 )
 data class AllianceForce(val code: String, val units: List<WeeklyUnitContribution>, val contributors: Int, val contributedPower: Long)
 
@@ -194,7 +195,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         max(balance.objectiveMinPoints, balance.objectiveBasePoints - tick * balance.objectiveDecayPerTick).toLong()
 
     private fun deploy(side: WeeklySide, units: List<WeeklyUnitContribution>, entries: List<DeploymentEntry>): List<FormationState> =
-        units.groupBy { FormationKey(it.sourceContributionId, it.contributorPlayerId, it.code, it.level, it.entryId, it.tactic) }.entries
+        units.groupBy { FormationKey(it.sourceContributionId, it.contributorPlayerId, it.code, it.level, it.entryId, it.tactic, it.primaryObjectiveId) }.entries
             .sortedWith(compareBy({ it.key.contributorPlayerId ?: Long.MIN_VALUE }, { it.key.sourceContributionId ?: Long.MIN_VALUE }, { it.key.code }, { it.key.level }))
             .mapIndexed { index, (key, members) ->
             val contributorPlayerId = key.contributorPlayerId
@@ -202,7 +203,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
             val level = key.level
             val definition = equipment.require(code)
             val quantity = members.sumOf { it.quantity }
-            val unit = WeeklyUnitContribution(code, level, quantity, contributorPlayerId, key.sourceContributionId, key.entryId, key.tactic)
+            val unit = WeeklyUnitContribution(code, level, quantity, contributorPlayerId, key.sourceContributionId, key.entryId, key.tactic, key.primaryObjectiveId)
             val power = unitPower(unit)
             val entry = entries.firstOrNull { it.id == key.entryId } ?: entries[index % entries.size]
             FormationState(
@@ -225,6 +226,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
                 profile = definition.spatial.movementProfile,
                 fireMode = definition.spatial.fireMode,
                 tactic = key.tactic,
+                primaryObjectiveId = key.primaryObjectiveId,
             )
         }
 
@@ -267,7 +269,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         formations.filter { it.power > 0 }.forEach { unit ->
             if (unit.tactic == Tactic.DEFENSE && objectives.any { it.owner == unit.side && it.position == unit.position }) return@forEach
             val candidates = objectives.filter { it.owner != unit.side }.ifEmpty { objectives }
-            val goal = when (unit.tactic) {
+            val goal = candidates.firstOrNull { it.id == unit.primaryObjectiveId } ?: when (unit.tactic) {
                 Tactic.ASSAULT -> candidates.minWithOrNull(compareBy<ObjectiveState> { map.distanceBetween(unit.position, it.position) }.thenBy { it.id })
                 Tactic.DEFENSE -> candidates.minWithOrNull(compareBy<ObjectiveState> { map.distanceBetween(unit.position, it.position) }.thenByDescending { it.captureSteps })
                 Tactic.AMBUSH -> candidates.maxWithOrNull(compareBy<ObjectiveState> { map.terrainAt(it.position).cover }.thenByDescending { -map.distanceBetween(unit.position, it.position) })
@@ -460,6 +462,7 @@ private data class FormationState(
     val profile: MovementProfile,
     val fireMode: FireMode,
     val tactic: Tactic,
+    val primaryObjectiveId: String?,
 ) {
     fun result() = WeeklyFormationResult(
         side = side,
@@ -485,6 +488,7 @@ private data class FormationKey(
     val level: Int,
     val entryId: String?,
     val tactic: Tactic,
+    val primaryObjectiveId: String?,
 )
 
 private data class NpcSquad(val cp: Int, val units: List<WeeklyUnitContribution>)
