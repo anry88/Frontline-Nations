@@ -17,7 +17,10 @@ import com.tggames.frontline.progression.CommanderProgression
 import com.tggames.frontline.progression.ForceTierCatalog
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Service
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import java.nio.charset.StandardCharsets
 import java.sql.Timestamp
 import java.time.Clock
@@ -78,8 +81,15 @@ class CampaignService(
     private val mapCatalog: WeeklyBattleMapCatalog,
     private val inventory: InventoryService,
     private val equipment: EquipmentCatalog,
+    transactionManager: PlatformTransactionManager,
 ) {
     private val calendar = CampaignCalendar(ZoneId.of(properties.gameTimezone))
+    private val resolutionTransaction = TransactionTemplate(transactionManager).apply {
+        propagationBehavior = TransactionDefinition.PROPAGATION_REQUIRES_NEW
+    }
+    private val resolutionBatch = CampaignResolutionBatch { action ->
+        resolutionTransaction.executeWithoutResult { action() }
+    }
 
     @Transactional
     fun ensureCurrentWeek(): CampaignPeriod {
@@ -296,9 +306,8 @@ class CampaignService(
             }.optional().orElse(null)
     }
 
-    @Transactional
     fun resolveDueCampaigns(): Int {
-        ensureCurrentWeek()
+        resolutionTransaction.executeWithoutResult { ensureCurrentWeek() }
         val due = jdbc.sql(
             "SELECT week_key FROM campaign_weeks WHERE status = 'OPEN' AND scheduled_at <= :now ORDER BY scheduled_at",
         ).param("now", Timestamp.from(clock.instant()))
@@ -462,31 +471,66 @@ class CampaignService(
     }
 
     private fun resolveWeek(weekKey: String) {
-        val status = jdbc.sql("SELECT status FROM campaign_weeks WHERE week_key = :week FOR UPDATE")
+        val status = jdbc.sql("SELECT status FROM campaign_weeks WHERE week_key = :week")
             .param("week", weekKey)
             .query(String::class.java)
             .single()
         if (status != "OPEN") return
 
-        matchupRows(weekKey).forEach { matchup ->
-            val forceA = force(weekKey, matchup.allianceA)
-            val forceB = force(weekKey, matchup.allianceB)
-            val map = mapCatalog.require(matchup.mapId ?: matchup.battlefield)
-            val result = battleEngine.resolve(
-                properties.battleServerSalt,
-                weekKey,
-                matchup.pairIndex,
-                map,
-                forceA,
-                forceB,
-                campaignBalance(matchup.maxTicks),
-            )
-            val ratingBeforeA = lockRating(matchup.allianceA)
-            val ratingBeforeB = lockRating(matchup.allianceB)
-            val ratingAfterA = CampaignRanking.updatedRating(ratingBeforeA, result.scoreA)
-            val ratingAfterB = CampaignRanking.updatedRating(ratingBeforeB, result.scoreB)
-            jdbc.sql(
-                """
+        resolutionBatch.resolve(
+            matchupRows(weekKey).filterNot { it.resolved },
+            simulate = { matchup ->
+                val forceA = force(weekKey, matchup.allianceA)
+                val forceB = force(weekKey, matchup.allianceB)
+                val map = mapCatalog.require(matchup.mapId ?: matchup.battlefield)
+                PreparedMatchup(
+                    forceA,
+                    forceB,
+                    battleEngine.resolve(
+                        properties.battleServerSalt,
+                        weekKey,
+                        matchup.pairIndex,
+                        map,
+                        forceA,
+                        forceB,
+                        campaignBalance(matchup.maxTicks),
+                    ),
+                )
+            },
+            persist = { matchup, prepared ->
+                persistResolvedMatchup(weekKey, matchup, prepared.forceA, prepared.forceB, prepared.result)
+            },
+        )
+        resolutionTransaction.executeWithoutResult {
+            val unresolved = jdbc.sql(
+                "SELECT COUNT(*) FROM campaign_matchups WHERE week_key = :week AND resolved_at IS NULL",
+            ).param("week", weekKey).query(Int::class.java).single()
+            if (unresolved == 0) {
+                jdbc.sql(
+                    "UPDATE campaign_weeks SET status = 'RESOLVED', resolved_at = CURRENT_TIMESTAMP WHERE week_key = :week AND status = 'OPEN'",
+                ).param("week", weekKey).update()
+            }
+        }
+    }
+
+    private fun persistResolvedMatchup(
+        weekKey: String,
+        matchup: MatchupRow,
+        forceA: AllianceForce,
+        forceB: AllianceForce,
+        result: WeeklyBattleResult,
+    ) {
+        val alreadyResolved = jdbc.sql(
+            "SELECT resolved_at IS NOT NULL FROM campaign_matchups WHERE id = :id FOR UPDATE",
+        ).param("id", matchup.id).query(Boolean::class.java).single()
+        if (alreadyResolved) return
+
+        val ratingBeforeA = lockRating(matchup.allianceA)
+        val ratingBeforeB = lockRating(matchup.allianceB)
+        val ratingAfterA = CampaignRanking.updatedRating(ratingBeforeA, result.scoreA)
+        val ratingAfterB = CampaignRanking.updatedRating(ratingBeforeB, result.scoreB)
+        jdbc.sql(
+            """
                 UPDATE campaign_matchups
                    SET contribution_a = :contributionA,
                        contribution_b = :contributionB,
@@ -522,8 +566,8 @@ class CampaignService(
                        npc_snapshot_b = CAST(:npcBUnits AS jsonb),
                        resolved_at = CURRENT_TIMESTAMP
                  WHERE id = :id AND resolved_at IS NULL
-                """.trimIndent(),
-            ).param("contributionA", forceA.contributedPower)
+            """.trimIndent(),
+        ).param("contributionA", forceA.contributedPower)
                 .param("contributionB", forceB.contributedPower)
                 .param("contributorsA", forceA.contributors)
                 .param("contributorsB", forceB.contributors)
@@ -556,27 +600,23 @@ class CampaignService(
                 .param("npcBUnits", objectMapper.writeValueAsString(result.npcUnitsB))
                 .param("id", matchup.id)
                 .update()
-            updateRating(matchup.allianceA, ratingAfterA, result.scoreA, result.winnerCode == matchup.allianceA)
-            updateRating(matchup.allianceB, ratingAfterB, result.scoreB, result.winnerCode == matchup.allianceB)
-            val casualties = inventory.settleWeeklyCasualties(
-                weekKey, matchup.id, matchup.allianceA,
-                result.formations.filter { it.side == WeeklySide.A }, result.npcUnitsA, result.seed,
-            ) + inventory.settleWeeklyCasualties(
-                weekKey, matchup.id, matchup.allianceB,
-                result.formations.filter { it.side == WeeklySide.B }, result.npcUnitsB, result.seed,
-            )
-            casualties.forEach { outcome ->
-                jdbc.sql(
-                    "UPDATE campaign_contributions SET units_survived = :survived, units_lost = :lost WHERE id = :id AND week_key = :week AND contribution_type = 'EQUIPMENT_SNAPSHOT' AND voided_at IS NULL",
-                ).param("survived", outcome.survived).param("lost", outcome.lost)
-                    .param("id", outcome.contributionId).param("week", weekKey).update()
-            }
-            issueRewardsAndNotifications(weekKey, matchup, result)
-            activateWinnerBonus(weekKey, result.winnerCode, matchup.allianceA, matchup.allianceB)
+        updateRating(matchup.allianceA, ratingAfterA, result.scoreA, result.winnerCode == matchup.allianceA)
+        updateRating(matchup.allianceB, ratingAfterB, result.scoreB, result.winnerCode == matchup.allianceB)
+        val casualties = inventory.settleWeeklyCasualties(
+            weekKey, matchup.id, matchup.allianceA,
+            result.formations.filter { it.side == WeeklySide.A }, result.npcUnitsA, result.seed,
+        ) + inventory.settleWeeklyCasualties(
+            weekKey, matchup.id, matchup.allianceB,
+            result.formations.filter { it.side == WeeklySide.B }, result.npcUnitsB, result.seed,
+        )
+        casualties.forEach { outcome ->
+            jdbc.sql(
+                "UPDATE campaign_contributions SET units_survived = :survived, units_lost = :lost WHERE id = :id AND week_key = :week AND contribution_type = 'EQUIPMENT_SNAPSHOT' AND voided_at IS NULL",
+            ).param("survived", outcome.survived).param("lost", outcome.lost)
+                .param("id", outcome.contributionId).param("week", weekKey).update()
         }
-        jdbc.sql(
-            "UPDATE campaign_weeks SET status = 'RESOLVED', resolved_at = CURRENT_TIMESTAMP WHERE week_key = :week AND status = 'OPEN'",
-        ).param("week", weekKey).update()
+        issueRewardsAndNotifications(weekKey, matchup, result)
+        activateWinnerBonus(weekKey, result.winnerCode, matchup.allianceA, matchup.allianceB)
     }
 
     private fun lockRating(allianceCode: String): Long = jdbc.sql(
@@ -877,7 +917,8 @@ class CampaignService(
                m.destroyed_score_a, m.destroyed_score_b, m.survivor_score_a, m.survivor_score_b,
                m.remaining_power_a, m.remaining_power_b, m.completed_ticks, m.end_reason,
                m.rating_before_a, m.rating_before_b, m.rating_after_a, m.rating_after_b,
-               m.winner_code, m.events_json, w.status
+               m.winner_code, m.events_json, m.resolved_at IS NOT NULL AS resolved,
+               CASE WHEN m.resolved_at IS NOT NULL THEN 'RESOLVED' ELSE w.status END AS status
           FROM campaign_matchups m
           JOIN campaign_weeks w ON w.week_key = m.week_key
          WHERE m.week_key = :week
@@ -915,6 +956,7 @@ class CampaignService(
                 ratingAfterB = rs.getLong("rating_after_b").takeUnless { rs.wasNull() },
                 winnerCode = rs.getString("winner_code"),
                 eventsJson = rs.getString("events_json"),
+                resolved = rs.getBoolean("resolved"),
                 status = rs.getString("status"),
             )
         }.list()
@@ -1119,6 +1161,7 @@ private data class MatchupRow(
     val ratingAfterB: Long?,
     val winnerCode: String?,
     val eventsJson: String,
+    val resolved: Boolean,
     val status: String,
 )
 
@@ -1128,6 +1171,12 @@ private data class CampaignParticipant(
     val power: Long,
     val survived: Int,
     val lost: Int,
+)
+
+private data class PreparedMatchup(
+    val forceA: AllianceForce,
+    val forceB: AllianceForce,
+    val result: WeeklyBattleResult,
 )
 
 private data class ContributionSnapshotRow(
