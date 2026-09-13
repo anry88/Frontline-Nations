@@ -9,7 +9,7 @@ After a Sunday campaign resolved, the calendar still identified the completed IS
 - The campaign service distinguishes the calendar week from the currently contributable week. If the calendar week is fully resolved, it idempotently creates the next ISO week's rating-seeded matchups immediately.
 - Resolution performs that rollover in the same worker pass after the final matchup commits. The Monday opening schedule remains a recovery trigger.
 - `/contribute`, withdrawal, deployment selection, and the planning map target the contributable week.
-- `/front` shows the next open matchup while retaining the latest prior result and replay for the player's country.
+- `/front` shows only the next open matchup. A localized `Previous battle` callback opens the latest prior result and replay for the player's country as a separate message.
 - Typed weekly events are localized at presentation time from stored objective IDs, equipment codes, and formation types. Stored events and replay inputs remain unchanged.
 - Player-facing front, contribution, weekly-result, rating, and help text uses complete eight-language message entries. Telegram language detection accepts supported primary tags and falls back to English; an explicit `/language` selection remains persistent.
 

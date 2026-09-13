@@ -70,6 +70,7 @@ data class ActiveEconomyBonus(
     val creditsPercent: Int,
     val xpPercent: Int,
     val endsAt: Instant,
+    val materialsPercent: Int = creditsPercent,
 )
 
 @Service
@@ -259,12 +260,25 @@ class CampaignService(
         } else {
             openMatchupText(ownMatchup, playerId, allianceCode, language)
         }
-        val previous = latestResolvedMatchup(allianceCode, period.weekKey)
-        val previousText = previous?.let {
-            GameI18n.t(language, "previous_result", it.weekKey) +
-                "\n${resolvedMatchupText(it, allianceCode, language)}"
-        }
-        return listOfNotNull(previousText, "$header\n\n$activeText").joinToString("\n\n")
+        return "$header\n\n$activeText"
+    }
+
+    @Transactional
+    fun previousFrontText(allianceCode: String?, language: GameLanguage = GameLanguage.EN): String? {
+        if (allianceCode == null) return null
+        val period = ensureContributionWeek()
+        val previous = latestResolvedMatchup(allianceCode, period.weekKey) ?: return null
+        return GameI18n.t(language, "previous_result", previous.weekKey) +
+            "\n\n${resolvedMatchupText(previous, allianceCode, language)}"
+    }
+
+    fun hasPreviousBattle(allianceCode: String?): Boolean {
+        if (allianceCode == null) return false
+        return jdbc.sql(
+            "SELECT EXISTS(SELECT 1 FROM campaign_matchups WHERE resolved_at IS NOT NULL AND (alliance_a = :alliance OR alliance_b = :alliance))",
+        ).param("alliance", allianceCode)
+            .query(Boolean::class.java)
+            .single()
     }
 
     @Transactional

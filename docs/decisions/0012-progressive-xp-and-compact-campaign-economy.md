@@ -15,7 +15,7 @@ A flat 1,000 XP per commander level made every capacity increase equally fast an
 - A standard first-tier personal victory pays a 20-Credit outcome reward; participation after defeat pays 2. Destroying enemy equipment pays one additional Credit and 10 XP for each destroyed enemy CP. Difficulty and deployed-force-tier multipliers apply to both components. The five-fight economy test requires average equal-force battle income plus one fifth of the base daily reward to cover average replacement losses.
 - A contributing weekly winner receives 90 Credits and 600 XP before individual performance bonuses; a loser receives 30 Credits and 250 XP. This makes the winning base payout approximately three ordinary equal-force victories.
 - Weekly player formations retain their contributor ID. A player receives 1 Credit and 50 XP per 100 enemy power on formations they finish, plus 5 Credits and 100 XP for every objective capture in which one of their surviving ground formations participates. Performance and every reward component are persisted for audit.
-- The winning country receives a persisted seven-day ×1.2 multiplier for Credits and XP earned from personal battles and `/daily`. A new weekly result replaces the prior bonus for both countries in that pairing.
+- The winning country receives a persisted seven-day ×1.2 multiplier for Credits, XP, and Materials earned from personal battles; `/daily` applies the same multiplier to its Credit reward. A new weekly result replaces the prior bonus for both countries in that pairing.
 - Personal and weekly map URLs include `?v=<mapVersion>` so current battles display upgraded images instead of Telegram's cached pre-upgrade file.
 
 ## Consequences

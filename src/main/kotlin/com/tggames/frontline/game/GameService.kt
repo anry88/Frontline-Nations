@@ -2,6 +2,7 @@ package com.tggames.frontline.game
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.tggames.frontline.battle.BattleMapDefinition
+import com.tggames.frontline.battle.BattleResult
 import com.tggames.frontline.battle.BattleSide
 import com.tggames.frontline.battle.BattleEngine
 import com.tggames.frontline.battle.DeploymentPlan
@@ -10,6 +11,7 @@ import com.tggames.frontline.battle.SpatialBattleEvent
 import com.tggames.frontline.battle.SpatialEndReason
 import com.tggames.frontline.battle.SpatialEventType
 import com.tggames.frontline.battle.Tactic
+import com.tggames.frontline.campaign.ActiveEconomyBonus
 import com.tggames.frontline.campaign.CampaignService
 import com.tggames.frontline.catalog.EquipmentCatalog
 import com.tggames.frontline.config.FrontlineProperties
@@ -183,6 +185,7 @@ class GameService(
             data == "nav:daily" -> claimDailyReward(callback.from.id, chatId)
             data == "nav:profile" -> telegram.sendMessage(chatId, profileText(callback.from.id), actionKeyboard(callback.from.id, language))
             data == "nav:front" -> front(callback.from.id, callback.from.firstName, chatId)
+            data == "front:previous" -> previousFront(callback.from.id, chatId)
             data == "nav:rankings" -> rankingMenu(callback.from.id, chatId)
             data == "nav:guide" -> guide(callback.from.id, chatId, 0)
             data.startsWith("rank:alliances:") -> allianceRanking(callback.from.id, chatId, data.substringAfterLast(':').toIntOrNull() ?: 0)
@@ -455,18 +458,7 @@ class GameService(
             plan,
         )
         val economyBonus = campaigns.activeEconomyBonus(player.allianceCode)
-        val outcomeCredits = EconomyPolicy.applyPercent(baseBattle.outcomeCredits, economyBonus?.creditsPercent ?: 100)
-        val destructionCredits = EconomyPolicy.applyPercent(baseBattle.destructionCredits, economyBonus?.creditsPercent ?: 100)
-        val outcomeXp = EconomyPolicy.applyPercent(baseBattle.outcomeXp, economyBonus?.xpPercent ?: 100)
-        val destructionXp = EconomyPolicy.applyPercent(baseBattle.destructionXp, economyBonus?.xpPercent ?: 100)
-        val battle = baseBattle.copy(
-            outcomeCredits = outcomeCredits,
-            destructionCredits = destructionCredits,
-            outcomeXp = outcomeXp,
-            destructionXp = destructionXp,
-            credits = outcomeCredits + destructionCredits,
-            xp = outcomeXp + destructionXp,
-        )
+        val battle = applyWeeklyEconomyBonus(baseBattle, economyBonus)
         val spatial = requireNotNull(battle.spatial)
         val xpAfter = player.xp + battle.xp
         val levelAfter = CommanderProgression.levelForXp(xpAfter)
@@ -630,6 +622,10 @@ class GameService(
             appendLine("+${battle.materials} ${GameI18n.t(language, "materials_label")}")
             appendLine(GameI18n.t(language, "equipment_returned_lost", casualties.survived, casualties.lost))
             appendLine("${GameI18n.t(language, "streak")}: ${fresh.currentStreak}$levelUp")
+            if (fresh.victories + fresh.defeats == 1) {
+                appendLine()
+                append(GameI18n.t(language, "new_player_economy_hint"))
+            }
         }
         telegram.sendMessage(chatId, report.trim(), replayKeyboard(telegramId, language, "replay:b:$battleId"))
     }
@@ -1126,7 +1122,7 @@ class GameService(
             inventory.grantDailyUnit(telegramId, unlocked[Math.floorMod(digest.take(4).fold(0) { acc, byte -> acc * 31 + byte }, unlocked.size)])
         } else null
         val bonusUnitText = bonusUnit?.let { "\n${GameI18n.t(language, "daily_bonus_unit", unitLabel(it, language))}" }.orEmpty()
-        val economyBonusText = economyBonus?.let { "\n${GameI18n.t(language, "weekly_victory_bonus_applied")}" }.orEmpty()
+        val economyBonusText = economyBonus?.let { "\n${GameI18n.t(language, "weekly_victory_bonus_daily_applied")}" }.orEmpty()
         telegram.sendMessage(chatId, GameI18n.t(language, "daily_claimed", reward.credits, reward.streak) + bonusUnitText + economyBonusText, actionKeyboard(telegramId, language))
     }
 
@@ -1288,9 +1284,9 @@ class GameService(
         val economyBonus = campaigns.activeEconomyBonus(p.allianceCode)
         val economyBonusText = economyBonus?.let {
             val endDate = it.endsAt.atZone(ZoneId.of(properties.gameTimezone)).toLocalDate()
-            "\n${GameI18n.t(language, "weekly_victory_bonus_profile", endDate)}"
-        }.orEmpty()
-        return """
+            GameI18n.t(language, "weekly_victory_bonus_profile", endDate)
+        }
+        val profile = """
             🪖 ${GameI18n.t(language, "commander")} ${p.displayName}
 
             ${GameI18n.t(language, "alliance")}: $alliance
@@ -1301,8 +1297,10 @@ class GameService(
             Credits: ${p.credits}
             ${GameI18n.t(language, "materials_label")}: ${p.materials}
             ${GameI18n.t(language, "command_capacity")}: ${p.commandCapacity} CP
-            ${GameI18n.t(language, "daily_reward_streak")}: ${p.dailyRewardStreak}/100$economyBonusText
-        """.trimIndent()
+            ${GameI18n.t(language, "daily_reward_streak")}: ${p.dailyRewardStreak}/100
+        """
+        val onboardingHint = GameI18n.t(language, "new_player_economy_hint").takeIf { battles <= 1 }
+        return formatProfileSections(profile, economyBonusText, onboardingHint)
     }
 
     private fun rankingMenu(telegramId: Long, chatId: Long) {
@@ -1388,10 +1386,25 @@ class GameService(
             )
         }
         val rows = mutableListOf<List<InlineKeyboardButton>>()
-        campaigns.frontReplayId(allianceCode)?.let { rows += listOf(InlineKeyboardButton(GameI18n.t(language, "replay_button"), "replay:w:$it")) }
+        if (campaigns.hasPreviousBattle(allianceCode)) {
+            rows += listOf(InlineKeyboardButton(GameI18n.t(language, "previous_battle_button"), "front:previous"))
+        }
         if (allianceCode != null) rows += listOf(InlineKeyboardButton(GameI18n.t(language, "front_groups_button"), "front:manage"))
         rows += actionKeyboard(telegramId, language).inlineKeyboard
         telegram.sendMessage(chatId, campaigns.frontText(telegramId, allianceCode, language), InlineKeyboardMarkup(rows))
+    }
+
+    private fun previousFront(telegramId: Long, chatId: Long) {
+        val player = player(telegramId)
+        val language = GameLanguage.fromStored(player.language)
+        val text = campaigns.previousFrontText(player.allianceCode, language)
+            ?: return telegram.sendMessage(chatId, GameI18n.t(language, "stale"), actionKeyboard(telegramId, language))
+        val rows = mutableListOf<List<InlineKeyboardButton>>()
+        campaigns.frontReplayId(player.allianceCode)?.let {
+            rows += listOf(InlineKeyboardButton(GameI18n.t(language, "replay_button"), "replay:w:$it"))
+        }
+        rows += listOf(InlineKeyboardButton(GameI18n.t(language, "front"), "nav:front"))
+        telegram.sendMessage(chatId, text, InlineKeyboardMarkup(rows))
     }
 
     private fun replayKeyboard(telegramId: Long, language: GameLanguage, callbackData: String): InlineKeyboardMarkup = InlineKeyboardMarkup(
@@ -1696,6 +1709,27 @@ class GameService(
     }
 
 }
+
+internal fun applyWeeklyEconomyBonus(base: BattleResult, bonus: ActiveEconomyBonus?): BattleResult {
+    if (bonus == null) return base
+    val outcomeCredits = EconomyPolicy.applyPercent(base.outcomeCredits, bonus.creditsPercent)
+    val destructionCredits = EconomyPolicy.applyPercent(base.destructionCredits, bonus.creditsPercent)
+    val outcomeXp = EconomyPolicy.applyPercent(base.outcomeXp, bonus.xpPercent)
+    val destructionXp = EconomyPolicy.applyPercent(base.destructionXp, bonus.xpPercent)
+    return base.copy(
+        outcomeCredits = outcomeCredits,
+        destructionCredits = destructionCredits,
+        outcomeXp = outcomeXp,
+        destructionXp = destructionXp,
+        credits = outcomeCredits + destructionCredits,
+        xp = outcomeXp + destructionXp,
+        materials = EconomyPolicy.applyPercent(base.materials, bonus.materialsPercent),
+    )
+}
+
+internal fun formatProfileSections(baseTemplate: String, vararg optionalSections: String?): String =
+    (listOf(baseTemplate.trimIndent()) + optionalSections.filterNotNull().filter(String::isNotBlank))
+        .joinToString("\n\n")
 
 data class Player(
     val telegramId: Long,
