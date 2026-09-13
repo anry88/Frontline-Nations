@@ -3,6 +3,14 @@ package com.tggames.frontline.monetization
 import com.tggames.frontline.i18n.GameLanguage
 
 object StarsMessages {
+    fun unavailable(language: GameLanguage): String = localized(
+        language,
+        "This Stars purchase is no longer available.", "Эта покупка за Stars больше недоступна.",
+        "Esta compra con Stars ya no está disponible.", "Esta compra com Stars não está mais disponível.",
+        "عملية الشراء عبر Stars لم تعد متاحة.", "Pembelian dengan Stars ini tidak tersedia lagi.",
+        "यह Stars खरीद अब उपलब्ध नहीं है।", "Bu Stars satın alımı artık kullanılamıyor.",
+    )
+
     fun menu(language: GameLanguage, balance: Long): String = localized(
         language,
         "Balance: $balance Credits\n\nChoose a package:",

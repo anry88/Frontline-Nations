@@ -21,7 +21,7 @@ class CampaignScheduler(
     @Scheduled(cron = "\${frontline.campaign.open-cron}", zone = "\${frontline.game-timezone}")
     fun openWeek() {
         try {
-            campaigns.ensureCurrentWeek()
+            campaigns.ensureContributionWeek()
         } catch (error: Exception) {
             logger.error("Weekly campaign opening failed", error)
         }

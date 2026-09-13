@@ -30,4 +30,7 @@ class CampaignCalendar(private val zoneId: ZoneId) {
             resolvesAt = sunday.atTime(LocalTime.of(15, 0)).atZone(zoneId),
         )
     }
+
+    fun nextPeriod(period: CampaignPeriod): CampaignPeriod =
+        periodAt(period.opensAt.plusWeeks(1).toInstant())
 }

@@ -15,4 +15,12 @@ class StarsMessagesTest {
 
         assertThat(StarsMessages.packButton(GameLanguage.RU, StarsCreditCatalog.packs[1])).contains("% выгоды")
     }
+
+    @Test
+    fun `unavailable purchase message follows every supported language`() {
+        GameLanguage.entries.forEach { language ->
+            assertThat(StarsMessages.unavailable(language)).isNotBlank()
+        }
+        assertThat(StarsMessages.unavailable(GameLanguage.RU)).isEqualTo("Эта покупка за Stars больше недоступна.")
+    }
 }

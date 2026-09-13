@@ -17,13 +17,13 @@ object AllianceCatalog {
             require(it.size == 250 && it.toSet().size == it.size) { "Invalid versioned alliance catalog" }
         }
 
-    val all: Map<String, String> by lazy { codes.associateWith { name(it, GameLanguage.RU) } }
+    val all: Map<String, String> by lazy { codes.associateWith { name(it, GameLanguage.EN) } }
 
     fun contains(code: String) = code.uppercase() in codes
 
     fun option(code: String, language: GameLanguage) = AllianceOption(code.uppercase(), name(code, language), flag(code))
 
-    fun name(code: String, language: GameLanguage = GameLanguage.RU): String {
+    fun name(code: String, language: GameLanguage = GameLanguage.EN): String {
         val normalized = code.uppercase()
         specialNames[normalized]?.get(language)?.let { return it }
         return Locale("", normalized).getDisplayCountry(language.locale)

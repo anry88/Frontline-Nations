@@ -73,11 +73,13 @@ class GameService(
 
         update.preCheckoutQuery?.let { query ->
             val validation = stars.validate(query)
+            val language = runCatching { language(query.from.id) }
+                .getOrElse { GameLanguage.fromTelegram(query.from.languageCode) }
             metrics.stars(if (validation.valid) "precheckout_approved" else "precheckout_rejected", StarsCreditCatalog.parsePayload(query.invoicePayload)?.packId)
             telegram.answerPreCheckout(
                 query.id,
                 validation.valid,
-                if (validation.valid) null else "This Stars purchase is no longer available.",
+                if (validation.valid) null else StarsMessages.unavailable(language),
             )
             return
         }
@@ -625,7 +627,7 @@ class GameService(
             economyBonus?.let {
                 appendLine(GameI18n.t(language, "weekly_victory_bonus_applied"))
             }
-            appendLine("+${battle.materials} Materials")
+            appendLine("+${battle.materials} ${GameI18n.t(language, "materials_label")}")
             appendLine(GameI18n.t(language, "equipment_returned_lost", casualties.survived, casualties.lost))
             appendLine("${GameI18n.t(language, "streak")}: ${fresh.currentStreak}$levelUp")
         }
@@ -1004,7 +1006,7 @@ class GameService(
         } + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "army"), "nav:army")))
         telegram.sendMessage(
             chatId,
-            "${GameI18n.t(language, "upgrade_title")}\nCredits: ${player.credits} · Materials: ${player.materials}\n\n${GameI18n.t(language, "upgrade_growth")}\n\n$details",
+            "${GameI18n.t(language, "upgrade_title")}\nCredits: ${player.credits} · ${GameI18n.t(language, "materials_label")}: ${player.materials}\n\n${GameI18n.t(language, "upgrade_growth")}\n\n$details",
             InlineKeyboardMarkup(rows),
         )
     }
@@ -1140,13 +1142,13 @@ class GameService(
         val sent = campaigns.contributions(telegramId).associateBy { it.presetNo }
         val deployment = campaigns.frontDeployment(player.allianceCode)
         val text = buildString {
-            appendLine(frontLocalized(language, "🚩 GROUPS ON THE FRONT", "🚩 ОТРЯДЫ НА ФРОНТЕ"))
-            appendLine(frontLocalized(language, "Choose any of your three groups. Each sent group receives its own map entry, first objective, and tactic.", "Можно отправить любой из трёх отрядов. Для каждого отдельно выбираются вход на карте, первая цель и тактика."))
+            appendLine(GameI18n.t(language, "front_groups_title"))
+            appendLine(GameI18n.t(language, "front_groups_help"))
             appendLine()
             army.groups.forEach { group ->
                 val cp = group.units.sumOf { equipment.require(it.code).cpCost }
                 val composition = if (group.units.isEmpty()) {
-                    frontLocalized(language, "empty", "пусто")
+                    GameI18n.t(language, "empty_short")
                 } else {
                     group.units.groupBy { it.code to it.level }.entries.joinToString(", ") { (key, units) ->
                         "${units.size}× ${unitLabel(key.first, key.second, language)}"
@@ -1159,12 +1161,12 @@ class GameService(
                     val objective = deployment?.objectives?.firstOrNull { objective -> objective.id == it.primaryObjectiveId }
                     val entryText = entry?.let { value -> "${deployment.entryMarker(value.id)} · ${GameI18n.t(language, value.nameKey)}" } ?: (it.entryId ?: "—")
                     val objectiveText = objective?.let { value -> "${deployment.objectiveMarker(value.id)} · ${GameI18n.t(language, value.nameKey)}" }
-                        ?: frontLocalized(language, "automatic target", "автоматическая цель")
+                        ?: GameI18n.t(language, "automatic_target")
                     appendLine("   ✅ $entryText → $objectiveText · ${GameI18n.tactic(language, it.tactic)}")
                 }
             }
             appendLine()
-            append(frontLocalized(language, "A sent unit cannot be used in personal battles or another front group until it is withdrawn or survives the weekly battle.", "Отправленная машина недоступна для обычных боёв и другого фронтового отряда, пока её не отозвали или она не вернулась после недельной битвы."))
+            append(GameI18n.t(language, "front_reservation_notice"))
         }
         val buttons = army.groups.map { group ->
             val contribution = sent[group.presetNo]
@@ -1190,10 +1192,10 @@ class GameService(
             ?: return staleSelection(chatId)
         if (group.units.isEmpty()) return telegram.sendMessage(chatId, GameI18n.t(language, "army_empty"), actionKeyboard(telegramId, language))
         val deployment = campaigns.frontDeployment(alliance)
-            ?: return telegram.sendMessage(chatId, frontLocalized(language, "No open weekly battle was found.", "Открытый недельный бой не найден."), actionKeyboard(telegramId, language))
+            ?: return telegram.sendMessage(chatId, GameI18n.t(language, "front_no_open_battle"), actionKeyboard(telegramId, language))
         val text = buildString {
             appendLine("🚩 ${group.name}")
-            appendLine(frontLocalized(language, "Choose an edge entry for this group:", "Выберите край карты для входа этого отряда:"))
+            appendLine(GameI18n.t(language, "front_choose_entry"))
         }
         val buttons = deployment.entries.map { entry ->
             listOf(InlineKeyboardButton("${deployment.entryMarker(entry.id)} · ${GameI18n.t(language, entry.nameKey)}", "front:entry:$binding:${entry.id}"))
@@ -1215,7 +1217,7 @@ class GameService(
         val entry = deployment.entries.firstOrNull { it.id == entryId } ?: return staleSelection(chatId)
         val text = buildString {
             appendLine("🚩 ${group.name} → ${deployment.entryMarker(entry.id)} · ${GameI18n.t(language, entry.nameKey)}")
-            appendLine(frontLocalized(language, "Choose the first objective for this group:", "Выберите первую цель этого отряда:"))
+            appendLine(GameI18n.t(language, "front_choose_objective"))
         }
         val buttons = deployment.objectives.map { objective ->
             listOf(InlineKeyboardButton("${deployment.objectiveMarker(objective.id)} · ${GameI18n.t(language, objective.nameKey)}", "front:objective:${parts[0]}:$entryId:${objective.id}"))
@@ -1239,7 +1241,7 @@ class GameService(
         val objective = deployment.objectives.firstOrNull { it.id == objectiveId } ?: return staleSelection(chatId)
         val text = buildString {
             appendLine("🚩 ${group.name} → ${deployment.entryMarker(entry.id)} · ${GameI18n.t(language, entry.nameKey)} → ${deployment.objectiveMarker(objective.id)} · ${GameI18n.t(language, objective.nameKey)}")
-            appendLine(frontLocalized(language, "Choose movement and target priority:", "Выберите порядок движения и приоритет целей:"))
+            appendLine(GameI18n.t(language, "choose_tactic_spatial"))
             Tactic.entries.forEach { appendLine("${it.icon} ${GameI18n.tactic(language, it)} — ${GameI18n.tacticHint(language, it)}") }
         }
         val buttons = Tactic.entries.map { tactic ->
@@ -1297,7 +1299,7 @@ class GameService(
             ${GameI18n.t(language, "streak")}: ${p.currentStreak} · ${GameI18n.t(language, "record")} ${p.bestStreak}
 
             Credits: ${p.credits}
-            Materials: ${p.materials}
+            ${GameI18n.t(language, "materials_label")}: ${p.materials}
             ${GameI18n.t(language, "command_capacity")}: ${p.commandCapacity} CP
             ${GameI18n.t(language, "daily_reward_streak")}: ${p.dailyRewardStreak}/100$economyBonusText
         """.trimIndent()
@@ -1305,11 +1307,11 @@ class GameService(
 
     private fun rankingMenu(telegramId: Long, chatId: Long) {
         val language = language(telegramId)
-        val text = frontLocalized(language, "🏆 RATINGS\n\nChoose alliance standings or the commander XP table.", "🏆 РЕЙТИНГИ\n\nВыберите таблицу стран или рейтинг командиров по XP.")
+        val text = GameI18n.t(language, "ratings_menu")
         val keyboard = InlineKeyboardMarkup(
             listOf(
-                listOf(InlineKeyboardButton(frontLocalized(language, "🌍 Alliances", "🌍 Страны"), "rank:alliances:0")),
-                listOf(InlineKeyboardButton(frontLocalized(language, "🪖 Players", "🪖 Игроки"), "rank:players")),
+                listOf(InlineKeyboardButton(GameI18n.t(language, "alliances_button"), "rank:alliances:0")),
+                listOf(InlineKeyboardButton(GameI18n.t(language, "players_button"), "rank:players")),
             ),
         )
         telegram.sendMessage(chatId, text, keyboard)
@@ -1321,13 +1323,13 @@ class GameService(
         val language = GameLanguage.fromStored(p.language)
         val ranking = rankings.alliances(page, ALLIANCE_RATING_PAGE_SIZE, p.allianceCode)
         val text = buildString {
-            appendLine(frontLocalized(language, "🌍 ALLIANCE RATING", "🌍 РЕЙТИНГ СТРАН"))
+            appendLine(GameI18n.t(language, "alliance_rating_title"))
             appendLine()
             ranking.entries.forEach { row ->
                 val marker = if (row.code == p.allianceCode) " ←" else ""
                 appendLine("${row.place}. ${AllianceCatalog.option(row.code, language).label} — ${row.rating} · ${row.wins}/${row.games}$marker")
             }
-            ranking.ownPlace?.let { appendLine("\n${frontLocalized(language, "Your alliance", "Ваша страна")}: #$it") }
+            ranking.ownPlace?.let { appendLine("\n${GameI18n.t(language, "your_alliance")}: #$it") }
             append("${ranking.page + 1}/${ranking.pages}")
         }
         val nav = mutableListOf<InlineKeyboardButton>()
@@ -1335,7 +1337,7 @@ class GameService(
         if (ranking.page + 1 < ranking.pages) nav += InlineKeyboardButton("➡️", "rank:alliances:${ranking.page + 1}")
         val rows = mutableListOf<List<InlineKeyboardButton>>()
         if (nav.isNotEmpty()) rows += nav
-        rows += listOf(InlineKeyboardButton(frontLocalized(language, "🪖 Players", "🪖 Игроки"), "rank:players"))
+        rows += listOf(InlineKeyboardButton(GameI18n.t(language, "players_button"), "rank:players"))
         telegram.sendMessage(chatId, text, InlineKeyboardMarkup(rows))
     }
 
@@ -1343,7 +1345,7 @@ class GameService(
         val language = language(telegramId)
         val ranking = rankings.players(telegramId)
         val text = buildString {
-            appendLine(frontLocalized(language, "🪖 TOP 10 COMMANDERS BY XP", "🪖 ТОП-10 КОМАНДИРОВ ПО XP"))
+            appendLine(GameI18n.t(language, "players_rating_title"))
             appendLine()
             ranking.top.forEach { row ->
                 val marker = if (row.telegramId == telegramId) " ←" else ""
@@ -1353,7 +1355,7 @@ class GameService(
                 appendLine("\n…\n${ranking.own.place}. ${ranking.own.name.take(32)} — ${ranking.own.xp} XP · L${ranking.own.level} ←")
             }
         }
-        telegram.sendMessage(chatId, text.trim(), InlineKeyboardMarkup(listOf(listOf(InlineKeyboardButton(frontLocalized(language, "🌍 Alliances", "🌍 Страны"), "rank:alliances:0")))))
+        telegram.sendMessage(chatId, text.trim(), InlineKeyboardMarkup(listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "alliances_button"), "rank:alliances:0")))))
     }
 
     private fun guide(telegramId: Long, chatId: Long, requestedPage: Int) {
@@ -1366,7 +1368,7 @@ class GameService(
         if (pageIndex + 1 < GameGuide.size) nav += InlineKeyboardButton("➡️", "guide:${pageIndex + 1}")
         val rows = mutableListOf<List<InlineKeyboardButton>>()
         if (nav.isNotEmpty()) rows += nav
-        rows += listOf(InlineKeyboardButton(frontLocalized(language, "🏠 Menu", "🏠 Меню"), "nav:profile"))
+        rows += listOf(InlineKeyboardButton(GameI18n.t(language, "menu_button"), "nav:profile"))
         telegram.sendMessage(chatId, text, InlineKeyboardMarkup(rows))
     }
 
@@ -1387,7 +1389,7 @@ class GameService(
         }
         val rows = mutableListOf<List<InlineKeyboardButton>>()
         campaigns.frontReplayId(allianceCode)?.let { rows += listOf(InlineKeyboardButton(GameI18n.t(language, "replay_button"), "replay:w:$it")) }
-        if (allianceCode != null) rows += listOf(InlineKeyboardButton(frontLocalized(language, "🚩 Front groups", "🚩 Отряды на фронте"), "front:manage"))
+        if (allianceCode != null) rows += listOf(InlineKeyboardButton(GameI18n.t(language, "front_groups_button"), "front:manage"))
         rows += actionKeyboard(telegramId, language).inlineKeyboard
         telegram.sendMessage(chatId, campaigns.frontText(telegramId, allianceCode, language), InlineKeyboardMarkup(rows))
     }
@@ -1501,8 +1503,8 @@ class GameService(
         )
         rows += listOf(InlineKeyboardButton(GameI18n.t(language, "front"), "nav:front"))
         rows += listOf(
-            InlineKeyboardButton(frontLocalized(language, "🏆 Ratings", "🏆 Рейтинги"), "nav:rankings"),
-            InlineKeyboardButton(frontLocalized(language, "📖 Guide", "📖 Гайд"), "nav:guide"),
+            InlineKeyboardButton(GameI18n.t(language, "ratings_button"), "nav:rankings"),
+            InlineKeyboardButton(GameI18n.t(language, "guide_button"), "nav:guide"),
         )
         rows += listOf(InlineKeyboardButton(GameI18n.t(language, "settings"), "nav:settings"))
         return InlineKeyboardMarkup(rows)
@@ -1679,16 +1681,13 @@ class GameService(
         appendLine(GameI18n.t(language, "help"))
         appendLine("/army — ${GameI18n.t(language, "army_title")}")
         appendLine("/shop — ${GameI18n.t(language, "shop_title")}")
-        appendLine("/stars — ${frontLocalized(language, "buy Credits with Telegram Stars", "купить Credits за Telegram Stars")}")
-        appendLine("/paysupport — ${frontLocalized(language, "Stars purchase support", "поддержка покупок за Stars")}")
+        appendLine("/stars — ${GameI18n.t(language, "help_buy_credits")}")
+        appendLine("/paysupport — ${GameI18n.t(language, "help_payment_support")}")
         appendLine("/upgrade — ${GameI18n.t(language, "upgrade_title")}")
         appendLine("/daily — ${GameI18n.t(language, "daily")}")
-        appendLine("/rankings — ${frontLocalized(language, "alliance and player ratings", "рейтинг стран и игроков")}")
-        append("/guide — ${frontLocalized(language, "game rules by section", "правила игры по разделам")}")
+        appendLine("/rankings — ${GameI18n.t(language, "help_rankings")}")
+        append("/guide — ${GameI18n.t(language, "help_guide")}")
     }
-
-    private fun frontLocalized(language: GameLanguage, english: String, russian: String): String =
-        if (language == GameLanguage.RU) russian else english
 
     companion object {
         private const val COUNTRY_PAGE_SIZE = 10

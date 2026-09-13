@@ -31,7 +31,7 @@ Open [@frontline_nations_bot](https://t.me/frontline_nations_bot) and use:
 
 Every newly completed personal battle includes a `▶️ Battle replay` button. The bot renders a deliberately paced square MP4 directly from the saved event log, showing formation movement, fire, losses, and objective control. Resolved weekly matchups expose the same button in `/front`.
 
-New accounts infer their initial language from Telegram and receive language-relevant country suggestions. The explicit language selection is retained even when Telegram later sends another interface locale. Existing accounts keep Russian until they choose another language.
+New accounts infer their initial language from Telegram when its primary language tag is one of the eight supported languages; a missing or unsupported tag falls back to English. The explicit language selection is retained even when Telegram later sends another interface locale. Existing stored preferences are preserved.
 
 ## Product Principles
 
@@ -52,7 +52,7 @@ Players launch operations from `/battle`. The bot sends a pre-rendered 1,536×1,
 
 ### Weekly campaigns
 
-All 250 countries and territories enter 125 weekly pairings. With an empty table they are sorted by English name and paired adjacently; later rounds sort by cumulative battle rating, with English name as the stable tie-break. Contributions remain open until Sunday at 15:00 UTC.
+All 250 countries and territories enter 125 weekly pairings. With an empty table they are sorted by English name and paired adjacently; later rounds sort by cumulative battle rating, with English name as the stable tie-break. Contributions remain open until Sunday at 15:00 UTC. As soon as a round is fully resolved, the next 125 matchups are created and contributions reopen without waiting for Monday; `/front` keeps the previous result and replay available beside the new matchup and map.
 
 Each country receives a deterministic random NPC group whose actual equipment totals 10–25 CP; internally one CP is represented as 100 combat-power points. Players may reinforce their country with any or all three personal presets, provided a concrete owned unit is not reused between them. Each contribution keeps its own edge entry and behavior doctrine; the weekly engine preserves the preset as a distinct formation source so those orders remain effective. Committed machines are reserved until withdrawal or resolution and cannot simultaneously enter a personal battle; surviving units return and destroyed units are removed. Each matchup uses one of ten individually composed, versioned 15×21 rectangular hex maps with a distinct front orientation, three edge entries per side, a unique five-objective arrangement, multiple terrain regions, and a connected road network with alternate routes. Formations move across exactly the grid shown in the image and use finite weapon ranges; artillery can fire indirectly, while aircraft still cannot strike across the whole map. Engine v8 resolves opposing formations that converge on the same objective hex through zero-distance combat instead of letting them stall. A captured point grants more score when secured early. Losing it removes its retained score, and a later recapture is worth less. Destroyed enemy power and half of surviving allied power also score. Capturing all five points or destroying the opposing army ends the battle early; engine v8 allows up to 120 turns and decides a timeout by total battle score, then objectives and remaining power. Every country starts from a configurable 10,000 rating. A winner adds its battle score. A loser gains no points and instead loses a configurable 2–15% of accumulated rating: the exact percentage grows with the final score deficit, so a close, efficient defeat costs much less than a rout. Rating-rule parameters and versions are snapshotted per matchup. `/front` reports the exact NPC unit count and CP instead of exposing the internal ×100 power scale. `/rankings` exposes the rating table in pages of ten and also shows the global commander XP top 10 plus the requesting player's place. A contributing winner receives a 90-Credit/600-XP base reward—about three ordinary equal-force victories—plus personal bonuses for formations destroyed and objectives captured. The winning country then earns ×1.2 Credits and XP from personal battles and `/daily` for seven days.
 
@@ -126,6 +126,7 @@ Mini App and a separately deployed replay-renderer directory will be added only 
 - [Progressive XP and compact campaign economy decision](docs/decisions/0012-progressive-xp-and-compact-campaign-economy.md)
 - [Event-log video replay decision](docs/decisions/0013-event-log-video-replays.md)
 - [Asynchronous campaign delivery decision](docs/decisions/0015-asynchronous-campaign-delivery.md)
+- [Continuous front rollover and localization decision](docs/decisions/0019-continuous-front-rollover-and-localization.md)
 - [Contributor guide](CONTRIBUTING.md)
 - [Agent guide](AGENTS.md)
 - [GitHub About metadata](docs/github-about.md)
