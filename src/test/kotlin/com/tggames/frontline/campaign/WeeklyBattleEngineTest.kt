@@ -117,6 +117,13 @@ class WeeklyBattleEngineTest {
     }
 
     @Test
+    fun `engine version 8 resolves opposing formations sharing an objective hex`() {
+        assertThat(engine.withinWeaponRange(7, distance = 0, weaponRange = 2)).isFalse()
+        assertThat(engine.withinWeaponRange(8, distance = 0, weaponRange = 2)).isTrue()
+        assertThat(engine.withinWeaponRange(8, distance = 3, weaponRange = 2)).isFalse()
+    }
+
+    @Test
     fun `each contributed preset keeps its selected entry and formation identity`() {
         val firstEntry = map.playerEntries.first()
         val lastEntry = map.playerEntries.last()

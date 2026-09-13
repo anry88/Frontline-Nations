@@ -22,7 +22,7 @@ Integer basis points and ceiling division make the calculation deterministic. Th
 
 Each matchup snapshots the rating version and its minimum/maximum loss bounds. Migration V18 resets countries to the v2 baseline and replays completed matchups in chronological order from their immutable stored scores and winner, updating before/after audit fields and the aggregate rating table.
 
-Weekly battle engine v8 extends newly created matchups from 96 to 120 turns and changes timeout winner selection. Capturing every objective and destroying the enemy army remain decisive end conditions. At the turn limit, total battle score decides first, followed by objective score and remaining power. Existing matchups are explicitly assigned engine v7 and preserve their snapshotted 96-turn boundary; only newly created matchups default to v8 and 120 turns.
+Weekly battle engine v8 extends newly created matchups from 96 to 120 turns and changes timeout winner selection. It also permits combat at distance zero when opposing formations converge on the same objective hex; v7 allowed the overlap but could not attack there, causing eventless stalemates. Capturing every objective and destroying the enemy army remain decisive end conditions. At the turn limit, total battle score decides first, followed by objective score and remaining power. Existing matchups are explicitly assigned engine v7 and preserve their snapshotted 96-turn boundary; only newly created matchups default to v8 and 120 turns.
 
 ## Consequences
 

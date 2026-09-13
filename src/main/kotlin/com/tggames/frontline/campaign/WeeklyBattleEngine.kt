@@ -152,8 +152,8 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         for (tick in 1..balance.maxTicks) {
             completedTicks = tick
             moveFormations(formations, objectives.values.toList(), map, tick, events)
-            fire(WeeklySide.A, formations, map, random, tick, events)
-            fire(WeeklySide.B, formations, map, random, tick, events)
+            fire(WeeklySide.A, formations, map, random, tick, engineVersion, events)
+            fire(WeeklySide.B, formations, map, random, tick, engineVersion, events)
             capture(formations, objectives.values, tick, balance, events)
             val aliveA = formations.any { it.side == WeeklySide.A && it.power > 0 }
             val aliveB = formations.any { it.side == WeeklySide.B && it.power > 0 }
@@ -303,7 +303,15 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         }
     }
 
-    private fun fire(side: WeeklySide, formations: List<FormationState>, map: BattleMapDefinition, random: Random, tick: Int, events: MutableList<WeeklyBattleEvent>) {
+    private fun fire(
+        side: WeeklySide,
+        formations: List<FormationState>,
+        map: BattleMapDefinition,
+        random: Random,
+        tick: Int,
+        engineVersion: Int,
+        events: MutableList<WeeklyBattleEvent>,
+    ) {
         formations.filter { it.side == side && it.power > 0 }.sortedBy { it.type.ordinal }.forEach { shooter ->
             val targetComparator = when (shooter.tactic) {
                 Tactic.ASSAULT -> compareBy<FormationState> { it.power * 100 / it.initialPower.coerceAtLeast(1) }.thenBy { map.distanceBetween(shooter.position, it.position) }
@@ -312,7 +320,7 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
                 Tactic.MANEUVER -> compareBy<FormationState> { if (it.type in setOf(WeeklyFormationType.ARTILLERY, WeeklyFormationType.SUPPORT)) 0 else 1 }.thenBy { map.distanceBetween(shooter.position, it.position) }
                 Tactic.RECON -> compareBy<FormationState> { if (it.type == WeeklyFormationType.RECON) 0 else 1 }.thenBy { map.distanceBetween(shooter.position, it.position) }
             }
-            val target = formations.filter { it.side != side && it.power > 0 && canAttack(shooter, it, map) }
+            val target = formations.filter { it.side != side && it.power > 0 && canAttack(shooter, it, map, engineVersion) }
                 .minWithOrNull(targetComparator) ?: return@forEach
             val base = max(1L, shooter.power * shooter.attackPercent / 1000)
             val protection = map.terrainAt(target.position).cover + target.armor / 12
@@ -349,8 +357,8 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         }
     }
 
-    private fun canAttack(shooter: FormationState, target: FormationState, map: BattleMapDefinition): Boolean {
-        if (map.distanceBetween(shooter.position, target.position) !in 1..shooter.weaponRange) return false
+    private fun canAttack(shooter: FormationState, target: FormationState, map: BattleMapDefinition, engineVersion: Int): Boolean {
+        if (!withinWeaponRange(engineVersion, map.distanceBetween(shooter.position, target.position), shooter.weaponRange)) return false
         val targetIsAir = target.profile == MovementProfile.AIR
         val validTarget = when (shooter.fireMode) {
             FireMode.AIR_INTERCEPT, FireMode.AIR_DEFENSE -> targetIsAir
@@ -359,6 +367,14 @@ class WeeklyBattleEngine(private val equipment: EquipmentCatalog) {
         if (!validTarget) return false
         if (shooter.fireMode == FireMode.INDIRECT || shooter.profile == MovementProfile.AIR) return true
         return map.lineBetween(shooter.position, target.position).drop(1).dropLast(1).none { map.terrainAt(it).blocksLineOfSight }
+    }
+
+    internal fun withinWeaponRange(engineVersion: Int, distance: Int, weaponRange: Int): Boolean {
+        require(engineVersion in LEGACY_ENGINE_VERSION..CURRENT_ENGINE_VERSION)
+        require(distance >= 0)
+        require(weaponRange >= 0)
+        val minimumDistance = if (engineVersion <= LEGACY_ENGINE_VERSION) 1 else 0
+        return distance in minimumDistance..weaponRange
     }
 
     private fun capture(formations: List<FormationState>, objectives: Collection<ObjectiveState>, tick: Int, balance: WeeklyBalance, events: MutableList<WeeklyBattleEvent>) {
