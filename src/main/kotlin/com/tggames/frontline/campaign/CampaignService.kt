@@ -39,10 +39,25 @@ data class FrontContribution(
     val presetNo: Int,
     val groupName: String,
     val snapshot: CombatGroupSnapshot,
+    val unitIds: List<UUID>,
     val entryId: String?,
     val tactic: Tactic,
     val primaryObjectiveId: String?,
 )
+
+internal fun frontReservationBlockers(
+    presetNo: Int,
+    unitIds: Collection<UUID>,
+    contributions: Iterable<FrontContribution>,
+): List<String> {
+    if (unitIds.isEmpty()) return emptyList()
+    val candidateIds = unitIds.toSet()
+    return contributions
+        .filter { it.presetNo != presetNo && it.unitIds.any(candidateIds::contains) }
+        .sortedBy { it.presetNo }
+        .map { it.groupName }
+        .distinct()
+}
 
 data class FrontDeployment(
     val entries: List<DeploymentEntry>,
@@ -168,6 +183,13 @@ class CampaignService(
             .query { rs, _ -> rs.getLong("id") to uuidArray(rs.getArray("unit_ids").array) }
             .optional().orElse(null)
         if (!inventory.replaceWeeklyReservation(playerId, period.weekKey, previous?.second.orEmpty(), unitIds)) {
+            val blockers = frontReservationBlockers(presetNo, unitIds, contributions(period.weekKey, playerId))
+            if (blockers.isNotEmpty()) {
+                return ContributionOutcome(
+                    false,
+                    GameI18n.t(language, "contribution_units_reserved_by_groups", blockers.joinToString(", ")),
+                )
+            }
             return ContributionOutcome(false, GameI18n.t(language, "contribution_units_unavailable"))
         }
         previous?.let { (id, _) ->
@@ -910,7 +932,8 @@ class CampaignService(
     private fun contributions(weekKey: String, playerId: Long): List<FrontContribution> = jdbc.sql(
         """
         SELECT contribution.id, contribution.preset_no, COALESCE(battle_group.name, 'Group ' || contribution.preset_no) AS group_name,
-               contribution.group_snapshot_json, contribution.deployment_entry, contribution.primary_objective, contribution.tactic
+               contribution.group_snapshot_json, contribution.unit_ids,
+               contribution.deployment_entry, contribution.primary_objective, contribution.tactic
           FROM campaign_contributions contribution
           LEFT JOIN battle_groups battle_group ON battle_group.id = contribution.group_id
          WHERE contribution.week_key = :week AND contribution.player_telegram_id = :player
@@ -924,6 +947,7 @@ class CampaignService(
                 presetNo = rs.getInt("preset_no"),
                 groupName = rs.getString("group_name"),
                 snapshot = objectMapper.readValue(rs.getString("group_snapshot_json"), CombatGroupSnapshot::class.java),
+                unitIds = uuidArray(rs.getArray("unit_ids").array),
                 entryId = rs.getString("deployment_entry"),
                 tactic = Tactic.fromCode(rs.getString("tactic") ?: "maneuver") ?: Tactic.MANEUVER,
                 primaryObjectiveId = rs.getString("primary_objective"),

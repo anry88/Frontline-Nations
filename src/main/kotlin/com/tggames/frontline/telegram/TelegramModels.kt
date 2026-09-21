@@ -47,7 +47,16 @@ data class TelegramUser(
     @param:JsonProperty("language_code") val languageCode: String? = null,
 )
 
-data class TelegramChat(val id: Long)
+data class TelegramChat(
+    val id: Long,
+    val type: String? = null,
+) {
+    /** Telegram sends `private`, `group`, `supergroup` or `channel`. Old payloads/tests may omit it. */
+    fun isGroupChat(): Boolean = when (type?.lowercase()) {
+        "group", "supergroup" -> true
+        else -> if (type == null) id < 0 else false
+    }
+}
 
 data class SendMessageRequest(
     @param:JsonProperty("chat_id") val chatId: Long,

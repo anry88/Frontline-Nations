@@ -37,6 +37,21 @@ class GameUiPolicyTest {
     }
 
     @Test
+    fun `units assigned to another preset are unavailable to the active preset`() {
+        val activeUnit = unit("MBT")
+        val otherPresetUnit = unit("MBT")
+        val freeUnit = unit("MBT")
+        val active = BattleGroup(UUID.randomUUID(), 1, "Alpha", true, 1, listOf(activeUnit))
+        val other = BattleGroup(UUID.randomUUID(), 2, "Bravo", false, 1, listOf(otherPresetUnit))
+        val army = Army(1, 10, listOf(active, other), listOf(activeUnit, otherPresetUnit, freeUnit))
+
+        val availability = GameUiPolicy.equipmentSelection(army).getValue("MBT")
+
+        assertThat(availability.selected).isEqualTo(1)
+        assertThat(availability.available).isEqualTo(2)
+    }
+
+    @Test
     fun `army equipment controls always retain minus and plus columns`() {
         val empty = GameUiPolicy.equipmentActionCallbacks(EquipmentSelectionAvailability("MBT", selected = 0, available = 2))
         val full = GameUiPolicy.equipmentActionCallbacks(EquipmentSelectionAvailability("MBT", selected = 2, available = 2))

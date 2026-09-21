@@ -72,14 +72,14 @@ fi
 
 if ! curl --fail --silent --show-error \
   --request POST \
-  --data-urlencode 'description=An asynchronous strategy game with tactical operations, commander progression, and massive weekly battles between countries.' \
+  --data-urlencode 'description=Frontline Nations is a Telegram strategy game where every quick operation grows your commander, upgrades your army, and feeds a live weekly war between countries. Choose a country, build three combat groups, fight deterministic hex-map battles, watch MP4 replays, and send surviving forces to the front for shared rewards and rankings.' \
   "$api_url/setMyDescription" >/dev/null; then
   printf 'Warning: Telegram profile description update was rate-limited or rejected.\n' >&2
 fi
 
 if ! curl --fail --silent --show-error \
   --request POST \
-  --data-urlencode 'short_description=Build your army and lead your country to victory.' \
+  --data-urlencode 'short_description=Command armored forces, win tactical battles, and push your country up the weekly front.' \
   "$api_url/setMyShortDescription" >/dev/null; then
   printf 'Warning: Telegram short description update was rate-limited or rejected.\n' >&2
 fi

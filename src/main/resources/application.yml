@@ -32,6 +32,7 @@ frontline:
   battle-server-salt: ${BATTLE_SERVER_SALT:local-development-only}
   telegram:
     bot-token: ${TELEGRAM_BOT_TOKEN:}
+    bot-username: ${TELEGRAM_BOT_USERNAME:frontline_nations_bot}
     webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
     admin-chat-id: ${TELEGRAM_ADMIN_CHAT_ID:0}
   replay:

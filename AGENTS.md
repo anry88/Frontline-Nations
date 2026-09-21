@@ -58,6 +58,7 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/main/resources/catalog/equipment-catalog.json`: localized unit costs, roles, statistics, unlocks, and icon paths.
 - `src/main/resources/static/assets/units/`: generated fictional equipment-class icons served by the backend.
 - `src/main/resources/db/migration/V5__personal_equipment_and_battle_groups.sql`: inventory, presets, audit history, and battle snapshots.
+- `src/main/resources/db/migration/V19__unique_units_across_battle_groups.sql`: deterministic legacy duplicate cleanup and the one-owned-unit-per-preset-membership invariant.
 - `src/main/kotlin/com/tggames/frontline/battle/`: versioned personal engines, rectangular odd-row offset maps with legacy axial compatibility, deterministic movement/fire/capture events, and legacy replay support.
 - `src/main/kotlin/com/tggames/frontline/replay/`: event-log projection, Java2D frame composition, FFmpeg encoding, signed MP4 delivery, short-lived personal cache, and week-long shared campaign cache.
 - `src/main/resources/catalog/battle-maps.json`: version-5 9×12 terrain maps with unique authored entry/objective layouts.

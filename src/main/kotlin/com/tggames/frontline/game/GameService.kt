@@ -13,6 +13,7 @@ import com.tggames.frontline.battle.SpatialEventType
 import com.tggames.frontline.battle.Tactic
 import com.tggames.frontline.campaign.ActiveEconomyBonus
 import com.tggames.frontline.campaign.CampaignService
+import com.tggames.frontline.campaign.frontReservationBlockers
 import com.tggames.frontline.catalog.EquipmentCatalog
 import com.tggames.frontline.config.FrontlineProperties
 import com.tggames.frontline.i18n.GameI18n
@@ -98,48 +99,74 @@ class GameService(
 
         val message = update.message ?: return
         val user = message.from ?: return
-        val command = message.text.orEmpty().trim().substringBefore('@').substringBefore(' ').lowercase()
-        val argument = message.text.orEmpty().trim().substringAfter(' ', "").trim()
-        val registrationReferral = if (command == "/start") GameMetrics.normalizeRegistrationReferral(argument) else null
-        val registrationSource = if (registrationReferral != null) "referral" else "telegram"
-        ensurePlayer(user.id, user.firstName, user.languageCode, registrationSource, registrationReferral)
-        val language = language(user.id)
+        val rawText = message.text.orEmpty().trim()
 
         message.successfulPayment?.let { payment ->
+            val provisionalCommand = parseBotCommand(rawText)?.command.orEmpty()
+            val provisionalArgument = parseBotCommand(rawText)?.argument.orEmpty()
+            val registrationReferral = if (provisionalCommand == "/start") GameMetrics.normalizeRegistrationReferral(provisionalArgument) else null
+            val registrationSource = if (registrationReferral != null) "referral" else "telegram"
+            ensurePlayer(user.id, user.firstName, user.languageCode, registrationSource, registrationReferral)
+            val paymentLanguage = language(user.id)
             when (val result = stars.deliver(user.id, payment)) {
                 is PaymentDelivery.Delivered -> {
                     metrics.stars("completed", result.pack.id)
                     telegram.sendMessage(
                         message.chat.id,
-                        StarsMessages.paymentComplete(language, result.pack.credits, result.creditsBalance),
-                        actionKeyboard(user.id, language),
+                        StarsMessages.paymentComplete(paymentLanguage, result.pack.credits, result.creditsBalance),
+                        actionKeyboard(user.id, paymentLanguage),
                     )
                 }
                 is PaymentDelivery.Duplicate -> {
                     metrics.stars("duplicate")
                     telegram.sendMessage(
                         message.chat.id,
-                        StarsMessages.duplicate(language),
-                        actionKeyboard(user.id, language),
+                        StarsMessages.duplicate(paymentLanguage),
+                        actionKeyboard(user.id, paymentLanguage),
                     )
                 }
                 is PaymentDelivery.Invalid -> {
                     metrics.stars("invalid")
                     logger.warn("Rejected Stars payment for player {}: {}", user.id, result.reason)
-                    telegram.sendMessage(message.chat.id, StarsMessages.invalid(language))
+                    telegram.sendMessage(message.chat.id, StarsMessages.invalid(paymentLanguage))
                 }
             }
             return
         }
 
-        if (command.startsWith('/')) metrics.command(command)
+        if (rawText.isEmpty()) return
 
-        if (stars.isAdminContext(message.chat.id, user.id) && command in ADMIN_PAYMENT_COMMANDS) {
-            handleAdminPaymentCommand(command, argument, message.chat.id)
+        val parsed = parseBotCommand(rawText)
+        if (message.chat.isGroupChat()) {
+            // In groups/supergroups ignore everything that is not a slash command addressed to this bot.
+            // This prevents the bot from answering every chat message with help/unknown text.
+            // Inline buttons (callback queries) are still handled in handleCallback.
+            if (parsed == null) return
+            if (parsed.mention != null && !parsed.mention.equals(properties.telegram.botUsername.trimStart('@'), ignoreCase = true)) return
+            if (parsed.command !in GROUP_PLAYER_COMMANDS) return
+        }
+        val command = parsed?.command.orEmpty()
+        val argument = parsed?.argument.orEmpty()
+        // In private chats keep legacy behavior: unknown text answers with help.
+        val effectiveCommand = when {
+            command.startsWith('/') -> command
+            message.chat.isGroupChat() -> return
+            rawText.isEmpty() -> ""
+            else -> ""
+        }
+        val registrationReferral = if (effectiveCommand == "/start") GameMetrics.normalizeRegistrationReferral(argument) else null
+        val registrationSource = if (registrationReferral != null) "referral" else "telegram"
+        ensurePlayer(user.id, user.firstName, user.languageCode, registrationSource, registrationReferral)
+        val language = language(user.id)
+
+        if (effectiveCommand.startsWith('/')) metrics.command(effectiveCommand)
+
+        if (stars.isAdminContext(message.chat.id, user.id) && effectiveCommand in ADMIN_PAYMENT_COMMANDS) {
+            handleAdminPaymentCommand(effectiveCommand, argument, message.chat.id)
             return
         }
 
-        when (command) {
+        when (effectiveCommand) {
             "/start" -> start(user.id, user.firstName, message.chat.id)
             "/battle" -> battleMenu(user.id, user.firstName, message.chat.id)
             "/army", "/hangar" -> armyMenu(user.id, message.chat.id)
@@ -1071,6 +1098,7 @@ class GameService(
             }
             EquipmentActionStatus.LOCKED -> GameI18n.t(language, "equipment_locked", action.definition?.unlockLevel ?: 1)
             EquipmentActionStatus.RESERVED -> GameI18n.t(language, "equipment_reserved")
+            EquipmentActionStatus.ASSIGNED_TO_GROUP -> GameI18n.t(language, "equipment_assigned_to_group")
             EquipmentActionStatus.INSUFFICIENT_RESOURCES -> GameI18n.t(language, insufficientResourcesKey)
             EquipmentActionStatus.MAX_LEVEL -> GameI18n.t(language, "max_level")
             EquipmentActionStatus.GROUP_FULL -> GameI18n.t(language, "group_full")
@@ -1159,6 +1187,10 @@ class GameService(
                     val objectiveText = objective?.let { value -> "${deployment.objectiveMarker(value.id)} · ${GameI18n.t(language, value.nameKey)}" }
                         ?: GameI18n.t(language, "automatic_target")
                     appendLine("   ✅ $entryText → $objectiveText · ${GameI18n.tactic(language, it.tactic)}")
+                }
+                val blockers = frontReservationBlockers(group.presetNo, group.units.map { it.id }, sent.values)
+                if (blockers.isNotEmpty()) {
+                    appendLine("   ⚠️ ${GameI18n.t(language, "front_units_reserved_by_groups", blockers.joinToString(", "))}")
                 }
             }
             appendLine()
@@ -1706,6 +1738,12 @@ class GameService(
         private const val COUNTRY_PAGE_SIZE = 10
         private const val ALLIANCE_RATING_PAGE_SIZE = 10
         private val ADMIN_PAYMENT_COMMANDS = setOf("/refund", "/reject", "/ask")
+        internal val GROUP_PLAYER_COMMANDS = setOf(
+            "/start", "/battle", "/army", "/hangar", "/shop", "/stars", "/buycredits",
+            "/paysupport", "/answer", "/upgrade", "/daily", "/profile", "/front",
+            "/contribute", "/rankings", "/rating", "/ratings", "/guide", "/language",
+            "/nickname", "/country", "/settings", "/help",
+        )
     }
 
 }
@@ -1758,3 +1796,17 @@ data class Player(
 
 private data class Selection(val expectedOfferVersion: Long, val slot: Int)
 private data class GroupBinding(val presetNo: Int, val version: Int)
+
+internal data class ParsedBotCommand(val command: String, val mention: String?, val argument: String)
+
+/** Parses `/command[@mention] optional argument`. Returns null when the text is not a slash command. */
+internal fun parseBotCommand(rawText: String): ParsedBotCommand? {
+    val text = rawText.trim()
+    if (!text.startsWith('/')) return null
+    val firstToken = text.substringBefore(' ')
+    val argument = if (' ' in text) text.substringAfter(' ').trim() else ""
+    val mention = firstToken.substringAfter('@', "").takeIf { '@' in firstToken }
+    val command = firstToken.substringBefore('@').lowercase()
+    if (command == "/") return null
+    return ParsedBotCommand(command, mention?.takeIf(String::isNotBlank), argument)
+}

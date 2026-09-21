@@ -41,7 +41,7 @@ data class Army(
     val activeGroup: BattleGroup get() = groups.first { it.active }
 }
 
-enum class EquipmentActionStatus { SUCCESS, LOCKED, RESERVED, NOT_FOUND, NO_AVAILABLE_UNIT, INSUFFICIENT_RESOURCES, MAX_LEVEL, GROUP_FULL, LAST_UNIT }
+enum class EquipmentActionStatus { SUCCESS, LOCKED, RESERVED, ASSIGNED_TO_GROUP, NOT_FOUND, NO_AVAILABLE_UNIT, INSUFFICIENT_RESOURCES, MAX_LEVEL, GROUP_FULL, LAST_UNIT }
 
 data class EquipmentCasualties(val survived: Int, val lost: Int)
 data class WeeklyContributionCasualties(val contributionId: Long, val playerId: Long, val survived: Int, val lost: Int)
@@ -419,13 +419,17 @@ class InventoryService(
         val definition = catalog.require(unit.code)
         val selected = group.units.any { it.id == unitId }
         if (unit.reservedWeekKey != null) return EquipmentAction(EquipmentActionStatus.RESERVED, unit, definition)
+        if (!selected && army.groups.any { other -> other.id != group.id && other.units.any { it.id == unitId } }) {
+            return EquipmentAction(EquipmentActionStatus.ASSIGNED_TO_GROUP, unit, definition)
+        }
         if (selected && group.units.size == 1) return EquipmentAction(EquipmentActionStatus.LAST_UNIT, unit, definition)
         if (!selected) {
             val currentCp = group.units.sumOf { catalog.require(it.code).cpCost }
             if (currentCp + definition.cpCost > army.cpLimit) return EquipmentAction(EquipmentActionStatus.GROUP_FULL, unit, definition)
             val slot = nextSlot(group.id)
-            jdbc.sql("INSERT INTO battle_group_units(group_id, player_unit_id, slot_no) VALUES (:groupId, :unitId, :slot)")
+            val inserted = jdbc.sql("INSERT INTO battle_group_units(group_id, player_unit_id, slot_no) VALUES (:groupId, :unitId, :slot) ON CONFLICT DO NOTHING")
                 .param("groupId", group.id).param("unitId", unitId).param("slot", slot).update()
+            if (inserted == 0) return EquipmentAction(EquipmentActionStatus.ASSIGNED_TO_GROUP, unit, definition)
         } else {
             jdbc.sql("DELETE FROM battle_group_units WHERE group_id = :groupId AND player_unit_id = :unitId")
                 .param("groupId", group.id).param("unitId", unitId).update()
@@ -441,14 +445,19 @@ class InventoryService(
         lockActiveGroup(telegramId)
         val army = army(telegramId)
         val group = army.activeGroup
-        val selectedIds = group.units.map { it.id }.toSet()
-        val unit = army.inventory.filter { it.code == definition.code && it.id !in selectedIds && it.reservedWeekKey == null }
+        val assignedIds = army.groups.flatMap { it.units }.map { it.id }.toSet()
+        val unit = army.inventory.filter { it.code == definition.code && it.id !in assignedIds && it.reservedWeekKey == null }
             .maxWithOrNull(compareBy<OwnedUnit> { it.level }.thenBy { it.id })
-            ?: return EquipmentAction(EquipmentActionStatus.NO_AVAILABLE_UNIT, definition = definition)
+            ?: return if (army.groups.any { other -> other.id != group.id && other.units.any { it.code == definition.code } }) {
+                EquipmentAction(EquipmentActionStatus.ASSIGNED_TO_GROUP, definition = definition)
+            } else {
+                EquipmentAction(EquipmentActionStatus.NO_AVAILABLE_UNIT, definition = definition)
+            }
         val currentCp = group.units.sumOf { catalog.require(it.code).cpCost }
         if (currentCp + definition.cpCost > army.cpLimit) return EquipmentAction(EquipmentActionStatus.GROUP_FULL, unit, definition)
-        jdbc.sql("INSERT INTO battle_group_units(group_id, player_unit_id, slot_no) VALUES (:groupId, :unitId, :slot)")
+        val inserted = jdbc.sql("INSERT INTO battle_group_units(group_id, player_unit_id, slot_no) VALUES (:groupId, :unitId, :slot) ON CONFLICT DO NOTHING")
             .param("groupId", group.id).param("unitId", unit.id).param("slot", nextSlot(group.id)).update()
+        if (inserted == 0) return EquipmentAction(EquipmentActionStatus.ASSIGNED_TO_GROUP, unit, definition)
         bumpGroupVersion(group.id)
         return EquipmentAction(EquipmentActionStatus.SUCCESS, unit, definition)
     }

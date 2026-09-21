@@ -27,7 +27,7 @@ PostgreSQL stores players and their explicit locale/nickname settings, Telegram 
 
 1. The server deterministically generates five operation offers from a catalog of 24 battlefields for a single-use offer version.
 2. The bot shows a named battlefield, biome, risk/reward tier, and tier-dependent intelligence for each offer.
-3. The player maintains one of three reusable presets through `/army`. Command capacity is `level + 9 CP`, capped at the supported 1,000 CP maximum, making heavy armor, artillery, aircraft, air defense, and reconnaissance compete for space at every echelon.
+3. The player maintains one of three reusable presets through `/army`. Each concrete owned machine belongs to at most one preset, enforced both when selecting equipment and by a database uniqueness constraint. Command capacity is `level + 9 CP`, capped at the supported 1,000 CP maximum, making heavy armor, artillery, aircraft, air defense, and reconnaissance compete for space at every echelon.
 4. The selected operation resolves to a versioned 9×12 odd-row offset sector map. Map version 5 gives every battlefield an authored deployment orientation and objective arrangement instead of reusing one north/south template; a deterministic graph connects entries and objectives with primary and alternate roads. The bot sends its immutable 1,536×1,536 PNG assembled from generated full-bleed hex terrain and objective blocks, and its coordinates match the server map snapshot.
 5. The player binds the active group to an entry and a first objective, then chooses a behavior doctrine. Doctrines change route preference, holding behavior, movement order, and target selection; engine v10 applies no hidden tactic, counter, or terrain power percentage. Ambush formations may pause in cover near an unseen enemy, but periodically resume their advance so two opposing ambushes cannot deadlock outside weapon range. Defenders hold controlled objectives without an available target only while their side leads in objective control; tied or trailing defenders advance toward unsecured ground.
 6. The backend binds callbacks to the current offer version and group version, rejects stale or replayed changes, derives a protected seed, and moves units through logical steps. Movement costs, line of sight, spotting, weapon range, minimum artillery range, cover, damage, and objective control are resolved using integer arithmetic. Equipment moves at most four road hexes per personal-battle step; a traversable cell whose terrain cost exceeds the remaining allowance still permits one cell of progress.
@@ -121,6 +121,7 @@ Implementation should refine this model through versioned migrations. Important 
 - Telegram payment delivery is unique by Telegram charge ID and every refund reverses its granted Credits
 - one-time starter grants and equipment transactions are idempotent and auditable
 - a preset cannot exceed its persisted command-capacity limit through normal application writes
+- a concrete owned unit can belong to at most one combat-group preset
 - command capacity is derived from commander level and changes atomically with XP rewards
 - a personal unit reserved for a weekly campaign cannot enter a personal battle or be upgraded until resolution
 - destroyed personal units leave usable inventory while retaining auditable history

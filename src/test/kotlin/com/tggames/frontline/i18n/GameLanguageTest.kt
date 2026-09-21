@@ -19,6 +19,7 @@ class GameLanguageTest {
             "objective_control", "end_army_routed", "upgrade", "stat_attack", "stat_armor", "stat_mobility",
             "stat_recon", "stat_support", "stat_map_movement", "stat_weapon_range", "stat_sight", "stat_fire_mode",
             "front_groups_title", "front_groups_help", "front_choose_entry", "front_choose_objective",
+            "front_units_reserved_by_groups", "contribution_units_reserved_by_groups", "equipment_assigned_to_group",
             "weekly_front_title", "weekly_battle_time", "previous_result", "previous_battle_button", "weekly_notification_title",
             "new_player_economy_hint", "weekly_victory_bonus_applied", "weekly_victory_bonus_daily_applied",
             "weekly_victory_bonus_profile",

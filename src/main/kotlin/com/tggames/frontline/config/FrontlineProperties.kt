@@ -15,6 +15,7 @@ data class FrontlineProperties(
         val botToken: String = "",
         val webhookSecret: String = "",
         val adminChatId: Long = 0,
+        val botUsername: String = "frontline_nations_bot",
     )
 
     data class Campaign(

@@ -20,7 +20,12 @@ object GameUiPolicy {
         definitions.sortedBy { if (it.unlockLevel <= commanderLevel) 0 else 1 }
 
     fun equipmentSelection(army: Army): Map<String, EquipmentSelectionAvailability> {
-        val availableUnits = army.inventory.filter { it.reservedWeekKey == null }
+        val assignedElsewhere = army.groups
+            .filter { it.id != army.activeGroup.id }
+            .flatMap { it.units }
+            .map { it.id }
+            .toSet()
+        val availableUnits = army.inventory.filter { it.reservedWeekKey == null && it.id !in assignedElsewhere }
         val selectedUnits = army.activeGroup.units.filter { it.reservedWeekKey == null }
         return availableUnits.map { it.code }.distinct().associateWith { code ->
             EquipmentSelectionAvailability(

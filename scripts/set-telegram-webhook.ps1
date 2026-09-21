@@ -85,8 +85,8 @@ foreach ($language in $languages) {
 }
 
 $webhookUrl = "$publicBaseUrl/bot"
-$botDescription = 'An asynchronous strategy game with tactical operations, commander progression, and massive weekly battles between countries.'
-$botShortDescription = 'Build your army and lead your country to victory.'
+$botDescription = 'Frontline Nations is a Telegram strategy game where every quick operation grows your commander, upgrades your army, and feeds a live weekly war between countries. Choose a country, build three combat groups, fight deterministic hex-map battles, watch MP4 replays, and send surviving forces to the front for shared rewards and rankings.'
+$botShortDescription = 'Command armored forces, win tactical battles, and push your country up the weekly front.'
 Invoke-Telegram 'setMyName' @{ name = 'Frontline Nations' } | Out-Null
 Invoke-Telegram 'setMyDescription' @{ description = $botDescription } | Out-Null
 Invoke-Telegram 'setMyShortDescription' @{ short_description = $botShortDescription } | Out-Null
