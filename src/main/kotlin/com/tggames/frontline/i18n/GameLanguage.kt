@@ -13,6 +13,12 @@ enum class GameLanguage(val code: String, val nativeName: String, val flag: Stri
     TR("tr", "Türkçe", "🇹🇷", Locale.forLanguageTag("tr")),
     ;
 
+    val menuName: String
+        get() = when (this) {
+            ID -> "Indonesia"
+            else -> nativeName
+        }
+
     companion object {
         fun fromStored(code: String?): GameLanguage = entries.firstOrNull { it.code == code } ?: EN
 

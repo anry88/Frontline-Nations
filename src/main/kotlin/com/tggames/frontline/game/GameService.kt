@@ -2773,7 +2773,7 @@ class GameService(
         val keyboard = InlineKeyboardMarkup(GameLanguage.entries.chunked(2).map { row ->
             row.map { option ->
                 val checked = if (option == current) " ✅" else ""
-                InlineKeyboardButton("${option.flag} ${option.nativeName}$checked", "language:${option.code}")
+                InlineKeyboardButton("${option.flag} ${option.menuName}$checked", "language:${option.code}")
             }
         })
         telegram.sendMessage(chatId, text, keyboard)

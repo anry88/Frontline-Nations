@@ -130,10 +130,12 @@ class TelegramMobileUiContractTest {
     fun `all supported locale selectors fit two-column mobile layout`() {
         assertThat(GameLanguage.entries.map { it.code })
             .containsExactly("en", "ru", "es", "pt", "ar", "id", "hi", "tr")
+        assertThat(GameLanguage.ID.menuName).isEqualTo("Indonesia")
+        assertThat(GameLanguage.ID.nativeName).isEqualTo("Bahasa Indonesia")
         GameLanguage.entries.forEach { language ->
-            assertThat(codePoints("${language.flag} ${language.nativeName} ✅"))
+            assertThat(codePoints("${language.flag} ${language.menuName} ✅"))
                 .describedAs("language selector for %s", language.code)
-                .isLessThanOrEqualTo(24)
+                .isLessThanOrEqualTo(18)
         }
     }
 
