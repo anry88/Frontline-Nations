@@ -1,6 +1,6 @@
 # Frontline Nations observability
 
-Import `dashboard.json` into Grafana and select the Prometheus-compatible datasource and scrape job for the production bot. The layout follows the operating pattern used by RiverKing, while its views and metric definitions are specific to Frontline Nations.
+`dashboard.json` is the source for the Frontline Nations Grafana dashboard. For an ad-hoc Grafana installation, import it and select the Prometheus-compatible datasource and production scrape job. HDC production provisions the dashboard from `/var/lib/grafana/dashboards/frontline-nations.json`; update that mounted file and let the file provider reload it instead of importing through the UI. A provisioned dashboard can reject UI overwrites with a version-conflict message even when `allowUiUpdates` is enabled. The layout follows the operating pattern used by RiverKing, while its views and metric definitions are specific to Frontline Nations.
 
 Prometheus must scrape `GET /actuator/prometheus` on management port `9090` of the application container. The public game and webhook server remains on port `8080`, so the metrics endpoint is not routed through the public domain. The dashboard intentionally combines two kinds of measurements:
 
