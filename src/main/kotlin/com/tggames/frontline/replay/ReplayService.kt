@@ -28,12 +28,12 @@ class ReplayService(
     private val objectMapper: ObjectMapper,
     private val properties: FrontlineProperties,
     private val renderer: BattleReplayRenderer,
-    private val encoder: ReplayVideoEncoder,
+    private val encoder: ReplayEncoder,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val locks = ConcurrentHashMap<String, Any>()
 
-    fun preparePersonal(playerId: Long, battleId: UUID): ReplayArtifact {
+    fun preparePersonal(playerId: Long, battleId: UUID, onRenderStart: () -> Unit = {}): ReplayArtifact {
         val snapshot = jdbc.sql(
             """
             SELECT player_telegram_id, map_snapshot_json, group_snapshot_json,
@@ -54,12 +54,12 @@ class ReplayService(
                     events = objectMapper.readValue(rs.getString("spatial_events_json"), object : TypeReference<List<SpatialBattleEvent>>() {}),
                 )
             }.optional().orElseThrow { IllegalArgumentException("Battle replay not found") }
-        return prepare(ReplayKind.PERSONAL, battleId, snapshot.events.maxOfOrNull { it.step } ?: 1) {
+        return prepare(ReplayKind.PERSONAL, battleId, snapshot.events.maxOfOrNull { it.step } ?: 1, onRenderStart) {
             renderer.personal(snapshot)
         }
     }
 
-    fun prepareWeekly(allianceCode: String?, matchupId: UUID): ReplayArtifact {
+    fun prepareWeekly(allianceCode: String?, matchupId: UUID, onRenderStart: () -> Unit = {}): ReplayArtifact {
         require(!allianceCode.isNullOrBlank()) { "Player has no alliance" }
         val snapshot = jdbc.sql(
             """
@@ -81,7 +81,7 @@ class ReplayService(
                 )
             }.optional().orElseThrow { IllegalArgumentException("Weekly replay not found") }
         require(snapshot.formations.all { it.id.isNotBlank() && it.initialPosition != null }) { "This battle predates visual replay events" }
-        return prepare(ReplayKind.WEEKLY, matchupId, snapshot.events.maxOfOrNull { it.tick } ?: snapshot.maxTicks) {
+        return prepare(ReplayKind.WEEKLY, matchupId, snapshot.events.maxOfOrNull { it.tick } ?: snapshot.maxTicks, onRenderStart) {
             renderer.weekly(snapshot)
         }
     }
@@ -101,22 +101,35 @@ class ReplayService(
             .joinToString("") { "%02x".format(it) }
     }
 
-    private fun prepare(kind: ReplayKind, id: UUID, steps: Int, frames: () -> Sequence<java.awt.image.BufferedImage>): ReplayArtifact {
+    internal fun prepare(
+        kind: ReplayKind,
+        id: UUID,
+        steps: Int,
+        onRenderStart: () -> Unit,
+        frames: () -> Sequence<java.awt.image.BufferedImage>,
+    ): ReplayArtifact {
         cleanupExpired()
         val path = cachePath(kind, id)
+        var cacheHit = false
         synchronized(locks.computeIfAbsent("${kind.path}:$id") { Any() }) {
-            if (!Files.isRegularFile(path)) {
+            cacheHit = Files.isRegularFile(path)
+            if (!cacheHit) {
                 logger.info("Rendering {} battle replay {}", kind.path, id)
-                encoder.encode(frames(), path)
+                onRenderStart()
+                try {
+                    encoder.encode(frames(), path)
+                } catch (error: Exception) {
+                    throw ReplayRenderException(error)
+                }
                 if (Files.size(path) > MAX_TELEGRAM_URL_BYTES) {
                     Files.deleteIfExists(path)
-                    error("Replay exceeds Telegram URL upload limit")
+                    throw ReplayRenderException(IllegalStateException("Replay exceeds Telegram URL upload limit"))
                 }
             }
         }
         val duration = (properties.replay.fps * 3 + maxOf(1, steps) * 3 + properties.replay.fps - 1) / properties.replay.fps
         val url = properties.publicBaseUrl.trimEnd('/') + "/api/v1/replays/${kind.path}/$id.mp4?token=${token(kind, id)}"
-        return ReplayArtifact(url, properties.replay.width, properties.replay.width, duration)
+        return ReplayArtifact(url, properties.replay.width, properties.replay.width, duration, cacheHit)
     }
 
     private fun cachePath(kind: ReplayKind, id: UUID): Path =

@@ -88,6 +88,21 @@ data class ActiveEconomyBonus(
     val materialsPercent: Int = creditsPercent,
 )
 
+enum class FrontBridgeWeekState { OPEN, LOCKED, RESOLVED }
+
+data class FrontBridgeOverview(
+    val weekKey: String,
+    val state: FrontBridgeWeekState,
+    val resolvesAt: Instant,
+    val allianceCode: String,
+    val opponentCode: String?,
+    val ownPower: Long,
+    val opponentPower: Long,
+    val alreadyContributed: Boolean,
+) {
+    val openForContributions: Boolean get() = state == FrontBridgeWeekState.OPEN
+}
+
 @Service
 class CampaignService(
     private val jdbc: JdbcClient,
@@ -256,6 +271,40 @@ class CampaignService(
     fun contributions(playerId: Long): List<FrontContribution> {
         val period = ensureContributionWeek()
         return contributions(period.weekKey, playerId)
+    }
+
+    @Transactional
+    fun frontBridgeOverview(playerId: Long, allianceCode: String): FrontBridgeOverview {
+        val period = ensureContributionWeek()
+        val week = jdbc.sql("SELECT status, scheduled_at FROM campaign_weeks WHERE week_key = :week")
+            .param("week", period.weekKey)
+            .query { rs, _ -> rs.getString("status") to rs.getTimestamp("scheduled_at").toInstant() }
+            .single()
+        val matchup = matchupRows(period.weekKey).firstOrNull {
+            it.allianceA == allianceCode || it.allianceB == allianceCode
+        }
+        val opponent = matchup?.let { if (it.allianceA == allianceCode) it.allianceB else it.allianceA }
+        val state = when {
+            week.first == "RESOLVED" || matchup?.resolved == true -> FrontBridgeWeekState.RESOLVED
+            week.first != "OPEN" || !clock.instant().isBefore(week.second) -> FrontBridgeWeekState.LOCKED
+            else -> FrontBridgeWeekState.OPEN
+        }
+        val alreadyContributed = jdbc.sql(
+            "SELECT EXISTS(SELECT 1 FROM campaign_contributions WHERE week_key = :week AND player_telegram_id = :player AND contribution_type = 'EQUIPMENT_SNAPSHOT' AND voided_at IS NULL)",
+        ).param("week", period.weekKey)
+            .param("player", playerId)
+            .query(Boolean::class.java)
+            .single()
+        return FrontBridgeOverview(
+            weekKey = period.weekKey,
+            state = state,
+            resolvesAt = week.second,
+            allianceCode = allianceCode,
+            opponentCode = opponent,
+            ownPower = matchup?.let { liveContribution(it, allianceCode) } ?: 0,
+            opponentPower = matchup?.let { row -> opponent?.let { liveContribution(row, it) } } ?: 0,
+            alreadyContributed = alreadyContributed,
+        )
     }
 
     @Transactional

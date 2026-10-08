@@ -157,6 +157,54 @@ class InventoryService(
     fun hasReservedUnits(group: BattleGroup): Boolean = group.units.any { it.reservedWeekKey != null }
 
     @Transactional
+    fun applyRecoveryPlan(
+        telegramId: Long,
+        expectedGroupVersion: Int,
+        expectedSignature: String,
+        minimumBattleCp: Int,
+    ): RecoveryApplyResult {
+        jdbc.sql("SELECT telegram_id FROM players WHERE telegram_id = :player FOR UPDATE")
+            .param("player", telegramId).query(Long::class.java).single()
+        lockActiveGroup(telegramId)
+        val army = army(telegramId)
+        if (army.activeGroup.version != expectedGroupVersion) return RecoveryApplyResult(RecoveryApplyStatus.STALE)
+        if (hasReservedUnits(army.activeGroup)) return RecoveryApplyResult(RecoveryApplyStatus.RESERVED)
+        val plan = ArmyRecoveryPlanner.plan(army, catalog.units, army.commanderLevel, minimumBattleCp)
+            ?: return RecoveryApplyResult(RecoveryApplyStatus.UNAVAILABLE)
+        if (plan.signature != expectedSignature) return RecoveryApplyResult(RecoveryApplyStatus.STALE)
+        if (plan.purchaseCredits > 0) {
+            val charged = jdbc.sql(
+                "UPDATE players SET credits = credits - :credits, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = :player AND credits >= :credits",
+            ).param("credits", plan.purchaseCredits).param("player", telegramId).update()
+            if (charged == 0) return RecoveryApplyResult(RecoveryApplyStatus.INSUFFICIENT_CREDITS, plan)
+        }
+
+        val batchId = UUID.randomUUID()
+        val unitsToAdd = plan.ownedUnitIds.toMutableList()
+        plan.purchases.forEach { purchase ->
+            val definition = catalog.require(purchase.code)
+            repeat(purchase.quantity) {
+                val unitId = UUID.randomUUID()
+                jdbc.sql(
+                    "INSERT INTO player_units(id, player_telegram_id, unit_code, origin) VALUES (:unitId, :player, :code, 'PURCHASE')",
+                ).param("unitId", unitId).param("player", telegramId).param("code", purchase.code).update()
+                recordEquipment(telegramId, unitId, "PURCHASE", -definition.buyCredits.toLong(), 0, null, 1)
+                unitsToAdd += unitId
+            }
+        }
+        unitsToAdd.forEach { unitId ->
+            jdbc.sql(
+                "INSERT INTO battle_group_units(group_id, player_unit_id, slot_no) VALUES (:groupId, :unitId, :slot)",
+            ).param("groupId", army.activeGroup.id).param("unitId", unitId).param("slot", nextSlot(army.activeGroup.id)).update()
+        }
+        if (plan.purchaseCredits > 0) {
+            recordWallet(telegramId, "CREDITS", -plan.purchaseCredits.toLong(), "PURCHASE", batchId)
+        }
+        bumpGroupVersion(army.activeGroup.id)
+        return RecoveryApplyResult(RecoveryApplyStatus.APPLIED, plan)
+    }
+
+    @Transactional
     fun grantDailyUnit(telegramId: Long, definition: EquipmentDefinition): OwnedUnit {
         val unitId = UUID.randomUUID()
         jdbc.sql(

@@ -9,9 +9,13 @@ import java.nio.file.Path
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.StandardCopyOption
 
+fun interface ReplayEncoder {
+    fun encode(frames: Sequence<BufferedImage>, destination: Path): Int
+}
+
 @Component
-class ReplayVideoEncoder(private val properties: FrontlineProperties) {
-    fun encode(frames: Sequence<BufferedImage>, destination: Path): Int {
+class ReplayVideoEncoder(private val properties: FrontlineProperties) : ReplayEncoder {
+    override fun encode(frames: Sequence<BufferedImage>, destination: Path): Int {
         val replay = properties.replay
         require(replay.width in 320..1280) { "Replay width must be between 320 and 1280" }
         require(replay.fps in 2..24) { "Replay fps must be between 2 and 24" }

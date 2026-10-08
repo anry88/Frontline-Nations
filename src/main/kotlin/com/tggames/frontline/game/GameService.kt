@@ -13,16 +13,20 @@ import com.tggames.frontline.battle.SpatialEventType
 import com.tggames.frontline.battle.Tactic
 import com.tggames.frontline.campaign.ActiveEconomyBonus
 import com.tggames.frontline.campaign.CampaignService
+import com.tggames.frontline.campaign.FrontBridgeWeekState
 import com.tggames.frontline.campaign.frontReservationBlockers
 import com.tggames.frontline.catalog.EquipmentCatalog
 import com.tggames.frontline.config.FrontlineProperties
 import com.tggames.frontline.i18n.GameI18n
 import com.tggames.frontline.i18n.GameLanguage
 import com.tggames.frontline.inventory.Army
+import com.tggames.frontline.inventory.ArmyRecoveryPlan
+import com.tggames.frontline.inventory.ArmyRecoveryPlanner
 import com.tggames.frontline.inventory.EquipmentAction
 import com.tggames.frontline.inventory.EquipmentActionStatus
 import com.tggames.frontline.inventory.InventoryService
 import com.tggames.frontline.inventory.OwnedUnit
+import com.tggames.frontline.inventory.RecoveryApplyStatus
 import com.tggames.frontline.monetization.AdminSupportResult
 import com.tggames.frontline.monetization.AnswerResult
 import com.tggames.frontline.monetization.PaymentDelivery
@@ -31,25 +35,38 @@ import com.tggames.frontline.monetization.StarsMessages
 import com.tggames.frontline.monetization.StarsPaymentService
 import com.tggames.frontline.monetization.SupportCreation
 import com.tggames.frontline.observability.GameMetrics
+import com.tggames.frontline.observability.JourneyEventDetails
+import com.tggames.frontline.observability.JourneyEventType
+import com.tggames.frontline.observability.PlayerJourney
+import com.tggames.frontline.observability.TechnicalFailure
+import com.tggames.frontline.observability.TechnicalOperation
+import com.tggames.frontline.observability.TechnicalOperationTelemetry
+import com.tggames.frontline.observability.TechnicalStage
 import com.tggames.frontline.progression.ForceTier
 import com.tggames.frontline.progression.ForceTierCatalog
 import com.tggames.frontline.progression.CommanderProgression
-import com.tggames.frontline.replay.ReplayService
+import com.tggames.frontline.replay.ReplayDeliveryService
 import com.tggames.frontline.telegram.InlineKeyboardButton
 import com.tggames.frontline.telegram.InlineKeyboardMarkup
 import com.tggames.frontline.telegram.TelegramCallbackQuery
 import com.tggames.frontline.telegram.TelegramClient
+import com.tggames.frontline.telegram.TelegramDeliveryException
 import com.tggames.frontline.telegram.TelegramUpdate
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
+import java.net.SocketTimeoutException
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.TimeoutException
 
 @Service
 class GameService(
@@ -63,10 +80,12 @@ class GameService(
     private val inventory: InventoryService,
     private val equipment: EquipmentCatalog,
     private val forceTiers: ForceTierCatalog,
-    private val replays: ReplayService,
+    private val replayDeliveries: ReplayDeliveryService,
     private val rankings: RankingService,
     private val stars: StarsPaymentService,
     private val metrics: GameMetrics,
+    private val journey: PlayerJourney,
+    private val technicalTelemetry: TechnicalOperationTelemetry,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -74,6 +93,12 @@ class GameService(
     fun handle(update: TelegramUpdate) {
         if (!claimUpdate(update.updateId)) return
 
+        journey.withinTelegramUpdate(update.updateId) {
+            handleClaimedUpdate(update)
+        }
+    }
+
+    private fun handleClaimedUpdate(update: TelegramUpdate) {
         update.preCheckoutQuery?.let { query ->
             val validation = stars.validate(query)
             val language = runCatching { language(query.from.id) }
@@ -89,6 +114,7 @@ class GameService(
 
         update.callbackQuery?.let { callback ->
             ensurePlayer(callback.from.id, callback.from.firstName, callback.from.languageCode)
+            journey.record(callback.from.id, JourneyEventType.USER_ACTION, JourneyEventDetails(surface = "callback"))
             metrics.callback(callback.data.orEmpty())
             val replayCallback = callback.data.orEmpty().startsWith("replay:")
             if (replayCallback) telegram.answerCallback(callback.id)
@@ -107,6 +133,7 @@ class GameService(
             val registrationReferral = if (provisionalCommand == "/start") GameMetrics.normalizeRegistrationReferral(provisionalArgument) else null
             val registrationSource = if (registrationReferral != null) "referral" else "telegram"
             ensurePlayer(user.id, user.firstName, user.languageCode, registrationSource, registrationReferral)
+            journey.record(user.id, JourneyEventType.USER_ACTION, JourneyEventDetails(surface = "payment"))
             val paymentLanguage = language(user.id)
             when (val result = stars.deliver(user.id, payment)) {
                 is PaymentDelivery.Delivered -> {
@@ -157,6 +184,7 @@ class GameService(
         val registrationReferral = if (effectiveCommand == "/start") GameMetrics.normalizeRegistrationReferral(argument) else null
         val registrationSource = if (registrationReferral != null) "referral" else "telegram"
         ensurePlayer(user.id, user.firstName, user.languageCode, registrationSource, registrationReferral)
+        journey.record(user.id, JourneyEventType.USER_ACTION, JourneyEventDetails(surface = "message"))
         val language = language(user.id)
 
         if (effectiveCommand.startsWith('/')) metrics.command(effectiveCommand)
@@ -185,8 +213,9 @@ class GameService(
             "/nickname" -> nickname(user.id, message.chat.id, argument)
             "/country" -> countryMenu(user.id, message.chat.id, argument)
             "/settings" -> settings(user.id, message.chat.id)
-            "/help", "" -> telegram.sendMessage(message.chat.id, helpText(language(user.id)), actionKeyboard(user.id, language(user.id)))
-            else -> telegram.sendMessage(message.chat.id, "${GameI18n.t(language(user.id), "unknown")}\n\n${helpText(language(user.id))}", actionKeyboard(user.id, language(user.id)))
+            "/help" -> telegram.sendMessage(message.chat.id, helpText(language(user.id)), actionKeyboard(user.id, language(user.id)))
+            "" -> recoverNavigation(user.id, message.chat.id, NavigationErrorCategory.UNEXPECTED_TEXT)
+            else -> recoverNavigation(user.id, message.chat.id, NavigationErrorCategory.UNKNOWN_COMMAND)
         }
     }
 
@@ -219,16 +248,22 @@ class GameService(
             data == "rank:players" -> playerRanking(callback.from.id, chatId)
             data.startsWith("guide:") -> guide(callback.from.id, chatId, data.substringAfterLast(':').toIntOrNull() ?: 0)
             data == "front:manage" -> contribute(callback.from.id, callback.from.firstName, chatId)
+            data == "front:bridge" -> openFrontBridge(callback.from.id, callback.from.firstName, chatId)
             data.startsWith("front:send:") -> frontEntries(callback.from.id, chatId, data.removePrefix("front:send:"))
             data.startsWith("front:entry:") -> frontObjectives(callback.from.id, chatId, data.removePrefix("front:entry:"))
             data.startsWith("front:objective:") -> frontTactics(callback.from.id, chatId, data.removePrefix("front:objective:"))
+            data.startsWith("front:review:") -> reviewFrontContribution(callback.from.id, chatId, data.removePrefix("front:review:"))
             data.startsWith("front:commit:") -> commitFrontGroup(callback.from.id, chatId, data.removePrefix("front:commit:"))
             data.startsWith("front:withdraw:") -> withdrawFrontGroup(callback.from.id, chatId, data.substringAfterLast(':').toLongOrNull())
             data == "nav:settings" -> settings(callback.from.id, chatId)
+            data == "nav:country" -> countryMenu(callback.from.id, chatId, "")
+            data.startsWith("first:") -> handleFirstMissionCallback(callback.from.id, callback.from.firstName, chatId, data)
             data.startsWith("op:") -> showDeployment(callback.from.id, callback.from.firstName, chatId, data)
             data.startsWith("deploy:") -> showObjectives(callback.from.id, callback.from.firstName, chatId, data)
             data.startsWith("objective:") -> showTactics(callback.from.id, callback.from.firstName, chatId, data)
             data.startsWith("fight:") -> resolveBattle(callback.from.id, callback.from.firstName, chatId, data)
+            data.startsWith("result:details:") -> showBattleResultDetails(callback.from.id, chatId, data.removePrefix("result:details:"))
+            data.startsWith("result:act:") -> handlePostBattleAction(callback.from.id, callback.from.firstName, chatId, data.removePrefix("result:act:"))
             data.startsWith("replay:b:") -> sendPersonalReplay(callback.from.id, chatId, data.removePrefix("replay:b:"))
             data.startsWith("replay:w:") -> sendWeeklyReplay(callback.from.id, chatId, data.removePrefix("replay:w:"))
             data.startsWith("shop:view:") -> shopDetails(callback.from.id, chatId, data.substringAfterLast(':'))
@@ -239,8 +274,9 @@ class GameService(
             data.startsWith("army:add:") -> addUnitType(callback.from.id, chatId, data.substringAfterLast(':'))
             data.startsWith("army:remove:") -> removeUnitType(callback.from.id, chatId, data.substringAfterLast(':'))
             data.startsWith("army:preset:") -> activatePreset(callback.from.id, chatId, data.substringAfterLast(':'))
+            data.startsWith("recovery:apply:") -> applyArmyRecovery(callback.from.id, chatId, data.removePrefix("recovery:apply:"))
             data == "army:noop" -> Unit
-            else -> telegram.sendMessage(chatId, GameI18n.t(language, "stale"), actionKeyboard(callback.from.id, language))
+            else -> recoverNavigation(callback.from.id, chatId, NavigationErrorCategory.STALE_CALLBACK)
         }
     }
 
@@ -257,14 +293,20 @@ class GameService(
         val current = player(telegramId)
         val language = GameLanguage.fromStored(current.language)
         if (current.allianceCode != null) {
-            telegram.sendMessage(chatId, "${GameI18n.t(language, "welcome_back", current.displayName)}\n\n${profileText(telegramId)}", actionKeyboard(telegramId, language))
+            if (eligibleForGuidedFirstMission(current)) {
+                showGuidedFirstMission(telegramId, chatId, GameI18n.t(language, "welcome_back", current.displayName), "start")
+            } else {
+                telegram.sendMessage(chatId, "${GameI18n.t(language, "welcome_back", current.displayName)}\n\n${profileText(telegramId)}", actionKeyboard(telegramId, language))
+                recordOnboardingCtaViewedIfEligible(telegramId, "start")
+            }
             return
         }
         telegram.sendMessage(
             chatId,
-            "${GameI18n.t(language, "welcome", firstName)}\n\n${GameI18n.t(language, "choose_country")}",
+            "${GameI18n.t(language, "welcome", firstName)}\n\n${countryChoiceText(language)}",
             recommendedCountryKeyboard(language, GameLanguage.fromTelegram(current.telegramLanguage)),
         )
+        journey.record(telegramId, JourneyEventType.ONBOARDING_COUNTRY_VIEWED, JourneyEventDetails(surface = "start"))
     }
 
     private fun selectAlliance(telegramId: Long, code: String, chatId: Long) {
@@ -278,18 +320,236 @@ class GameService(
         if (updated == 0) {
             val current = player(telegramId).allianceCode?.let { AllianceCatalog.option(it, language).label } ?: selected
             telegram.sendMessage(chatId, GameI18n.t(language, "country_locked", current), actionKeyboard(telegramId, language))
+            recordOnboardingCtaViewedIfEligible(telegramId, "country_locked")
         } else {
             campaigns.ensureCurrentWeek()
-            telegram.sendMessage(chatId, "${GameI18n.t(language, "country_selected", selected)}\n\n${profileText(telegramId)}", actionKeyboard(telegramId, language))
+            journey.record(
+                telegramId,
+                JourneyEventType.ONBOARDING_COUNTRY_SELECTED,
+                JourneyEventDetails(surface = "country_picker", result = "selected", referenceId = code.uppercase()),
+            )
+            val current = player(telegramId)
+            if (eligibleForGuidedFirstMission(current)) {
+                showGuidedFirstMission(telegramId, chatId, GameI18n.t(language, "country_selected", selected), "country_selected")
+            } else {
+                telegram.sendMessage(chatId, "${GameI18n.t(language, "country_selected", selected)}\n\n${profileText(telegramId)}", actionKeyboard(telegramId, language))
+                recordOnboardingCtaViewedIfEligible(telegramId, "country_selected")
+            }
         }
+    }
+
+    private fun recordOnboardingCtaViewedIfEligible(telegramId: Long, surface: String) {
+        val current = player(telegramId)
+        if (current.allianceCode == null || current.victories + current.defeats > 0) return
+        journey.record(
+            telegramId,
+            JourneyEventType.ONBOARDING_CTA_VIEWED,
+            JourneyEventDetails(surface = surface, result = "battle", variant = effectiveOnboardingVariant(current).value),
+        )
+    }
+
+    private fun eligibleForGuidedFirstMission(player: Player): Boolean =
+        player.allianceCode != null &&
+            player.victories + player.defeats == 0 &&
+            effectiveOnboardingVariant(player) == OnboardingVariant.GUIDED_V1
+
+    private fun effectiveOnboardingVariant(player: Player): OnboardingVariant {
+        val assigned = OnboardingVariant.fromStored(player.onboardingVariant) ?: OnboardingVariant.LEGACY
+        return if (properties.onboarding.firstMissionEnabled) assigned else OnboardingVariant.LEGACY
+    }
+
+    private fun showGuidedFirstMission(telegramId: Long, chatId: Long, prefix: String, surface: String) {
+        val player = player(telegramId)
+        val language = GameLanguage.fromStored(player.language)
+        val army = inventory.army(telegramId)
+        val usedCp = groupCp(army)
+        when (firstMissionReadiness(
+            unitCount = army.activeGroup.units.size,
+            hasReservedUnits = inventory.hasReservedUnits(army.activeGroup),
+            usedCp = usedCp,
+            cpLimit = army.cpLimit,
+            minimumBattleCp = forceTiers.minimumBattleCp,
+        )) {
+            FirstMissionReadiness.EMPTY -> {
+                telegram.sendMessage(chatId, "$prefix\n\n${GameI18n.t(language, "army_empty")}", armyKeyboard(army, language))
+                return
+            }
+            FirstMissionReadiness.RESERVED -> {
+                telegram.sendMessage(chatId, "$prefix\n\n${GameI18n.t(language, "weekly_units_reserved")}", armyKeyboard(army, language))
+                return
+            }
+            FirstMissionReadiness.OUTSIDE_CP_LIMIT -> {
+                telegram.sendMessage(
+                    chatId,
+                    "$prefix\n\n${GameI18n.t(language, "group_below_minimum", usedCp, forceTiers.minimumBattleCp)}",
+                    armyKeyboard(army, language),
+                )
+                return
+            }
+            FirstMissionReadiness.READY -> Unit
+        }
+        val group = inventory.battleSnapshot(army)
+        val offerVersion = nextOfferVersion(telegramId)
+        val recommendation = FirstMissionRecommendationPolicy.recommend(
+            offers = offersFor(telegramId, offerVersion),
+            commanderLevel = player.commanderLevel,
+            group = group,
+            mapFor = battleEngine::mapFor,
+        )
+        val entry = recommendation.map.playerEntries.first { it.id == recommendation.entryId }
+        val objective = recommendation.map.objectives.first { it.id == recommendation.objectiveId }
+        saveFirstMissionRecommendation(telegramId, offerVersion, army, recommendation)
+        val operation = recommendation.operation
+        val text = buildString {
+            appendLine(prefix)
+            appendLine()
+            appendLine(GameI18n.t(language, "first_mission_title"))
+            appendLine(GameI18n.t(language, "starter_army_ready", army.activeGroup.name, group.usedCp, group.cpLimit))
+            appendLine()
+            appendLine("🗺️ ${GameI18n.battlefield(language, operation.battlefield.location)} · ${GameI18n.biome(language, operation.battlefield.biome)}")
+            appendLine(GameI18n.t(language, "first_mission_goal", GameI18n.t(language, objective.nameKey)))
+            appendLine(GameI18n.t(language, "first_mission_orders", GameI18n.t(language, entry.nameKey), GameI18n.t(language, objective.nameKey)))
+            appendLine(GameI18n.t(language, "first_mission_tactic", GameI18n.tactic(language, recommendation.tactic), GameI18n.tacticHint(language, recommendation.tactic)))
+            appendLine("${GameI18n.t(language, "intel")}: ${localizedIntel(language, operation)}")
+            appendLine()
+            appendLine(GameI18n.t(language, "first_mission_losses"))
+            append(GameI18n.t(language, "first_mission_no_guarantee"))
+        }
+        val keyboard = InlineKeyboardMarkup(
+            listOf(
+                listOf(
+                    InlineKeyboardButton(
+                        GameI18n.t(language, "first_mission_start"),
+                        "first:start:${recommendation.version}:$offerVersion",
+                    ),
+                ),
+                listOf(
+                    InlineKeyboardButton(
+                        GameI18n.t(language, "first_mission_configure"),
+                        "first:configure:${recommendation.version}:$offerVersion",
+                    ),
+                ),
+            ),
+        )
+        telegram.sendPhoto(
+            chatId,
+            properties.publicBaseUrl.trimEnd('/') + "/assets/maps/personal/${recommendation.map.id}.png?v=${recommendation.map.version}",
+            text,
+            keyboard,
+        )
+        journey.record(
+            telegramId,
+            JourneyEventType.ONBOARDING_CTA_VIEWED,
+            JourneyEventDetails(
+                surface = surface,
+                result = "first_mission",
+                variant = OnboardingVariant.GUIDED_V1.value,
+                offerVersion = offerVersion,
+                offerSlot = operation.slot,
+                presetNo = army.activeGroup.presetNo,
+                usedCp = group.usedCp,
+                entryId = recommendation.entryId,
+                objectiveId = recommendation.objectiveId,
+                tactic = recommendation.tactic.code,
+            ),
+        )
+    }
+
+    private fun nextOfferVersion(telegramId: Long): Long = jdbc.sql(
+        "UPDATE players SET battle_offer_version = battle_offer_version + 1, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = :id RETURNING battle_offer_version",
+    ).param("id", telegramId).query(Long::class.java).single()
+
+    private fun saveFirstMissionRecommendation(
+        telegramId: Long,
+        offerVersion: Long,
+        army: Army,
+        recommendation: FirstMissionRecommendation,
+    ) {
+        jdbc.sql(
+            """
+            INSERT INTO first_mission_recommendations(
+                player_telegram_id, recommendation_version, onboarding_variant,
+                offer_version, offer_slot, preset_no, group_version,
+                entry_id, objective_id, tactic
+            ) VALUES (
+                :playerId, :recommendationVersion, 'guided_v1',
+                :offerVersion, :offerSlot, :presetNo, :groupVersion,
+                :entryId, :objectiveId, :tactic
+            )
+            ON CONFLICT (player_telegram_id) DO UPDATE
+               SET recommendation_version = EXCLUDED.recommendation_version,
+                   onboarding_variant = EXCLUDED.onboarding_variant,
+                   offer_version = EXCLUDED.offer_version,
+                   offer_slot = EXCLUDED.offer_slot,
+                   preset_no = EXCLUDED.preset_no,
+                   group_version = EXCLUDED.group_version,
+                   entry_id = EXCLUDED.entry_id,
+                   objective_id = EXCLUDED.objective_id,
+                   tactic = EXCLUDED.tactic,
+                   shown_at = CURRENT_TIMESTAMP,
+                   accepted_battle_id = NULL,
+                   accepted_at = NULL
+            """.trimIndent(),
+        ).param("playerId", telegramId)
+            .param("recommendationVersion", recommendation.version)
+            .param("offerVersion", offerVersion)
+            .param("offerSlot", recommendation.operation.slot)
+            .param("presetNo", army.activeGroup.presetNo)
+            .param("groupVersion", army.activeGroup.version)
+            .param("entryId", recommendation.entryId)
+            .param("objectiveId", recommendation.objectiveId)
+            .param("tactic", recommendation.tactic.code)
+            .update()
+    }
+
+    private fun handleFirstMissionCallback(telegramId: Long, firstName: String, chatId: Long, data: String) {
+        val callback = parseFirstMissionCallback(data) ?: return staleSelection(telegramId, chatId)
+        val context = firstMissionContext(telegramId, callback.offerVersion)
+            ?.takeIf { it.recommendationVersion == callback.recommendationVersion }
+            ?: return staleSelection(telegramId, chatId)
+        val current = player(telegramId)
+        if (current.battleOfferVersion != callback.offerVersion || current.victories + current.defeats > 0) return staleSelection(telegramId, chatId)
+        journey.record(
+            telegramId,
+            JourneyEventType.ONBOARDING_CTA_CLICKED,
+            JourneyEventDetails(
+                surface = "first_mission_${callback.action}",
+                result = callback.action,
+                variant = context.onboardingVariant,
+                offerVersion = context.offerVersion,
+                offerSlot = context.offerSlot,
+                presetNo = context.presetNo,
+                entryId = context.entryId,
+                objectiveId = context.objectiveId,
+                tactic = context.tactic.code,
+            ),
+        )
+        if (callback.action == "configure") {
+            showDeployment(telegramId, firstName, chatId, "op:${context.offerVersion}:${context.offerSlot}")
+            return
+        }
+        resolveBattle(
+            telegramId,
+            firstName,
+            chatId,
+            "fight:${context.offerVersion}:${context.offerSlot}:${context.entryId}:${context.objectiveId}:${context.tactic.code}:${context.presetNo}.${context.groupVersion}",
+        )
     }
 
     private fun battleMenu(telegramId: Long, firstName: String, chatId: Long) {
         ensurePlayer(telegramId, firstName)
         val player = player(telegramId)
         val language = GameLanguage.fromStored(player.language)
+        if (player.victories + player.defeats == 0) {
+            journey.record(
+                telegramId,
+                JourneyEventType.ONBOARDING_CTA_CLICKED,
+                JourneyEventDetails(surface = "battle_entry", result = "battle", variant = effectiveOnboardingVariant(player).value),
+            )
+        }
         if (player.allianceCode == null) {
-            telegram.sendMessage(chatId, GameI18n.t(language, "choose_country"), recommendedCountryKeyboard(language, GameLanguage.fromTelegram(player.telegramLanguage)))
+            telegram.sendMessage(chatId, countryChoiceText(language), recommendedCountryKeyboard(language, GameLanguage.fromTelegram(player.telegramLanguage)))
+            journey.record(telegramId, JourneyEventType.ONBOARDING_COUNTRY_VIEWED, JourneyEventDetails(surface = "battle"))
             return
         }
         val army = inventory.army(telegramId)
@@ -298,7 +558,7 @@ class GameService(
             return
         }
         if (inventory.hasReservedUnits(army.activeGroup)) {
-            telegram.sendMessage(chatId, GameI18n.t(language, "weekly_units_reserved"), armyKeyboard(army, language))
+            weeklyUnitsReserved(telegramId, chatId, army, language, "battle_menu")
             return
         }
         val deployedCp = groupCp(army)
@@ -311,9 +571,7 @@ class GameService(
             return
         }
         val forceTier = forceTiers.forDeployedCp(deployedCp)
-        val offerVersion = jdbc.sql(
-            "UPDATE players SET battle_offer_version = battle_offer_version + 1, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = :id RETURNING battle_offer_version",
-        ).param("id", telegramId).query(Long::class.java).single()
+        val offerVersion = nextOfferVersion(telegramId)
 
         val offers = offersFor(telegramId, offerVersion)
         val text = buildString {
@@ -336,17 +594,22 @@ class GameService(
             } + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "profile"), "nav:profile"))),
         )
         telegram.sendMessage(chatId, text, keyboard)
+        journey.record(
+            telegramId,
+            JourneyEventType.BATTLE_OFFER_VIEWED,
+            JourneyEventDetails(surface = "battle_menu", offerVersion = offerVersion, presetNo = army.activeGroup.presetNo, usedCp = deployedCp),
+        )
     }
 
     private fun showDeployment(telegramId: Long, firstName: String, chatId: Long, callbackData: String) {
         ensurePlayer(telegramId, firstName)
-        val parsed = parseSelection(callbackData, "op") ?: return staleSelection(chatId)
+        val parsed = parseSelection(callbackData, "op") ?: return staleSelection(telegramId, chatId)
         val player = player(telegramId)
         val language = GameLanguage.fromStored(player.language)
-        if (player.allianceCode == null || player.battleOfferVersion != parsed.expectedOfferVersion) return staleSelection(chatId)
-        val operation = offersFor(telegramId, parsed.expectedOfferVersion).getOrNull(parsed.slot) ?: return staleSelection(chatId)
+        if (player.allianceCode == null || player.battleOfferVersion != parsed.expectedOfferVersion) return staleSelection(telegramId, chatId)
+        val operation = offersFor(telegramId, parsed.expectedOfferVersion).getOrNull(parsed.slot) ?: return staleSelection(telegramId, chatId)
         val army = inventory.army(telegramId)
-        if (inventory.hasReservedUnits(army.activeGroup)) return weeklyUnitsReserved(chatId, army, language)
+        if (inventory.hasReservedUnits(army.activeGroup)) return weeklyUnitsReserved(telegramId, chatId, army, language, "entry")
         val group = inventory.battleSnapshot(army)
         if (group.units.isEmpty() || group.usedCp < forceTiers.minimumBattleCp || group.usedCp > group.cpLimit) return armyMenu(telegramId, chatId)
         val map = battleEngine.mapFor(operation)
@@ -376,25 +639,36 @@ class GameService(
             text,
             InlineKeyboardMarkup(buttons),
         )
+        journey.record(
+            telegramId,
+            JourneyEventType.BATTLE_OFFER_SELECTED,
+            JourneyEventDetails(
+                surface = "operation",
+                offerVersion = parsed.expectedOfferVersion,
+                offerSlot = parsed.slot,
+                presetNo = army.activeGroup.presetNo,
+                usedCp = group.usedCp,
+            ),
+        )
     }
 
     private fun showObjectives(telegramId: Long, firstName: String, chatId: Long, callbackData: String) {
         ensurePlayer(telegramId, firstName)
         val parts = callbackData.split(':')
-        if (parts.size != 5 || parts[0] != "deploy") return staleSelection(chatId)
-        val expectedOfferVersion = parts[1].toLongOrNull() ?: return staleSelection(chatId)
-        val slot = parts[2].toIntOrNull() ?: return staleSelection(chatId)
+        if (parts.size != 5 || parts[0] != "deploy") return staleSelection(telegramId, chatId)
+        val expectedOfferVersion = parts[1].toLongOrNull() ?: return staleSelection(telegramId, chatId)
+        val slot = parts[2].toIntOrNull() ?: return staleSelection(telegramId, chatId)
         val entryId = parts[3]
-        val expectedGroup = parseGroupBinding(parts[4]) ?: return staleSelection(chatId)
+        val expectedGroup = parseGroupBinding(parts[4]) ?: return staleSelection(telegramId, chatId)
         val player = player(telegramId)
         val language = GameLanguage.fromStored(player.language)
-        if (player.allianceCode == null || player.battleOfferVersion != expectedOfferVersion) return staleSelection(chatId)
-        val operation = offersFor(telegramId, expectedOfferVersion).getOrNull(slot) ?: return staleSelection(chatId)
+        if (player.allianceCode == null || player.battleOfferVersion != expectedOfferVersion) return staleSelection(telegramId, chatId)
+        val operation = offersFor(telegramId, expectedOfferVersion).getOrNull(slot) ?: return staleSelection(telegramId, chatId)
         val army = inventory.army(telegramId)
-        if (inventory.hasReservedUnits(army.activeGroup)) return weeklyUnitsReserved(chatId, army, language)
-        if (army.activeGroup.presetNo != expectedGroup.presetNo || army.activeGroup.version != expectedGroup.version || army.activeGroup.units.isEmpty()) return staleSelection(chatId)
+        if (inventory.hasReservedUnits(army.activeGroup)) return weeklyUnitsReserved(telegramId, chatId, army, language, "objective")
+        if (army.activeGroup.presetNo != expectedGroup.presetNo || army.activeGroup.version != expectedGroup.version || army.activeGroup.units.isEmpty()) return staleSelection(telegramId, chatId)
         val map = battleEngine.mapFor(operation)
-        val entry = map.playerEntries.firstOrNull { it.id == entryId } ?: return staleSelection(chatId)
+        val entry = map.playerEntries.firstOrNull { it.id == entryId } ?: return staleSelection(telegramId, chatId)
 
         val text = buildString {
             appendLine("🧭 ${GameI18n.t(language, "route")}")
@@ -411,27 +685,38 @@ class GameService(
             )
         } + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "other_operations"), "nav:battle")))
         telegram.sendMessage(chatId, text, InlineKeyboardMarkup(buttons))
+        journey.record(
+            telegramId,
+            JourneyEventType.BATTLE_DEPLOYMENT_SELECTED,
+            JourneyEventDetails(
+                surface = "entry",
+                offerVersion = expectedOfferVersion,
+                offerSlot = slot,
+                presetNo = expectedGroup.presetNo,
+                entryId = entryId,
+            ),
+        )
     }
 
     private fun showTactics(telegramId: Long, firstName: String, chatId: Long, callbackData: String) {
         ensurePlayer(telegramId, firstName)
         val parts = callbackData.split(':')
-        if (parts.size != 6 || parts[0] != "objective") return staleSelection(chatId)
-        val expectedOfferVersion = parts[1].toLongOrNull() ?: return staleSelection(chatId)
-        val slot = parts[2].toIntOrNull() ?: return staleSelection(chatId)
+        if (parts.size != 6 || parts[0] != "objective") return staleSelection(telegramId, chatId)
+        val expectedOfferVersion = parts[1].toLongOrNull() ?: return staleSelection(telegramId, chatId)
+        val slot = parts[2].toIntOrNull() ?: return staleSelection(telegramId, chatId)
         val entryId = parts[3]
         val objectiveId = parts[4]
-        val expectedGroup = parseGroupBinding(parts[5]) ?: return staleSelection(chatId)
+        val expectedGroup = parseGroupBinding(parts[5]) ?: return staleSelection(telegramId, chatId)
         val player = player(telegramId)
         val language = GameLanguage.fromStored(player.language)
-        if (player.allianceCode == null || player.battleOfferVersion != expectedOfferVersion) return staleSelection(chatId)
-        val operation = offersFor(telegramId, expectedOfferVersion).getOrNull(slot) ?: return staleSelection(chatId)
+        if (player.allianceCode == null || player.battleOfferVersion != expectedOfferVersion) return staleSelection(telegramId, chatId)
+        val operation = offersFor(telegramId, expectedOfferVersion).getOrNull(slot) ?: return staleSelection(telegramId, chatId)
         val army = inventory.army(telegramId)
-        if (inventory.hasReservedUnits(army.activeGroup)) return weeklyUnitsReserved(chatId, army, language)
-        if (army.activeGroup.presetNo != expectedGroup.presetNo || army.activeGroup.version != expectedGroup.version || army.activeGroup.units.isEmpty()) return staleSelection(chatId)
+        if (inventory.hasReservedUnits(army.activeGroup)) return weeklyUnitsReserved(telegramId, chatId, army, language, "tactic")
+        if (army.activeGroup.presetNo != expectedGroup.presetNo || army.activeGroup.version != expectedGroup.version || army.activeGroup.units.isEmpty()) return staleSelection(telegramId, chatId)
         val map = battleEngine.mapFor(operation)
-        val entry = map.playerEntries.firstOrNull { it.id == entryId } ?: return staleSelection(chatId)
-        val objective = map.objectives.firstOrNull { it.id == objectiveId } ?: return staleSelection(chatId)
+        val entry = map.playerEntries.firstOrNull { it.id == entryId } ?: return staleSelection(telegramId, chatId)
+        val objective = map.objectives.firstOrNull { it.id == objectiveId } ?: return staleSelection(telegramId, chatId)
 
         val text = buildString {
             appendLine("🎯 ${GameI18n.battlefield(language, operation.battlefield.location)}")
@@ -450,40 +735,117 @@ class GameService(
             )
         }.chunked(2) + listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "other_operations"), "nav:battle")))
         telegram.sendMessage(chatId, text.trim(), InlineKeyboardMarkup(buttons))
+        journey.record(
+            telegramId,
+            JourneyEventType.BATTLE_DEPLOYMENT_SELECTED,
+            JourneyEventDetails(
+                surface = "objective",
+                offerVersion = expectedOfferVersion,
+                offerSlot = slot,
+                presetNo = expectedGroup.presetNo,
+                entryId = entryId,
+                objectiveId = objectiveId,
+            ),
+        )
     }
 
     private fun resolveBattle(telegramId: Long, firstName: String, chatId: Long, callbackData: String) {
         ensurePlayer(telegramId, firstName)
+        val battleId = UUID.randomUUID()
+        val attempt = technicalTelemetry.begin(
+            TechnicalOperation.BATTLE,
+            mode = "personal",
+            session = journey.currentSession(telegramId),
+            resourceId = battleId,
+            engineVersion = PERSONAL_BATTLE_ENGINE_VERSION,
+        )
+        fun rejectStale() {
+            technicalTelemetry.failure(attempt, TechnicalStage.ACCEPTED, TechnicalFailure.BUSINESS_STALE)
+            staleSelection(telegramId, chatId)
+        }
+        fun rejectRule(action: () -> Unit) {
+            technicalTelemetry.failure(attempt, TechnicalStage.ACCEPTED, TechnicalFailure.BUSINESS_RULE)
+            action()
+        }
         val parts = callbackData.split(':')
-        if (parts.size != 7 || parts[0] != "fight") return staleSelection(chatId)
-        val expectedOfferVersion = parts[1].toLongOrNull() ?: return staleSelection(chatId)
-        val slot = parts[2].toIntOrNull() ?: return staleSelection(chatId)
+        if (parts.size != 7 || parts[0] != "fight") return rejectStale()
+        val expectedOfferVersion = parts[1].toLongOrNull() ?: return rejectStale()
+        val slot = parts[2].toIntOrNull() ?: return rejectStale()
         val entryId = parts[3]
         val objectiveId = parts[4]
-        val tactic = Tactic.fromCode(parts[5]) ?: return staleSelection(chatId)
-        val expectedGroup = parseGroupBinding(parts[6]) ?: return staleSelection(chatId)
+        val tactic = Tactic.fromCode(parts[5]) ?: return rejectStale()
+        val expectedGroup = parseGroupBinding(parts[6]) ?: return rejectStale()
         val player = player(telegramId, lock = true)
         val language = GameLanguage.fromStored(player.language)
-        if (player.allianceCode == null || player.battleOfferVersion != expectedOfferVersion) return staleSelection(chatId)
-        val operation = offersFor(telegramId, expectedOfferVersion).getOrNull(slot) ?: return staleSelection(chatId)
+        if (player.allianceCode == null || player.battleOfferVersion != expectedOfferVersion) return rejectStale()
+        val operation = offersFor(telegramId, expectedOfferVersion).getOrNull(slot) ?: return rejectStale()
         val army = inventory.army(telegramId)
-        if (inventory.hasReservedUnits(army.activeGroup)) return weeklyUnitsReserved(chatId, army, language)
-        if (army.activeGroup.presetNo != expectedGroup.presetNo || army.activeGroup.version != expectedGroup.version || army.activeGroup.units.isEmpty()) return staleSelection(chatId)
+        if (inventory.hasReservedUnits(army.activeGroup)) return rejectRule { weeklyUnitsReserved(telegramId, chatId, army, language, "resolve") }
+        if (army.activeGroup.presetNo != expectedGroup.presetNo || army.activeGroup.version != expectedGroup.version || army.activeGroup.units.isEmpty()) return rejectStale()
         val group = inventory.battleSnapshot(army)
-        if (group.usedCp < forceTiers.minimumBattleCp || group.usedCp > group.cpLimit) return armyMenu(telegramId, chatId)
+        if (group.usedCp < forceTiers.minimumBattleCp || group.usedCp > group.cpLimit) return rejectRule { armyMenu(telegramId, chatId) }
         val map = battleEngine.mapFor(operation)
-        if (map.playerEntries.none { it.id == entryId } || map.objectives.none { it.id == objectiveId }) return staleSelection(chatId)
+        if (map.playerEntries.none { it.id == entryId } || map.objectives.none { it.id == objectiveId }) return rejectStale()
         val plan = DeploymentPlan(entryId, objectiveId)
-        val battleId = UUID.randomUUID()
-        val baseBattle = battleEngine.resolve(
-            properties.battleServerSalt,
-            "$telegramId:${todayKey()}:$expectedOfferVersion:$slot",
-            player.commanderLevel,
-            operation,
-            tactic,
-            group,
-            plan,
+        val firstMission = firstMissionContext(telegramId, expectedOfferVersion)
+            ?.takeIf { player.victories + player.defeats == 0 }
+        val orderSelectionSource = when {
+            firstMission == null -> "manual"
+            firstMission.offerSlot == slot &&
+                firstMission.presetNo == expectedGroup.presetNo &&
+                firstMission.groupVersion == expectedGroup.version &&
+                firstMission.entryId == entryId &&
+                firstMission.objectiveId == objectiveId &&
+                firstMission.tactic == tactic -> "recommended"
+            else -> "customized"
+        }
+        technicalTelemetry.success(attempt, TechnicalStage.ACCEPTED)
+        journey.record(
+            telegramId,
+            JourneyEventType.BATTLE_DEPLOYMENT_SELECTED,
+            JourneyEventDetails(
+                surface = "tactic",
+                battleId = battleId,
+                offerVersion = expectedOfferVersion,
+                offerSlot = slot,
+                presetNo = expectedGroup.presetNo,
+                usedCp = group.usedCp,
+                entryId = entryId,
+                objectiveId = objectiveId,
+                tactic = tactic.name.lowercase(),
+                variant = firstMission?.onboardingVariant,
+            ),
         )
+        journey.record(
+            telegramId,
+            JourneyEventType.BATTLE_STARTED,
+            JourneyEventDetails(
+                surface = "personal",
+                battleId = battleId,
+                offerVersion = expectedOfferVersion,
+                offerSlot = slot,
+                presetNo = expectedGroup.presetNo,
+                usedCp = group.usedCp,
+                entryId = entryId,
+                objectiveId = objectiveId,
+                tactic = tactic.name.lowercase(),
+                variant = firstMission?.onboardingVariant,
+            ),
+        )
+        val baseBattle = try {
+            battleEngine.resolve(
+                properties.battleServerSalt,
+                "$telegramId:${todayKey()}:$expectedOfferVersion:$slot",
+                player.commanderLevel,
+                operation,
+                tactic,
+                group,
+                plan,
+            )
+        } catch (error: Exception) {
+            technicalTelemetry.failure(attempt, TechnicalStage.RESULT_COMMITTED, technicalFailure(error, TechnicalFailure.ENGINE_FAILURE))
+            throw error
+        }
         val economyBonus = campaigns.activeEconomyBonus(player.allianceCode)
         val battle = applyWeeklyEconomyBonus(baseBattle, economyBonus)
         val spatial = requireNotNull(battle.spatial)
@@ -516,7 +878,10 @@ class GameService(
             .param("expectedOfferVersion", expectedOfferVersion)
             .update()
 
-        if (updated == 0) return staleSelection(chatId)
+        if (updated == 0) {
+            technicalTelemetry.failure(attempt, TechnicalStage.RESULT_COMMITTED, TechnicalFailure.BUSINESS_STALE)
+            return staleSelection(telegramId, chatId)
+        }
         val casualties = inventory.destroyPersonalCasualties(telegramId, army, group, spatial.playerUnits, battleId)
 
         jdbc.sql(
@@ -532,7 +897,8 @@ class GameService(
                 map_snapshot_json, enemy_group_snapshot_json, spatial_events_json, objective_state_json,
                 force_tier_id, player_deployed_cp, enemy_deployed_cp,
                 player_units_survived, player_units_lost,
-                outcome_credits, destruction_credits, outcome_xp, destruction_xp, enemy_units_destroyed
+                outcome_credits, destruction_credits, outcome_xp, destruction_xp, enemy_units_destroyed,
+                order_selection_source, onboarding_variant, recommendation_version
             )
             VALUES (
                 :id, :playerId, :victory, :playerPower, :enemyPower,
@@ -546,7 +912,8 @@ class GameService(
                 CAST(:spatialEvents AS jsonb), CAST(:objectiveState AS jsonb),
                 :forceTier, :playerDeployedCp, :enemyDeployedCp,
                 :playerUnitsSurvived, :playerUnitsLost,
-                :outcomeCredits, :destructionCredits, :outcomeXp, :destructionXp, :enemyUnitsDestroyed
+                :outcomeCredits, :destructionCredits, :outcomeXp, :destructionXp, :enemyUnitsDestroyed,
+                :orderSelectionSource, :onboardingVariant, :recommendationVersion
             )
             """.trimIndent(),
         ).param("id", battleId)
@@ -593,14 +960,49 @@ class GameService(
             .param("outcomeXp", battle.outcomeXp)
             .param("destructionXp", battle.destructionXp)
             .param("enemyUnitsDestroyed", battle.destroyedEnemyUnits)
+            .param("orderSelectionSource", orderSelectionSource)
+            .param("onboardingVariant", firstMission?.onboardingVariant)
+            .param("recommendationVersion", firstMission?.recommendationVersion)
             .update()
+
+        if (firstMission != null) {
+            jdbc.sql(
+                """
+                UPDATE first_mission_recommendations
+                   SET accepted_battle_id = :battleId,
+                       accepted_at = CURRENT_TIMESTAMP
+                 WHERE player_telegram_id = :playerId
+                   AND offer_version = :offerVersion
+                   AND accepted_battle_id IS NULL
+                """.trimIndent(),
+            ).param("battleId", battleId)
+                .param("playerId", telegramId)
+                .param("offerVersion", expectedOfferVersion)
+                .update()
+        }
 
         recordWalletChange(telegramId, "XP", battle.xp.toLong(), "BATTLE_REWARD", battleId)
         recordWalletChange(telegramId, "CREDITS", battle.credits.toLong(), "BATTLE_REWARD", battleId)
         recordWalletChange(telegramId, "MATERIALS", battle.materials.toLong(), "BATTLE_REWARD", battleId)
         metrics.battle(battle.victory)
+        journey.record(
+            telegramId,
+            JourneyEventType.BATTLE_FINISHED,
+            JourneyEventDetails(
+                surface = "personal",
+                result = if (battle.victory) "victory" else "defeat",
+                reason = spatial.endReason.name.lowercase(),
+                battleId = battleId,
+                usedCp = group.usedCp,
+                entryId = entryId,
+                objectiveId = objectiveId,
+                tactic = tactic.name.lowercase(),
+                quantity = casualties.lost,
+            ),
+        )
 
         val fresh = player(telegramId)
+        val freshArmy = inventory.army(telegramId)
         val entry = spatial.map.playerEntries.first { it.id == spatial.playerPlan.entryId }
         val objective = spatial.map.objectives.first { it.id == spatial.playerPlan.objectiveId }
         val highlights = spatialHighlights(language, spatial.events, spatial.map)
@@ -620,7 +1022,7 @@ class GameService(
         val levelUp = if (fresh.commanderLevel > player.commanderLevel) {
             "\n⭐ ${GameI18n.t(language, "new_level")}: ${fresh.commanderLevel} · ${fresh.commandCapacity} CP"
         } else ""
-        val report = buildString {
+        val detailsText = buildString {
             appendLine(GameI18n.t(language, "battle_complete"))
             appendLine("${GameI18n.battlefield(language, operation.battlefield.location)} · ${GameI18n.biome(language, operation.battlefield.biome)}")
             appendLine("${tactic.icon} ${GameI18n.tactic(language, tactic)}")
@@ -654,66 +1056,492 @@ class GameService(
                 append(GameI18n.t(language, "new_player_economy_hint"))
             }
         }
-        telegram.sendMessage(chatId, report.trim(), replayKeyboard(telegramId, language, "replay:b:$battleId"))
+        val personalOutcome = if (battle.victory) PersonalBattleOutcome.VICTORY else PersonalBattleOutcome.DEFEAT
+        val orderedObjectiveHeld = spatial.objectives.firstOrNull { it.id == objectiveId }?.owner == BattleSide.PLAYER
+        val insight = BattleResultPresentationPolicy.insight(
+            personalOutcome,
+            spatial.endReason,
+            objectiveId,
+            spatial.objectives,
+            spatial.events,
+        )
+        val dailyAvailable = GameUiPolicy.dailyRewardAvailable(
+            fresh.dailyRewardLastClaim,
+            LocalDate.now(ZoneId.of(properties.gameTimezone)),
+        )
+        val recommendation = BattleResultPresentationPolicy.recommendNextAction(
+            unitCount = freshArmy.activeGroup.units.size,
+            hasReservedUnits = inventory.hasReservedUnits(freshArmy.activeGroup),
+            usedCp = groupCp(freshArmy),
+            cpLimit = freshArmy.cpLimit,
+            minimumBattleCp = forceTiers.minimumBattleCp,
+            dailyAvailable = dailyAvailable,
+        )
+        val nextGoal = BattleResultPresentationPolicy.nextLevelGoal(fresh.xp)
+        val summary = buildString {
+            appendLine(GameI18n.t(language, when (personalOutcome) {
+                PersonalBattleOutcome.VICTORY -> "result_outcome_victory"
+                PersonalBattleOutcome.DEFEAT -> "result_outcome_defeat"
+                PersonalBattleOutcome.DRAW -> "result_outcome_draw"
+            }))
+            appendLine(GameI18n.t(language, if (orderedObjectiveHeld) "result_goal_achieved" else "result_goal_not_achieved", GameI18n.t(language, objective.nameKey)))
+            appendLine(GameI18n.t(language, "result_reward_summary", battle.xp, battle.credits, battle.materials))
+            appendLine(GameI18n.t(language, "equipment_returned_lost", casualties.survived, casualties.lost))
+            appendLine()
+            appendLine(GameI18n.t(language, "result_insight", battleInsightText(language, insight)))
+            append(GameI18n.t(language, "result_next_level_goal", nextGoal.level, nextGoal.xpRemaining, nextGoal.nextCapacity))
+            if (recommendation.dailySuggested) {
+                appendLine()
+                append(GameI18n.t(language, "result_daily_available"))
+            }
+        }.trim()
+        savePostBattleRecommendation(telegramId, battleId, recommendation, detailsText.trim())
+        completeNextBattleRecommendation(telegramId, battleId)
+        journey.record(
+            telegramId,
+            JourneyEventType.POST_BATTLE_ACTION_SELECTED,
+            JourneyEventDetails(
+                surface = "battle_result",
+                result = recommendation.action.value,
+                reason = recommendation.reason.value,
+                battleId = battleId,
+            ),
+        )
+        val resultKeyboard = postBattleKeyboard(language, battleId, recommendation.action)
+        val frontBridge = prepareFrontBridgeOffer(telegramId, battleId, fresh, freshArmy, language)
+        runAfterCommit {
+            technicalTelemetry.success(attempt, TechnicalStage.RESULT_COMMITTED)
+            try {
+                telegram.sendMessage(chatId, summary, resultKeyboard)
+                markPostBattleSent(telegramId, battleId)
+                technicalTelemetry.success(attempt, TechnicalStage.RESULT_SENT, terminal = true)
+                frontBridge?.let { offer ->
+                    runCatching {
+                        telegram.sendMessage(
+                            chatId,
+                            offer.text,
+                            InlineKeyboardMarkup(listOf(listOf(InlineKeyboardButton(offer.buttonText, "front:bridge")))),
+                        )
+                        markFrontBridgeShown(telegramId)
+                        offer.recordShown()
+                    }.onFailure { error ->
+                        logger.warn("Front bridge after battle {} could not be delivered to player {}", battleId, telegramId, error)
+                    }
+                }
+            } catch (error: Exception) {
+                technicalTelemetry.failure(attempt, TechnicalStage.RESULT_SENT, technicalFailure(error, TechnicalFailure.TELEGRAM_SEND))
+                logger.warn("Battle result {} was committed but could not be delivered to player {}", battleId, telegramId, error)
+            }
+        }
     }
+
+    private fun prepareFrontBridgeOffer(
+        telegramId: Long,
+        battleId: UUID,
+        player: Player,
+        army: Army,
+        language: GameLanguage,
+    ): FrontBridgeOffer? {
+        val allianceCode = player.allianceCode ?: return null
+        val alreadyShown = jdbc.sql(
+            "SELECT EXISTS(SELECT 1 FROM front_bridge_offers WHERE player_telegram_id = :player AND shown_at IS NOT NULL)",
+        ).param("player", telegramId).query(Boolean::class.java).single()
+        val overview = campaigns.frontBridgeOverview(telegramId, allianceCode)
+        if (!FrontBridgePolicy.eligible(player.victories + player.defeats, alreadyShown, overview.alreadyContributed)) return null
+
+        val readyGroups = FrontBridgePolicy.battleReadyGroups(frontGroupReadiness(army), forceTiers.minimumBattleCp, army.cpLimit)
+        val action = FrontBridgePolicy.bridgeAction(overview.openForContributions, readyGroups)
+        val persisted = jdbc.sql(
+            """
+            INSERT INTO front_bridge_offers(player_telegram_id, battle_id, week_key, action)
+            VALUES (:player, :battle, :week, :action)
+            ON CONFLICT (player_telegram_id) DO UPDATE
+                SET battle_id = EXCLUDED.battle_id,
+                    week_key = EXCLUDED.week_key,
+                    action = EXCLUDED.action,
+                    updated_at = CURRENT_TIMESTAMP
+              WHERE front_bridge_offers.shown_at IS NULL
+            """.trimIndent(),
+        ).param("player", telegramId)
+            .param("battle", battleId)
+            .param("week", overview.weekKey)
+            .param("action", action.value)
+            .update()
+        if (persisted == 0) return null
+
+        val own = AllianceCatalog.option(allianceCode, language).label
+        val opponent = overview.opponentCode?.let { AllianceCatalog.option(it, language).label }
+            ?: GameI18n.t(language, "front_bridge_opponent_pending")
+        val deadline = overview.resolvesAt.atZone(ZoneId.of(properties.gameTimezone))
+            .format(DateTimeFormatter.ofPattern("dd.MM HH:mm"))
+        val status = when (overview.state) {
+            FrontBridgeWeekState.OPEN -> GameI18n.t(language, "front_bridge_status_open", deadline)
+            FrontBridgeWeekState.LOCKED -> GameI18n.t(language, "front_bridge_status_locked")
+            FrontBridgeWeekState.RESOLVED -> GameI18n.t(language, "front_bridge_status_resolved")
+        }
+        val safety = if (action == FrontBridgeAction.CONTRIBUTE) {
+            GameI18n.t(language, "front_bridge_safe", readyGroups.size - 1)
+        } else {
+            GameI18n.t(language, "front_bridge_unsafe")
+        }
+        val text = buildString {
+            appendLine(GameI18n.t(language, "front_bridge_title"))
+            appendLine(GameI18n.t(language, "front_bridge_intro", own, opponent))
+            appendLine(status)
+            appendLine(GameI18n.t(language, "front_bridge_power", formatCampaignPower(overview.ownPower), formatCampaignPower(overview.opponentPower)))
+            appendLine()
+            appendLine(
+                GameI18n.t(
+                    language,
+                    "front_bridge_rewards",
+                    properties.campaign.loserXp,
+                    properties.campaign.loserCredits,
+                    properties.campaign.loserMaterials,
+                    properties.campaign.winnerXp,
+                    properties.campaign.winnerCredits,
+                    properties.campaign.winnerMaterials,
+                ),
+            )
+            appendLine(GameI18n.t(language, "front_bridge_bonus", properties.campaign.victoryBonusPercent, properties.campaign.victoryBonusDays))
+            appendLine(GameI18n.t(language, "front_bridge_no_guarantee"))
+            appendLine()
+            appendLine(GameI18n.t(language, "front_bridge_reserve_terms"))
+            append(safety)
+        }
+        val shown = journey.deferred(
+            telegramId,
+            JourneyEventType.FRONT_BRIDGE_SHOWN,
+            JourneyEventDetails(surface = "battle_result", result = action.value, battleId = battleId, referenceId = overview.weekKey),
+        )
+        return FrontBridgeOffer(
+            text = text,
+            buttonText = GameI18n.t(language, if (action == FrontBridgeAction.CONTRIBUTE) "front_bridge_contribute_button" else "front_bridge_view_button"),
+            action = action,
+            recordShown = shown,
+        )
+    }
+
+    private fun markFrontBridgeShown(telegramId: Long) {
+        jdbc.sql(
+            "UPDATE front_bridge_offers SET shown_at = COALESCE(shown_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE player_telegram_id = :player",
+        ).param("player", telegramId).update()
+    }
+
+    private fun savePostBattleRecommendation(
+        telegramId: Long,
+        battleId: UUID,
+        recommendation: PostBattleRecommendation,
+        detailsText: String,
+    ) {
+        jdbc.sql(
+            """
+            INSERT INTO battle_next_actions(
+                battle_id, player_telegram_id, action, reason, summary_version, daily_suggested, details_text
+            ) VALUES (
+                :battleId, :playerId, :action, :reason, :summaryVersion, :dailySuggested, :detailsText
+            )
+            """.trimIndent(),
+        ).param("battleId", battleId)
+            .param("playerId", telegramId)
+            .param("action", recommendation.action.value)
+            .param("reason", recommendation.reason.value)
+            .param("summaryVersion", BattleResultPresentationPolicy.SUMMARY_VERSION)
+            .param("dailySuggested", recommendation.dailySuggested)
+            .param("detailsText", detailsText)
+            .update()
+    }
+
+    private fun markPostBattleSent(telegramId: Long, battleId: UUID) {
+        runCatching {
+            jdbc.sql(
+                """
+                UPDATE battle_next_actions
+                   SET sent_at = COALESCE(sent_at, CURRENT_TIMESTAMP)
+                 WHERE battle_id = :battleId AND player_telegram_id = :playerId
+                """.trimIndent(),
+            ).param("battleId", battleId).param("playerId", telegramId).update()
+        }.onFailure { logger.warn("Battle result {} was delivered but its delivery marker could not be stored", battleId, it) }
+    }
+
+    private fun showBattleResultDetails(telegramId: Long, chatId: Long, rawBattleId: String) {
+        val language = language(telegramId)
+        val battleId = runCatching { UUID.fromString(rawBattleId) }.getOrNull()
+            ?: return telegram.sendMessage(chatId, GameI18n.t(language, "stale"), actionKeyboard(telegramId, language))
+        val row = postBattleAction(telegramId, battleId)
+            ?: return telegram.sendMessage(chatId, GameI18n.t(language, "stale"), actionKeyboard(telegramId, language))
+        markBattleResultDetailsOpened(jdbc, telegramId, battleId)
+        journey.record(
+            telegramId,
+            JourneyEventType.BATTLE_RESULT_DETAILS_OPENED,
+            JourneyEventDetails(surface = "battle_result", battleId = battleId),
+        )
+        telegram.sendMessage(chatId, row.detailsText, postBattleKeyboard(language, battleId, row.action))
+    }
+
+    private fun handlePostBattleAction(telegramId: Long, firstName: String, chatId: Long, rawBattleId: String) {
+        val language = language(telegramId)
+        val battleId = runCatching { UUID.fromString(rawBattleId) }.getOrNull()
+            ?: return telegram.sendMessage(chatId, GameI18n.t(language, "stale"), actionKeyboard(telegramId, language))
+        val row = postBattleAction(telegramId, battleId)
+            ?: return telegram.sendMessage(chatId, GameI18n.t(language, "stale"), actionKeyboard(telegramId, language))
+        val army = inventory.army(telegramId)
+        val current = BattleResultPresentationPolicy.recommendNextAction(
+            unitCount = army.activeGroup.units.size,
+            hasReservedUnits = inventory.hasReservedUnits(army.activeGroup),
+            usedCp = groupCp(army),
+            cpLimit = army.cpLimit,
+            minimumBattleCp = forceTiers.minimumBattleCp,
+            dailyAvailable = GameUiPolicy.dailyRewardAvailable(
+                player(telegramId).dailyRewardLastClaim,
+                LocalDate.now(ZoneId.of(properties.gameTimezone)),
+            ),
+        )
+        val ready = current.action == PostBattleAction.NEXT_BATTLE
+        val clickResult = when {
+            row.action == PostBattleAction.NEXT_BATTLE && !ready -> "unavailable"
+            row.action != PostBattleAction.NEXT_BATTLE && ready -> "already_ready"
+            else -> "opened"
+        }
+        markPostBattleClicked(telegramId, row, clickResult)
+        when {
+            row.action == PostBattleAction.NEXT_BATTLE && ready -> battleMenu(telegramId, firstName, chatId)
+            row.action == PostBattleAction.NEXT_BATTLE -> {
+                telegram.sendMessage(chatId, GameI18n.t(language, "result_action_unavailable"))
+                armyMenu(telegramId, chatId)
+            }
+            ready -> {
+                completeRestorationRecommendation(telegramId, row.battleId, "already_ready")
+                battleMenu(telegramId, firstName, chatId)
+            }
+            else -> armyMenu(telegramId, chatId)
+        }
+    }
+
+    private fun markPostBattleClicked(telegramId: Long, row: PostBattleActionRow, result: String) {
+        jdbc.sql(
+            """
+            UPDATE battle_next_actions
+               SET clicked_at = COALESCE(clicked_at, CURRENT_TIMESTAMP),
+                   click_count = click_count + 1,
+                   last_click_result = :result
+             WHERE battle_id = :battleId AND player_telegram_id = :playerId
+            """.trimIndent(),
+        ).param("result", result).param("battleId", row.battleId).param("playerId", telegramId).update()
+        journey.record(
+            telegramId,
+            JourneyEventType.POST_BATTLE_ACTION_CLICKED,
+            JourneyEventDetails(
+                surface = "battle_result",
+                result = row.action.value,
+                reason = result,
+                battleId = row.battleId,
+            ),
+        )
+    }
+
+    private fun completeNextBattleRecommendation(telegramId: Long, completionBattleId: UUID) {
+        val recommendedBattleId = jdbc.sql(
+            """
+            SELECT battle_id
+              FROM battle_next_actions
+             WHERE player_telegram_id = :playerId
+               AND action = 'next_battle'
+               AND clicked_at IS NOT NULL
+               AND completed_at IS NULL
+               AND battle_id <> :completionBattleId
+             ORDER BY clicked_at DESC, created_at DESC
+             LIMIT 1
+            """.trimIndent(),
+        ).param("playerId", telegramId).param("completionBattleId", completionBattleId)
+            .query(UUID::class.java).optional().orElse(null) ?: return
+        val updated = jdbc.sql(
+            """
+            UPDATE battle_next_actions
+               SET completed_at = CURRENT_TIMESTAMP,
+                   completion_battle_id = :completionBattleId
+             WHERE battle_id = :battleId
+               AND player_telegram_id = :playerId
+               AND completed_at IS NULL
+            """.trimIndent(),
+        ).param("completionBattleId", completionBattleId)
+            .param("battleId", recommendedBattleId)
+            .param("playerId", telegramId)
+            .update()
+        if (updated > 0) {
+            journey.record(
+                telegramId,
+                JourneyEventType.POST_BATTLE_ACTION_COMPLETED,
+                JourneyEventDetails(surface = "next_battle", result = "completed", referenceId = recommendedBattleId.toString(), battleId = completionBattleId),
+            )
+        }
+    }
+
+    private fun completeRestorationRecommendationIfReady(telegramId: Long) {
+        val army = inventory.army(telegramId)
+        val ready = army.activeGroup.units.isNotEmpty() &&
+            !inventory.hasReservedUnits(army.activeGroup) &&
+            groupCp(army) in forceTiers.minimumBattleCp..army.cpLimit
+        if (!ready) return
+        val battleId = jdbc.sql(
+            """
+            SELECT battle_id
+              FROM battle_next_actions
+             WHERE player_telegram_id = :playerId
+               AND action IN ('restore_group', 'choose_group')
+               AND clicked_at IS NOT NULL
+               AND completed_at IS NULL
+             ORDER BY clicked_at DESC, created_at DESC
+             LIMIT 1
+            """.trimIndent(),
+        ).param("playerId", telegramId).query(UUID::class.java).optional().orElse(null) ?: return
+        completeRestorationRecommendation(telegramId, battleId, "group_ready")
+    }
+
+    private fun completeRestorationRecommendation(telegramId: Long, battleId: UUID, reason: String) {
+        val updated = jdbc.sql(
+            """
+            UPDATE battle_next_actions
+               SET completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP)
+             WHERE battle_id = :battleId
+               AND player_telegram_id = :playerId
+               AND completed_at IS NULL
+            """.trimIndent(),
+        ).param("battleId", battleId).param("playerId", telegramId).update()
+        if (updated > 0) {
+            journey.record(
+                telegramId,
+                JourneyEventType.POST_BATTLE_ACTION_COMPLETED,
+                JourneyEventDetails(surface = "restore_group", result = "completed", reason = reason, battleId = battleId),
+            )
+        }
+    }
+
+    private fun postBattleAction(telegramId: Long, battleId: UUID): PostBattleActionRow? = jdbc.sql(
+        """
+        SELECT battle_id, action, details_text
+          FROM battle_next_actions
+         WHERE battle_id = :battleId AND player_telegram_id = :playerId
+        """.trimIndent(),
+    ).param("battleId", battleId).param("playerId", telegramId).query { rs, _ ->
+        PostBattleActionRow(
+            battleId = rs.getObject("battle_id", UUID::class.java),
+            action = PostBattleAction.entries.first { it.value == rs.getString("action") },
+            detailsText = rs.getString("details_text"),
+        )
+    }.optional().orElse(null)
 
     private fun sendPersonalReplay(telegramId: Long, chatId: Long, rawBattleId: String) {
         val language = language(telegramId)
         val battleId = runCatching { UUID.fromString(rawBattleId) }.getOrNull()
-            ?: return telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(telegramId, language))
-        telegram.sendMessage(chatId, GameI18n.t(language, "replay_rendering"))
-        runCatching { replays.preparePersonal(telegramId, battleId) }
-            .onSuccess { replay ->
-                telegram.sendAnimation(
-                    chatId,
-                    replay.url,
-                    GameI18n.t(language, "replay_caption"),
-                    replay.width,
-                    replay.height,
-                    replay.durationSeconds,
-                    actionKeyboard(telegramId, language),
-                )
-            }
-            .onFailure { error ->
-                logger.warn("Could not render personal replay {} for player {}", battleId, telegramId, error)
-                telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(telegramId, language))
-            }
+        if (battleId == null) return rejectReplayRequest(telegramId, chatId, language, "personal")
+        replayDeliveries.requestPersonal(telegramId, chatId, language, battleId)
     }
 
     private fun sendWeeklyReplay(telegramId: Long, chatId: Long, rawMatchupId: String) {
         val language = language(telegramId)
         val matchupId = runCatching { UUID.fromString(rawMatchupId) }.getOrNull()
-            ?: return telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(telegramId, language))
-        telegram.sendMessage(chatId, GameI18n.t(language, "replay_rendering"))
-        runCatching { replays.prepareWeekly(player(telegramId).allianceCode, matchupId) }
-            .onSuccess { replay ->
-                telegram.sendAnimation(
-                    chatId,
-                    replay.url,
-                    GameI18n.t(language, "weekly_replay_caption"),
-                    replay.width,
-                    replay.height,
-                    replay.durationSeconds,
-                    actionKeyboard(telegramId, language),
-                )
-            }
-            .onFailure { error ->
-                logger.warn("Could not render weekly replay {} for player {}", matchupId, telegramId, error)
-                telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(telegramId, language))
-            }
+        if (matchupId == null) return rejectReplayRequest(telegramId, chatId, language, "weekly")
+        replayDeliveries.requestWeekly(telegramId, chatId, language, matchupId, player(telegramId).allianceCode)
     }
 
-    private fun staleSelection(chatId: Long) {
-        val language = languageByChat(chatId)
-        telegram.sendMessage(chatId, GameI18n.t(language, "stale"), actionKeyboard(chatId, language))
+    private fun rejectReplayRequest(
+        telegramId: Long,
+        chatId: Long,
+        language: GameLanguage,
+        mode: String,
+    ) {
+        val attempt = technicalTelemetry.begin(
+            TechnicalOperation.REPLAY,
+            mode = mode,
+            session = journey.currentSession(telegramId),
+            resourceId = null,
+        )
+        technicalTelemetry.success(attempt, TechnicalStage.REQUESTED)
+        technicalTelemetry.failure(attempt, TechnicalStage.QUEUED, TechnicalFailure.BUSINESS_STALE)
+        telegram.sendMessage(chatId, GameI18n.t(language, "replay_unavailable"), actionKeyboard(telegramId, language))
     }
 
-    private fun weeklyUnitsReserved(chatId: Long, army: Army, language: GameLanguage) {
+    private fun staleSelection(telegramId: Long, chatId: Long) =
+        recoverNavigation(telegramId, chatId, NavigationErrorCategory.STALE_CALLBACK)
+
+    private fun recoverNavigation(telegramId: Long, chatId: Long, category: NavigationErrorCategory) {
+        val current = player(telegramId)
+        val language = GameLanguage.fromStored(current.language)
+        val army = inventory.army(telegramId)
+        val usedCp = groupCp(army)
+        val battleReady = army.activeGroup.units.isNotEmpty() &&
+            !inventory.hasReservedUnits(army.activeGroup) &&
+            usedCp in forceTiers.minimumBattleCp..army.cpLimit
+        val recovery = NavigationRecoveryPolicy.decide(
+            hasCountry = current.allianceCode != null,
+            hasPendingNickname = current.pendingNickname != null,
+            completedBattles = current.victories + current.defeats,
+            battleReady = battleReady,
+            dailyAvailable = GameUiPolicy.dailyRewardAvailable(
+                current.dailyRewardLastClaim,
+                LocalDate.now(ZoneId.of(properties.gameTimezone)),
+            ),
+        )
+        val rows = recovery.actions.map { action ->
+            listOf(InlineKeyboardButton(GameI18n.t(language, "navigation_action_${action.value}"), action.callback))
+        }
+        telegram.sendMessage(
+            chatId,
+            GameI18n.t(language, "navigation_${category.value}", GameI18n.t(language, "navigation_stage_${recovery.stage.value}")),
+            InlineKeyboardMarkup(rows),
+        )
+        journey.record(
+            telegramId,
+            JourneyEventType.NAVIGATION_ERROR,
+            JourneyEventDetails(
+                surface = category.value,
+                result = recovery.primary.value,
+                reason = recovery.stage.value,
+            ),
+        )
+    }
+
+    private fun weeklyUnitsReserved(telegramId: Long, chatId: Long, army: Army, language: GameLanguage, surface: String) {
+        journey.record(
+            telegramId,
+            JourneyEventType.PERSONAL_BATTLE_BLOCKED_BY_RESERVATION,
+            JourneyEventDetails(
+                surface = surface,
+                reason = "front_reservation",
+                presetNo = army.activeGroup.presetNo,
+                usedCp = groupCp(army),
+            ),
+        )
         telegram.sendMessage(chatId, GameI18n.t(language, "weekly_units_reserved"), armyKeyboard(army, language))
     }
 
     private fun offersFor(telegramId: Long, offerVersion: Long): List<OperationOffer> =
         battleEngine.offers(properties.battleServerSalt, "$telegramId:${todayKey()}:$offerVersion")
+
+    private fun firstMissionContext(telegramId: Long, offerVersion: Long): FirstMissionContext? = jdbc.sql(
+        """
+        SELECT recommendation_version, onboarding_variant, offer_version, offer_slot,
+               preset_no, group_version, entry_id, objective_id, tactic
+          FROM first_mission_recommendations
+         WHERE player_telegram_id = :playerId
+           AND offer_version = :offerVersion
+           AND accepted_battle_id IS NULL
+        """.trimIndent(),
+    ).param("playerId", telegramId)
+        .param("offerVersion", offerVersion)
+        .query { result, _ ->
+            FirstMissionContext(
+                recommendationVersion = result.getInt("recommendation_version"),
+                onboardingVariant = result.getString("onboarding_variant"),
+                offerVersion = result.getLong("offer_version"),
+                offerSlot = result.getInt("offer_slot"),
+                presetNo = result.getInt("preset_no"),
+                groupVersion = result.getInt("group_version"),
+                entryId = result.getString("entry_id"),
+                objectiveId = result.getString("objective_id"),
+                tactic = requireNotNull(Tactic.fromCode(result.getString("tactic"))),
+            )
+        }.optional().orElse(null)
 
     private fun parseSelection(data: String, prefix: String): Selection? {
         val parts = data.split(':')
@@ -730,12 +1558,14 @@ class GameService(
     private fun armyMenu(telegramId: Long, chatId: Long) {
         val language = language(telegramId)
         val army = inventory.army(telegramId)
+        val currentPlayer = player(telegramId)
         val active = army.activeGroup
+        val deployedCp = groupCp(army)
+        val recovery = ArmyRecoveryPlanner.plan(army, equipment.units, currentPlayer.commanderLevel, forceTiers.minimumBattleCp)
         val snapshot = active.units.takeIf { it.isNotEmpty() }?.let { inventory.battleSnapshot(army) }
         val text = buildString {
             appendLine(GameI18n.t(language, "army_title"))
             appendLine("${GameI18n.t(language, "cp_limit")}: ${groupCp(army)}/${army.cpLimit} CP")
-            val deployedCp = groupCp(army)
             if (deployedCp >= forceTiers.minimumBattleCp) {
                 appendLine("${GameI18n.t(language, "battle_category")}: ${forceTierLabel(language, forceTiers.forDeployedCp(deployedCp))}")
             } else {
@@ -760,14 +1590,58 @@ class GameService(
                 appendLine()
                 appendLine("${GameI18n.t(language, "composition_power")}: ${battleEngine.compositionPower(it)}")
             }
+            if (deployedCp < forceTiers.minimumBattleCp || inventory.hasReservedUnits(active)) {
+                appendLine()
+                appendLine(GameI18n.t(language, "recovery_title"))
+                appendLine(recoveryStatusText(telegramId, language, army, recovery, currentPlayer))
+            }
             appendLine()
             append(GameI18n.t(language, "army_hint"))
         }
-        telegram.sendMessage(chatId, text, armyKeyboard(army, language))
+        telegram.sendMessage(chatId, text, armyKeyboard(army, language, recovery, currentPlayer))
+        journey.record(
+            telegramId,
+            JourneyEventType.ARMY_VIEWED,
+            JourneyEventDetails(surface = "army", presetNo = active.presetNo, usedCp = groupCp(army)),
+        )
+        if (deployedCp < forceTiers.minimumBattleCp || inventory.hasReservedUnits(active)) {
+            journey.record(
+                telegramId,
+                JourneyEventType.ARMY_RECOVERY_BLOCKED,
+                JourneyEventDetails(
+                    surface = "army",
+                    reason = when {
+                        inventory.hasReservedUnits(active) -> "reserved"
+                        active.units.isEmpty() -> "empty"
+                        recovery == null -> "no_valid_plan"
+                        recovery.purchaseCredits > currentPlayer.credits -> "insufficient_credits"
+                        else -> "below_minimum"
+                    },
+                    presetNo = active.presetNo,
+                    usedCp = deployedCp,
+                ),
+            )
+        }
     }
 
-    private fun armyKeyboard(army: Army, language: GameLanguage): InlineKeyboardMarkup {
+    private fun armyKeyboard(
+        army: Army,
+        language: GameLanguage,
+        recovery: ArmyRecoveryPlan? = null,
+        currentPlayer: Player? = null,
+    ): InlineKeyboardMarkup {
         val rows = mutableListOf<List<InlineKeyboardButton>>()
+        if (recovery != null && currentPlayer != null && recovery.purchaseCredits <= currentPlayer.credits) {
+            rows += listOf(
+                InlineKeyboardButton(
+                    GameI18n.t(language, if (recovery.needsPurchase) "recovery_confirm_purchase" else "recovery_confirm_owned", recovery.purchaseCredits),
+                    "recovery:apply:${recovery.groupVersion}:${recovery.signature}",
+                ),
+            )
+        } else if (recovery != null && currentPlayer != null &&
+            GameUiPolicy.dailyRewardAvailable(currentPlayer.dailyRewardLastClaim, LocalDate.now(ZoneId.of(properties.gameTimezone)))) {
+            rows += listOf(InlineKeyboardButton(GameI18n.t(language, "daily"), "nav:daily"))
+        }
         rows += army.groups.map { group ->
             val mark = if (group.active) "✅ " else ""
             InlineKeyboardButton("$mark${group.presetNo}. ${group.name}", "army:preset:${group.presetNo}")
@@ -792,6 +1666,80 @@ class GameService(
         return InlineKeyboardMarkup(rows)
     }
 
+    private fun recoveryStatusText(
+        telegramId: Long,
+        language: GameLanguage,
+        army: Army,
+        recovery: ArmyRecoveryPlan?,
+        currentPlayer: Player,
+    ): String {
+        val assigned = army.groups.flatMap { it.units }.mapTo(mutableSetOf()) { it.id }
+        val available = army.inventory.count { it.id !in assigned && it.reservedWeekKey == null }
+        val reserved = army.inventory.count { it.reservedWeekKey != null }
+        val destroyed = jdbc.sql("SELECT COUNT(*) FROM player_units WHERE player_telegram_id = :player AND destroyed_at IS NOT NULL")
+            .param("player", telegramId).query(Long::class.java).single()
+        val inventoryLine = GameI18n.t(language, "recovery_inventory_state", army.inventory.size, assigned.size, available, reserved, destroyed)
+        if (inventory.hasReservedUnits(army.activeGroup)) {
+            return "$inventoryLine\n${GameI18n.t(language, "recovery_reserved_reason")}"
+        }
+        if (recovery == null) return "$inventoryLine\n${GameI18n.t(language, "recovery_no_valid_plan")}"
+        val ownedText = recovery.ownedUnitIds.size.takeIf { it > 0 }?.let {
+            GameI18n.t(language, "recovery_owned_plan", it, recovery.ownedCp)
+        }
+        val purchaseText = recovery.purchases.takeIf { it.isNotEmpty() }?.joinToString(" + ") { item ->
+            val definition = equipment.require(item.code)
+            "${item.quantity}× ${definition.emoji} ${definition.name(language)}"
+        }?.let { GameI18n.t(language, "recovery_purchase_plan", it, recovery.purchaseCredits) }
+        val shortage = (recovery.purchaseCredits - currentPlayer.credits).coerceAtLeast(0)
+        val resourceText = when {
+            shortage == 0L -> null
+            GameUiPolicy.dailyRewardAvailable(currentPlayer.dailyRewardLastClaim, LocalDate.now(ZoneId.of(properties.gameTimezone))) ->
+                GameI18n.t(language, "recovery_shortage_daily", shortage)
+            else -> GameI18n.t(language, "recovery_shortage_wait", shortage, properties.gameTimezone)
+        }
+        return listOfNotNull(
+            inventoryLine,
+            GameI18n.t(language, "recovery_target", recovery.currentCp, recovery.finalCp, recovery.targetCp),
+            ownedText,
+            purchaseText,
+            resourceText,
+        ).joinToString("\n")
+    }
+
+    private fun applyArmyRecovery(telegramId: Long, chatId: Long, payload: String) {
+        val language = language(telegramId)
+        val parts = payload.split(':')
+        val expectedVersion = parts.getOrNull(0)?.toIntOrNull() ?: return armyMenu(telegramId, chatId)
+        val expectedSignature = parts.getOrNull(1)?.takeIf { it.matches(Regex("[0-9a-f]{12}")) }
+            ?: return armyMenu(telegramId, chatId)
+        journey.record(telegramId, JourneyEventType.ARMY_RECOVERY_STARTED, JourneyEventDetails(surface = "army", referenceId = expectedVersion.toString()))
+        val result = inventory.applyRecoveryPlan(telegramId, expectedVersion, expectedSignature, forceTiers.minimumBattleCp)
+        when (result.status) {
+            RecoveryApplyStatus.APPLIED -> {
+                result.plan?.purchases?.forEach { metrics.equipment("purchase", it.code, "SUCCESS", it.quantity) }
+                result.plan?.purchases?.forEach {
+                    journey.record(
+                        telegramId,
+                        JourneyEventType.SHOP_PURCHASED,
+                        JourneyEventDetails(surface = "army_recovery", result = "success", unitCode = it.code, quantity = it.quantity),
+                    )
+                }
+                journey.record(
+                    telegramId,
+                    JourneyEventType.ARMY_RECOVERY_COMPLETED,
+                    JourneyEventDetails(surface = "army", result = "ready", usedCp = result.plan?.finalCp, quantity = result.plan?.purchases?.sumOf { it.quantity }),
+                )
+                completeRestorationRecommendationIfReady(telegramId)
+                telegram.sendMessage(chatId, GameI18n.t(language, "recovery_complete"))
+            }
+            RecoveryApplyStatus.INSUFFICIENT_CREDITS -> telegram.sendMessage(chatId, GameI18n.t(language, "recovery_changed_resources"))
+            RecoveryApplyStatus.RESERVED -> telegram.sendMessage(chatId, GameI18n.t(language, "recovery_reserved_reason"))
+            RecoveryApplyStatus.STALE -> telegram.sendMessage(chatId, GameI18n.t(language, "recovery_stale"))
+            RecoveryApplyStatus.UNAVAILABLE -> telegram.sendMessage(chatId, GameI18n.t(language, "recovery_no_valid_plan"))
+        }
+        armyMenu(telegramId, chatId)
+    }
+
     private fun shopMenu(telegramId: Long, chatId: Long) {
         val player = player(telegramId)
         val language = GameLanguage.fromStored(player.language)
@@ -812,6 +1760,7 @@ class GameService(
             ),
         )
         telegram.sendMessage(chatId, text, InlineKeyboardMarkup(rows))
+        journey.record(telegramId, JourneyEventType.SHOP_OPENED, JourneyEventDetails(surface = "shop"))
     }
 
     private fun starsMenu(telegramId: Long, chatId: Long) {
@@ -984,14 +1933,16 @@ class GameService(
             ${GameI18n.t(language, "buy")}: ${definition.buyCredits} Credits
             ${GameI18n.t(language, "upgrade_growth")}
         """.trimIndent()
-        val keyboard = InlineKeyboardMarkup(listOf(
-            listOf(
+        val rows = mutableListOf<List<InlineKeyboardButton>>()
+        if (player.commanderLevel >= definition.unlockLevel) {
+            rows += listOf(
                 InlineKeyboardButton("💳 ${GameI18n.t(language, "buy")} ×1", "shop:buy:${definition.code}:1"),
                 InlineKeyboardButton("💳 ×5", "shop:buy:${definition.code}:5"),
                 InlineKeyboardButton("💳 ×25", "shop:buy:${definition.code}:25"),
-            ),
-            listOf(InlineKeyboardButton("↩️ ${GameI18n.t(language, "shop")}", "nav:shop")),
-        ))
+            )
+        }
+        rows += listOf(InlineKeyboardButton("↩️ ${GameI18n.t(language, "shop")}", "nav:shop"))
+        val keyboard = InlineKeyboardMarkup(rows)
         telegram.sendPhoto(chatId, properties.publicBaseUrl.trimEnd('/') + definition.iconPath, text, keyboard)
     }
 
@@ -1002,7 +1953,34 @@ class GameService(
         val quantity = parts.getOrNull(1)?.toIntOrNull() ?: 1
         val action = inventory.acquire(telegramId, code, quantity)
         metrics.equipment("purchase", action.definition?.code ?: code, action.status.name, quantity)
-        telegram.sendMessage(chatId, actionMessage(action, language, "insufficient_credits"))
+        if (action.status == EquipmentActionStatus.SUCCESS) {
+            journey.record(
+                telegramId,
+                JourneyEventType.SHOP_PURCHASED,
+                JourneyEventDetails(
+                    surface = "shop",
+                    result = "success",
+                    unitCode = action.definition?.code ?: code,
+                    quantity = action.quantity,
+                ),
+            )
+        }
+        val message = when (action.status) {
+            EquipmentActionStatus.INSUFFICIENT_RESOURCES -> {
+                val required = (action.definition?.buyCredits ?: 0) * quantity
+                val current = player(telegramId)
+                val missing = (required - current.credits).coerceAtLeast(0)
+                val today = LocalDate.now(ZoneId.of(properties.gameTimezone))
+                if (GameUiPolicy.dailyRewardAvailable(current.dailyRewardLastClaim, today)) {
+                    GameI18n.t(language, "purchase_shortage_daily", missing, required, current.credits)
+                } else {
+                    GameI18n.t(language, "purchase_shortage_wait", missing, required, current.credits, properties.gameTimezone)
+                }
+            }
+            EquipmentActionStatus.LOCKED -> GameI18n.t(language, "purchase_locked_next", action.definition?.unlockLevel ?: 1)
+            else -> actionMessage(action, language, "insufficient_credits")
+        }
+        telegram.sendMessage(chatId, message)
         shopDetails(telegramId, chatId, code)
     }
 
@@ -1042,6 +2020,13 @@ class GameService(
         val language = language(telegramId)
         val action = inventory.upgradeBatch(telegramId, parts[0], level, quantity)
         metrics.equipment("upgrade", action.definition?.code ?: parts[0], action.status.name, action.quantity)
+        if (action.status == EquipmentActionStatus.SUCCESS) {
+            journey.record(
+                telegramId,
+                JourneyEventType.UPGRADE_COMPLETED,
+                JourneyEventDetails(surface = "upgrade", result = "success", unitCode = action.definition?.code ?: parts[0], quantity = action.quantity),
+            )
+        }
         telegram.sendMessage(chatId, actionMessage(action, language))
         upgradeMenu(telegramId, chatId)
     }
@@ -1051,6 +2036,13 @@ class GameService(
         val unitId = runCatching { UUID.fromString(rawId) }.getOrNull() ?: return upgradeMenu(telegramId, chatId)
         val action = inventory.upgrade(telegramId, unitId)
         metrics.equipment("upgrade", action.definition?.code, action.status.name, action.quantity)
+        if (action.status == EquipmentActionStatus.SUCCESS) {
+            journey.record(
+                telegramId,
+                JourneyEventType.UPGRADE_COMPLETED,
+                JourneyEventDetails(surface = "upgrade", result = "success", unitCode = action.definition?.code, quantity = action.quantity),
+            )
+        }
         telegram.sendMessage(chatId, actionMessage(action, language))
         upgradeMenu(telegramId, chatId)
     }
@@ -1059,6 +2051,8 @@ class GameService(
         val language = language(telegramId)
         val unitId = runCatching { UUID.fromString(rawId) }.getOrNull() ?: return armyMenu(telegramId, chatId)
         val action = inventory.toggleInActiveGroup(telegramId, unitId)
+        recordArmyChange(telegramId, action, "toggle")
+        if (action.status == EquipmentActionStatus.SUCCESS) completeRestorationRecommendationIfReady(telegramId)
         if (action.status != EquipmentActionStatus.SUCCESS) telegram.sendMessage(chatId, actionMessage(action, language))
         armyMenu(telegramId, chatId)
     }
@@ -1066,6 +2060,8 @@ class GameService(
     private fun addUnitType(telegramId: Long, chatId: Long, code: String) {
         val language = language(telegramId)
         val action = inventory.addUnitTypeToActiveGroup(telegramId, code)
+        recordArmyChange(telegramId, action, "add")
+        if (action.status == EquipmentActionStatus.SUCCESS) completeRestorationRecommendationIfReady(telegramId)
         if (action.status != EquipmentActionStatus.SUCCESS) telegram.sendMessage(chatId, actionMessage(action, language))
         armyMenu(telegramId, chatId)
     }
@@ -1073,13 +2069,41 @@ class GameService(
     private fun removeUnitType(telegramId: Long, chatId: Long, code: String) {
         val language = language(telegramId)
         val action = inventory.removeUnitTypeFromActiveGroup(telegramId, code)
+        recordArmyChange(telegramId, action, "remove")
+        if (action.status == EquipmentActionStatus.SUCCESS) completeRestorationRecommendationIfReady(telegramId)
         if (action.status != EquipmentActionStatus.SUCCESS) telegram.sendMessage(chatId, actionMessage(action, language))
         armyMenu(telegramId, chatId)
     }
 
     private fun activatePreset(telegramId: Long, chatId: Long, rawPreset: String) {
-        inventory.activatePreset(telegramId, rawPreset.toIntOrNull() ?: 0)
+        val presetNo = rawPreset.toIntOrNull() ?: 0
+        val changed = inventory.activatePreset(telegramId, presetNo)
+        if (changed) {
+            journey.record(
+                telegramId,
+                JourneyEventType.ARMY_CHANGED,
+                JourneyEventDetails(surface = "preset", result = "success", presetNo = presetNo),
+            )
+            completeRestorationRecommendationIfReady(telegramId)
+        }
         armyMenu(telegramId, chatId)
+    }
+
+    private fun recordArmyChange(telegramId: Long, action: EquipmentAction, surface: String) {
+        if (action.status != EquipmentActionStatus.SUCCESS) return
+        val army = inventory.army(telegramId)
+        journey.record(
+            telegramId,
+            JourneyEventType.ARMY_CHANGED,
+            JourneyEventDetails(
+                surface = surface,
+                result = "success",
+                presetNo = army.activeGroup.presetNo,
+                usedCp = groupCp(army),
+                unitCode = action.definition?.code,
+                quantity = action.quantity,
+            ),
+        )
     }
 
     private fun actionMessage(
@@ -1117,6 +2141,21 @@ class GameService(
 
     private fun groupCp(army: Army): Int = army.activeGroup.units.sumOf { equipment.require(it.code).cpCost }
 
+    private fun frontGroupReadiness(army: Army): List<FrontGroupReadiness> = army.groups.map { group ->
+        FrontGroupReadiness(
+            presetNo = group.presetNo,
+            name = group.name,
+            usedCp = group.units.sumOf { equipment.require(it.code).cpCost },
+            reserved = inventory.hasReservedUnits(group),
+        )
+    }
+
+    private fun formatCampaignPower(power: Long): String {
+        val whole = power / 100
+        val remainder = power % 100
+        return if (remainder == 0L) "$whole CP" else "$whole.${remainder.toString().padStart(2, '0').trimEnd('0')} CP"
+    }
+
     private fun forceTierLabel(language: GameLanguage, tier: ForceTier): String =
         "${GameI18n.t(language, tier.nameKey)} · ${tier.minCp}–${tier.maxCp} CP"
 
@@ -1152,6 +2191,11 @@ class GameService(
         val bonusUnitText = bonusUnit?.let { "\n${GameI18n.t(language, "daily_bonus_unit", unitLabel(it, language))}" }.orEmpty()
         val economyBonusText = economyBonus?.let { "\n${GameI18n.t(language, "weekly_victory_bonus_daily_applied")}" }.orEmpty()
         telegram.sendMessage(chatId, GameI18n.t(language, "daily_claimed", reward.credits, reward.streak) + bonusUnitText + economyBonusText, actionKeyboard(telegramId, language))
+        journey.record(
+            telegramId,
+            JourneyEventType.DAILY_CLAIMED,
+            JourneyEventDetails(surface = "daily", result = "success", referenceId = today.toString(), quantity = reward.credits.toInt()),
+        )
     }
 
     private fun contribute(telegramId: Long, firstName: String, chatId: Long) {
@@ -1210,14 +2254,41 @@ class GameService(
         telegram.sendMessage(chatId, text, InlineKeyboardMarkup(buttons))
     }
 
+    private fun openFrontBridge(telegramId: Long, firstName: String, chatId: Long) {
+        val offer = jdbc.sql(
+            "SELECT action FROM front_bridge_offers WHERE player_telegram_id = :player AND shown_at IS NOT NULL",
+        ).param("player", telegramId).query(String::class.java).optional().orElse(null)
+            ?: return front(telegramId, firstName, chatId)
+        val firstClick = jdbc.sql(
+            "UPDATE front_bridge_offers SET clicked_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE player_telegram_id = :player AND clicked_at IS NULL",
+        ).param("player", telegramId).update() > 0
+        if (firstClick) {
+            journey.record(
+                telegramId,
+                JourneyEventType.FRONT_BRIDGE_CLICKED,
+                JourneyEventDetails(surface = "battle_result", result = offer),
+            )
+        }
+        val player = player(telegramId)
+        val alliance = player.allianceCode ?: return front(telegramId, firstName, chatId)
+        val army = inventory.army(telegramId)
+        val readyGroups = FrontBridgePolicy.battleReadyGroups(frontGroupReadiness(army), forceTiers.minimumBattleCp, army.cpLimit)
+        val overview = campaigns.frontBridgeOverview(telegramId, alliance)
+        if (offer == FrontBridgeAction.CONTRIBUTE.value && overview.openForContributions && readyGroups.size >= 2 && !overview.alreadyContributed) {
+            contribute(telegramId, firstName, chatId)
+        } else {
+            front(telegramId, firstName, chatId)
+        }
+    }
+
     private fun frontEntries(telegramId: Long, chatId: Long, binding: String) {
-        val expected = parseGroupBinding(binding) ?: return staleSelection(chatId)
+        val expected = parseGroupBinding(binding) ?: return staleSelection(telegramId, chatId)
         val p = player(telegramId)
         val language = GameLanguage.fromStored(p.language)
-        val alliance = p.allianceCode ?: return staleSelection(chatId)
+        val alliance = p.allianceCode ?: return staleSelection(telegramId, chatId)
         val army = inventory.army(telegramId)
         val group = army.groups.firstOrNull { it.presetNo == expected.presetNo && it.version == expected.version }
-            ?: return staleSelection(chatId)
+            ?: return staleSelection(telegramId, chatId)
         if (group.units.isEmpty()) return telegram.sendMessage(chatId, GameI18n.t(language, "army_empty"), actionKeyboard(telegramId, language))
         val deployment = campaigns.frontDeployment(alliance)
             ?: return telegram.sendMessage(chatId, GameI18n.t(language, "front_no_open_battle"), actionKeyboard(telegramId, language))
@@ -1233,16 +2304,16 @@ class GameService(
 
     private fun frontObjectives(telegramId: Long, chatId: Long, payload: String) {
         val parts = payload.split(':')
-        if (parts.size != 2) return staleSelection(chatId)
-        val expected = parseGroupBinding(parts[0]) ?: return staleSelection(chatId)
+        if (parts.size != 2) return staleSelection(telegramId, chatId)
+        val expected = parseGroupBinding(parts[0]) ?: return staleSelection(telegramId, chatId)
         val entryId = parts[1]
         val p = player(telegramId)
         val language = GameLanguage.fromStored(p.language)
         val army = inventory.army(telegramId)
         val group = army.groups.firstOrNull { it.presetNo == expected.presetNo && it.version == expected.version }
-            ?: return staleSelection(chatId)
-        val deployment = p.allianceCode?.let { campaigns.frontDeployment(it) } ?: return staleSelection(chatId)
-        val entry = deployment.entries.firstOrNull { it.id == entryId } ?: return staleSelection(chatId)
+            ?: return staleSelection(telegramId, chatId)
+        val deployment = p.allianceCode?.let { campaigns.frontDeployment(it) } ?: return staleSelection(telegramId, chatId)
+        val entry = deployment.entries.firstOrNull { it.id == entryId } ?: return staleSelection(telegramId, chatId)
         val text = buildString {
             appendLine("🚩 ${group.name} → ${deployment.entryMarker(entry.id)} · ${GameI18n.t(language, entry.nameKey)}")
             appendLine(GameI18n.t(language, "front_choose_objective"))
@@ -1255,51 +2326,131 @@ class GameService(
 
     private fun frontTactics(telegramId: Long, chatId: Long, payload: String) {
         val parts = payload.split(':')
-        if (parts.size != 3) return staleSelection(chatId)
-        val expected = parseGroupBinding(parts[0]) ?: return staleSelection(chatId)
+        if (parts.size != 3) return staleSelection(telegramId, chatId)
+        val expected = parseGroupBinding(parts[0]) ?: return staleSelection(telegramId, chatId)
         val entryId = parts[1]
         val objectiveId = parts[2]
         val p = player(telegramId)
         val language = GameLanguage.fromStored(p.language)
         val army = inventory.army(telegramId)
         val group = army.groups.firstOrNull { it.presetNo == expected.presetNo && it.version == expected.version }
-            ?: return staleSelection(chatId)
-        val deployment = p.allianceCode?.let { campaigns.frontDeployment(it) } ?: return staleSelection(chatId)
-        val entry = deployment.entries.firstOrNull { it.id == entryId } ?: return staleSelection(chatId)
-        val objective = deployment.objectives.firstOrNull { it.id == objectiveId } ?: return staleSelection(chatId)
+            ?: return staleSelection(telegramId, chatId)
+        val deployment = p.allianceCode?.let { campaigns.frontDeployment(it) } ?: return staleSelection(telegramId, chatId)
+        val entry = deployment.entries.firstOrNull { it.id == entryId } ?: return staleSelection(telegramId, chatId)
+        val objective = deployment.objectives.firstOrNull { it.id == objectiveId } ?: return staleSelection(telegramId, chatId)
         val text = buildString {
             appendLine("🚩 ${group.name} → ${deployment.entryMarker(entry.id)} · ${GameI18n.t(language, entry.nameKey)} → ${deployment.objectiveMarker(objective.id)} · ${GameI18n.t(language, objective.nameKey)}")
             appendLine(GameI18n.t(language, "choose_tactic_spatial"))
             Tactic.entries.forEach { appendLine("${it.icon} ${GameI18n.tactic(language, it)} — ${GameI18n.tacticHint(language, it)}") }
         }
         val buttons = Tactic.entries.map { tactic ->
-            InlineKeyboardButton("${tactic.icon} ${GameI18n.tactic(language, tactic)}", "front:commit:${parts[0]}:$entryId:$objectiveId:${tactic.code}")
+            InlineKeyboardButton("${tactic.icon} ${GameI18n.tactic(language, tactic)}", "front:review:${parts[0]}:$entryId:$objectiveId:${tactic.code}")
         }.chunked(2)
         telegram.sendMessage(chatId, text.trim(), InlineKeyboardMarkup(buttons))
     }
 
-    private fun commitFrontGroup(telegramId: Long, chatId: Long, payload: String) {
+    private fun reviewFrontContribution(telegramId: Long, chatId: Long, payload: String) {
         val parts = payload.split(':')
-        if (parts.size != 4) return staleSelection(chatId)
-        val expected = parseGroupBinding(parts[0]) ?: return staleSelection(chatId)
-        val tactic = Tactic.fromCode(parts[3]) ?: return staleSelection(chatId)
-        val p = player(telegramId)
-        val language = GameLanguage.fromStored(p.language)
-        val alliance = p.allianceCode ?: return staleSelection(chatId)
+        if (parts.size != 4) return staleSelection(telegramId, chatId)
+        val expected = parseGroupBinding(parts[0]) ?: return staleSelection(telegramId, chatId)
+        val tactic = Tactic.fromCode(parts[3]) ?: return staleSelection(telegramId, chatId)
+        val player = player(telegramId)
+        val language = GameLanguage.fromStored(player.language)
+        val alliance = player.allianceCode ?: return staleSelection(telegramId, chatId)
         val army = inventory.army(telegramId)
         val group = army.groups.firstOrNull { it.presetNo == expected.presetNo && it.version == expected.version }
-            ?: return staleSelection(chatId)
+            ?: return staleSelection(telegramId, chatId)
+        if (group.units.isEmpty()) return telegram.sendMessage(chatId, GameI18n.t(language, "army_empty"), actionKeyboard(telegramId, language))
+        val deployment = campaigns.frontDeployment(alliance) ?: return front(telegramId, player.firstName, chatId)
+        val entry = deployment.entries.firstOrNull { it.id == parts[1] } ?: return staleSelection(telegramId, chatId)
+        val objective = deployment.objectives.firstOrNull { it.id == parts[2] } ?: return staleSelection(telegramId, chatId)
+        val overview = campaigns.frontBridgeOverview(telegramId, alliance)
+        if (!overview.openForContributions) return front(telegramId, player.firstName, chatId)
+
+        val cp = group.units.sumOf { equipment.require(it.code).cpCost }
+        val composition = group.units.groupBy { it.code to it.level }.entries.joinToString(", ") { (key, units) ->
+            "${units.size}× ${unitLabel(key.first, key.second, language)}"
+        }
+        val otherReady = FrontBridgePolicy.battleReadyGroups(
+            frontGroupReadiness(army),
+            forceTiers.minimumBattleCp,
+            army.cpLimit,
+            excludingPreset = group.presetNo,
+        )
+        val safe = otherReady.isNotEmpty()
+        val deadline = overview.resolvesAt.atZone(ZoneId.of(properties.gameTimezone))
+            .format(DateTimeFormatter.ofPattern("dd.MM HH:mm"))
+        val text = buildString {
+            appendLine(GameI18n.t(language, "front_review_title"))
+            appendLine("${group.name} · $cp/${army.cpLimit} CP")
+            appendLine(composition)
+            appendLine("${deployment.entryMarker(entry.id)} · ${GameI18n.t(language, entry.nameKey)} → ${deployment.objectiveMarker(objective.id)} · ${GameI18n.t(language, objective.nameKey)}")
+            appendLine("${tactic.icon} ${GameI18n.tactic(language, tactic)}")
+            appendLine()
+            appendLine(GameI18n.t(language, "front_review_deadline", deadline))
+            appendLine(GameI18n.t(language, "front_reservation_notice"))
+            appendLine(GameI18n.t(language, "front_review_withdrawal"))
+            append(
+                if (safe) GameI18n.t(language, "front_review_group_remains", otherReady.joinToString(", ") { it.name })
+                else GameI18n.t(language, "front_review_no_group_remains"),
+            )
+        }
+        val confirm = "front:commit:${parts[0]}:${parts[1]}:${parts[2]}:${tactic.code}"
+        val rows = mutableListOf<List<InlineKeyboardButton>>()
+        if (safe) {
+            rows += listOf(InlineKeyboardButton(GameI18n.t(language, "front_review_confirm"), confirm))
+        } else {
+            rows += listOf(InlineKeyboardButton(GameI18n.t(language, "front_review_prepare_group"), "nav:army"))
+            rows += listOf(InlineKeyboardButton(GameI18n.t(language, "front_review_confirm_anyway"), confirm))
+        }
+        rows += listOf(InlineKeyboardButton(GameI18n.t(language, "front_review_back"), "front:manage"))
+        telegram.sendMessage(chatId, text.trim(), InlineKeyboardMarkup(rows))
+    }
+
+    private fun commitFrontGroup(telegramId: Long, chatId: Long, payload: String) {
+        val parts = payload.split(':')
+        if (parts.size != 4) return staleSelection(telegramId, chatId)
+        val expected = parseGroupBinding(parts[0]) ?: return staleSelection(telegramId, chatId)
+        val tactic = Tactic.fromCode(parts[3]) ?: return staleSelection(telegramId, chatId)
+        val p = player(telegramId)
+        val language = GameLanguage.fromStored(p.language)
+        val alliance = p.allianceCode ?: return staleSelection(telegramId, chatId)
+        val army = inventory.army(telegramId)
+        val group = army.groups.firstOrNull { it.presetNo == expected.presetNo && it.version == expected.version }
+            ?: return staleSelection(telegramId, chatId)
         val snapshot = inventory.battleSnapshot(army, group)
         val outcome = campaigns.contribute(telegramId, alliance, group.presetNo, snapshot, group.units.map { it.id }, parts[1], parts[2], tactic, language)
+        if (outcome.accepted) {
+            journey.record(
+                telegramId,
+                JourneyEventType.CONTRIBUTION_COMMITTED,
+                JourneyEventDetails(
+                    surface = "front",
+                    result = "accepted",
+                    presetNo = group.presetNo,
+                    usedCp = snapshot.usedCp,
+                    entryId = parts[1],
+                    objectiveId = parts[2],
+                    tactic = tactic.name.lowercase(),
+                ),
+            )
+        }
         telegram.sendMessage(chatId, outcome.message)
         contribute(telegramId, p.firstName, chatId)
     }
 
     private fun withdrawFrontGroup(telegramId: Long, chatId: Long, contributionId: Long?) {
-        if (contributionId == null) return staleSelection(chatId)
+        if (contributionId == null) return staleSelection(telegramId, chatId)
         val p = player(telegramId)
         val language = GameLanguage.fromStored(p.language)
         val outcome = campaigns.withdraw(telegramId, contributionId, language)
+        if (outcome.accepted) {
+            journey.record(
+                telegramId,
+                JourneyEventType.CONTRIBUTION_WITHDRAWN,
+                JourneyEventDetails(surface = "front", result = "accepted", referenceId = contributionId.toString()),
+            )
+        }
         telegram.sendMessage(chatId, outcome.message)
         contribute(telegramId, p.firstName, chatId)
     }
@@ -1424,6 +2575,7 @@ class GameService(
         if (allianceCode != null) rows += listOf(InlineKeyboardButton(GameI18n.t(language, "front_groups_button"), "front:manage"))
         rows += actionKeyboard(telegramId, language).inlineKeyboard
         telegram.sendMessage(chatId, campaigns.frontText(telegramId, allianceCode, language), InlineKeyboardMarkup(rows))
+        journey.record(telegramId, JourneyEventType.FRONT_VIEWED, JourneyEventDetails(surface = "front"))
     }
 
     private fun previousFront(telegramId: Long, chatId: Long) {
@@ -1439,8 +2591,37 @@ class GameService(
         telegram.sendMessage(chatId, text, InlineKeyboardMarkup(rows))
     }
 
-    private fun replayKeyboard(telegramId: Long, language: GameLanguage, callbackData: String): InlineKeyboardMarkup = InlineKeyboardMarkup(
-        listOf(listOf(InlineKeyboardButton(GameI18n.t(language, "replay_button"), callbackData))) + actionKeyboard(telegramId, language).inlineKeyboard,
+    private fun postBattleKeyboard(language: GameLanguage, battleId: UUID, action: PostBattleAction): InlineKeyboardMarkup =
+        InlineKeyboardMarkup(
+            listOf(
+                listOf(
+                    InlineKeyboardButton(
+                        GameI18n.t(language, when (action) {
+                            PostBattleAction.NEXT_BATTLE -> "result_primary_next_battle"
+                            PostBattleAction.RESTORE_GROUP -> "result_primary_restore_group"
+                            PostBattleAction.CHOOSE_GROUP -> "result_primary_choose_group"
+                        }),
+                        "result:act:$battleId",
+                    ),
+                ),
+                listOf(
+                    InlineKeyboardButton(GameI18n.t(language, "result_details_button"), "result:details:$battleId"),
+                    InlineKeyboardButton(GameI18n.t(language, "replay_button"), "replay:b:$battleId"),
+                ),
+            ),
+        )
+
+    private fun battleInsightText(language: GameLanguage, insight: BattleInsight): String = GameI18n.t(
+        language,
+        when (insight) {
+            BattleInsight.ORDERED_OBJECTIVE_HELD -> "result_insight_objective_held"
+            BattleInsight.ORDERED_OBJECTIVE_ENEMY_HELD -> "result_insight_enemy_held"
+            BattleInsight.ORDERED_OBJECTIVE_PROGRESS -> "result_insight_progress"
+            BattleInsight.ENEMY_DEFEATED_BEFORE_OBJECTIVE -> "result_insight_enemy_defeated"
+            BattleInsight.PLAYER_DESTROYED_BEFORE_OBJECTIVE -> "result_insight_player_destroyed"
+            BattleInsight.PLAYER_WITHDREW_BEHIND -> "result_insight_player_withdrew"
+            BattleInsight.OBJECTIVE_NOT_REACHED -> "result_insight_not_reached"
+        },
     )
 
     private fun ensurePlayer(
@@ -1453,10 +2634,20 @@ class GameService(
         val inferred = GameLanguage.fromTelegram(telegramLanguage).code
         val source = GameMetrics.normalizeRegistrationSource(registrationSource)
         val referral = if (source == "referral") GameMetrics.normalizeRegistrationReferral(registrationReferral) ?: "other" else null
+        val onboardingVariant = FirstMissionRecommendationPolicy.assignedVariant(
+            telegramId,
+            properties.onboarding.firstMissionRolloutPercent,
+        ).value
         val created = jdbc.sql(
             """
-            INSERT INTO players(telegram_id, first_name, language, telegram_language, registration_source, registration_referral)
-            VALUES (:id, :firstName, :language, :telegramLanguage, :registrationSource, :registrationReferral)
+            INSERT INTO players(
+                telegram_id, first_name, language, telegram_language,
+                registration_source, registration_referral, onboarding_variant
+            )
+            VALUES (
+                :id, :firstName, :language, :telegramLanguage,
+                :registrationSource, :registrationReferral, :onboardingVariant
+            )
             ON CONFLICT (telegram_id) DO NOTHING
             """.trimIndent(),
         ).param("id", telegramId)
@@ -1465,6 +2656,7 @@ class GameService(
             .param("telegramLanguage", telegramLanguage?.take(16))
             .param("registrationSource", source)
             .param("registrationReferral", referral)
+            .param("onboardingVariant", onboardingVariant)
             .update()
         if (created == 0) {
             jdbc.sql(
@@ -1472,6 +2664,7 @@ class GameService(
                 UPDATE players
                    SET first_name = :firstName,
                        telegram_language = COALESCE(:telegramLanguage, telegram_language),
+                       onboarding_variant = COALESCE(onboarding_variant, :onboardingVariant),
                        telegram_unavailable_at = NULL,
                        telegram_unavailable_reason = NULL,
                        updated_at = CURRENT_TIMESTAMP
@@ -1480,11 +2673,20 @@ class GameService(
             ).param("id", telegramId)
                 .param("firstName", firstName.take(128))
                 .param("telegramLanguage", telegramLanguage?.take(16))
+                .param("onboardingVariant", onboardingVariant)
                 .update()
         } else {
             metrics.registration(source)
+            journey.registerPlayer(telegramId)
         }
         inventory.ensureStarter(telegramId)
+        if (created > 0) {
+            journey.record(
+                telegramId,
+                JourneyEventType.REGISTRATION_COMPLETED,
+                JourneyEventDetails(surface = "telegram", result = source, referenceId = referral),
+            )
+        }
     }
 
     private fun player(telegramId: Long, lock: Boolean = false): Player = jdbc.sql(
@@ -1493,7 +2695,8 @@ class GameService(
                alliance_code, commander_level, xp,
                credits, materials, command_capacity, battle_offer_version,
                victories, defeats, current_streak, best_streak,
-               daily_reward_streak, daily_reward_last_claim, daily_reward_claims
+               daily_reward_streak, daily_reward_last_claim, daily_reward_claims,
+               onboarding_variant
           FROM players
          WHERE telegram_id = :id${if (lock) " FOR UPDATE" else ""}
         """.trimIndent(),
@@ -1639,20 +2842,27 @@ class GameService(
             return
         }
         if (query.isBlank()) {
-            val text = "${GameI18n.t(language, "country_title")}\n\n${GameI18n.t(language, "country_recommended")}\n${GameI18n.t(language, "country_search")}"
+            val text = countryChoiceText(language)
             telegram.sendMessage(chatId, text, recommendedCountryKeyboard(language, GameLanguage.fromTelegram(player.telegramLanguage)))
+            journey.record(telegramId, JourneyEventType.ONBOARDING_COUNTRY_VIEWED, JourneyEventDetails(surface = "country_menu"))
             return
         }
         val results = AllianceCatalog.search(query, language)
         if (results.isEmpty()) {
-            telegram.sendMessage(chatId, GameI18n.t(language, "country_none"), recommendedCountryKeyboard(language, GameLanguage.fromTelegram(player.telegramLanguage)))
+            telegram.sendMessage(
+                chatId,
+                "${GameI18n.t(language, "country_none")}\n${GameI18n.t(language, "country_lock_notice")}",
+                recommendedCountryKeyboard(language, GameLanguage.fromTelegram(player.telegramLanguage)),
+            )
+            journey.record(telegramId, JourneyEventType.ONBOARDING_COUNTRY_VIEWED, JourneyEventDetails(surface = "country_search", result = "empty"))
             return
         }
         telegram.sendMessage(
             chatId,
-            "${GameI18n.t(language, "country_results", query)}\n${GameI18n.t(language, "country_search")}",
+            "${GameI18n.t(language, "country_results", query)}\n${GameI18n.t(language, "country_lock_notice")}\n${GameI18n.t(language, "country_search")}",
             countryOptionsKeyboard(results),
         )
+        journey.record(telegramId, JourneyEventType.ONBOARDING_COUNTRY_VIEWED, JourneyEventDetails(surface = "country_search", result = "results"))
     }
 
     private fun countryPage(telegramId: Long, chatId: Long, requestedPage: Int) {
@@ -1669,12 +2879,28 @@ class GameService(
         }
         val rows = options.map { listOf(InlineKeyboardButton(it.label, "country:select:${it.code}")) }.toMutableList()
         if (navigation.isNotEmpty()) rows += navigation
-        telegram.sendMessage(chatId, GameI18n.t(language, "country_page", page + 1, totalPages), InlineKeyboardMarkup(rows))
+        telegram.sendMessage(
+            chatId,
+            "${GameI18n.t(language, "country_page", page + 1, totalPages)}\n${GameI18n.t(language, "country_lock_notice")}",
+            InlineKeyboardMarkup(rows),
+        )
+        journey.record(
+            telegramId,
+            JourneyEventType.ONBOARDING_COUNTRY_VIEWED,
+            JourneyEventDetails(surface = "country_page", referenceId = page.toString()),
+        )
     }
 
     private fun countryOptionsKeyboard(options: List<AllianceOption>) = InlineKeyboardMarkup(
         options.map { listOf(InlineKeyboardButton(it.label, "country:select:${it.code}")) },
     )
+
+    private fun countryChoiceText(language: GameLanguage): String =
+        "${GameI18n.t(language, "country_title")}\n\n" +
+            "${GameI18n.t(language, "country_neutral")}\n" +
+            "${GameI18n.t(language, "country_lock_notice")}\n\n" +
+            "${GameI18n.t(language, "country_recommended")}\n" +
+            GameI18n.t(language, "country_search")
 
     private fun language(telegramId: Long) = GameLanguage.fromStored(player(telegramId).language)
 
@@ -1722,6 +2948,13 @@ class GameService(
 
     private fun todayKey(): String = LocalDate.now(ZoneId.of(properties.gameTimezone)).toString()
 
+    private fun technicalFailure(error: Throwable, fallback: TechnicalFailure): TechnicalFailure {
+        val causes = generateSequence(error) { it.cause }.toList()
+        if (causes.any { it is SocketTimeoutException || it is TimeoutException }) return TechnicalFailure.TIMEOUT
+        if (causes.any { it is TelegramDeliveryException }) return TechnicalFailure.TELEGRAM_SEND
+        return fallback
+    }
+
     private fun helpText(language: GameLanguage) = buildString {
         appendLine(GameI18n.t(language, "help"))
         appendLine("/army — ${GameI18n.t(language, "army_title")}")
@@ -1737,6 +2970,7 @@ class GameService(
     companion object {
         private const val COUNTRY_PAGE_SIZE = 10
         private const val ALLIANCE_RATING_PAGE_SIZE = 10
+        private const val PERSONAL_BATTLE_ENGINE_VERSION = 10
         private val ADMIN_PAYMENT_COMMANDS = setOf("/refund", "/reject", "/ask")
         internal val GROUP_PLAYER_COMMANDS = setOf(
             "/start", "/battle", "/army", "/hangar", "/shop", "/stars", "/buycredits",
@@ -1746,6 +2980,16 @@ class GameService(
         )
     }
 
+}
+
+internal fun runAfterCommit(action: () -> Unit) {
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+        action()
+        return
+    }
+    TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+        override fun afterCommit() = action()
+    })
 }
 
 internal fun applyWeeklyEconomyBonus(base: BattleResult, bonus: ActiveEconomyBonus?): BattleResult {
@@ -1790,12 +3034,30 @@ data class Player(
     val dailyRewardStreak: Int,
     val dailyRewardLastClaim: LocalDate?,
     val dailyRewardClaims: Long,
+    val onboardingVariant: String?,
 ) {
     val displayName: String get() = nickname?.takeIf(String::isNotBlank) ?: firstName
 }
 
 private data class Selection(val expectedOfferVersion: Long, val slot: Int)
 private data class GroupBinding(val presetNo: Int, val version: Int)
+private data class FirstMissionContext(
+    val recommendationVersion: Int,
+    val onboardingVariant: String,
+    val offerVersion: Long,
+    val offerSlot: Int,
+    val presetNo: Int,
+    val groupVersion: Int,
+    val entryId: String,
+    val objectiveId: String,
+    val tactic: Tactic,
+)
+
+private data class PostBattleActionRow(
+    val battleId: UUID,
+    val action: PostBattleAction,
+    val detailsText: String,
+)
 
 internal data class ParsedBotCommand(val command: String, val mention: String?, val argument: String)
 

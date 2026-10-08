@@ -23,7 +23,10 @@ data class ReplayArtifact(
     val width: Int,
     val height: Int,
     val durationSeconds: Int,
+    val cacheHit: Boolean = false,
 )
+
+class ReplayRenderException(cause: Throwable) : RuntimeException("Replay rendering failed", cause)
 
 data class ReplayFile(val path: Path, val contentLength: Long)
 

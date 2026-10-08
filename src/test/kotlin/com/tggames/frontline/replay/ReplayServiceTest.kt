@@ -4,6 +4,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.tggames.frontline.config.FrontlineProperties
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import org.mockito.Mockito.mock
 import org.springframework.jdbc.core.simple.JdbcClient
@@ -66,6 +67,92 @@ class ReplayServiceTest {
         assertThat(personal).doesNotExist()
         assertThat(weeklyCurrent).exists()
         assertThat(weeklyExpired).doesNotExist()
+    }
+
+    @Test
+    fun `cold render is reported once and the next request is a cache hit`() {
+        val properties = FrontlineProperties(
+            battleServerSalt = "replay-test-secret",
+            replay = FrontlineProperties.Replay(cacheDirectory = directory.toString()),
+        )
+        var encodeCalls = 0
+        val encoder = ReplayEncoder { _, destination ->
+            encodeCalls++
+            Files.createDirectories(destination.parent)
+            Files.write(destination, byteArrayOf(1, 2, 3))
+            1
+        }
+        val service = ReplayService(
+            mock(JdbcClient::class.java),
+            jacksonObjectMapper(),
+            properties,
+            mock(BattleReplayRenderer::class.java),
+            encoder,
+        )
+        val id = UUID.randomUUID()
+        var renderStarts = 0
+
+        val cold = service.prepare(ReplayKind.PERSONAL, id, 3, { renderStarts++ }) { emptySequence() }
+        val cached = service.prepare(ReplayKind.PERSONAL, id, 3, { renderStarts++ }) { emptySequence() }
+
+        assertThat(cold.cacheHit).isFalse()
+        assertThat(cached.cacheHit).isTrue()
+        assertThat(renderStarts).isEqualTo(1)
+        assertThat(encodeCalls).isEqualTo(1)
+    }
+
+    @Test
+    fun `ffmpeg startup failure is classified as a render failure`() {
+        val properties = FrontlineProperties(
+            battleServerSalt = "replay-test-secret",
+            replay = FrontlineProperties.Replay(
+                cacheDirectory = directory.toString(),
+                ffmpegPath = directory.resolve("missing-ffmpeg").toString(),
+            ),
+        )
+        val service = ReplayService(
+            mock(JdbcClient::class.java),
+            jacksonObjectMapper(),
+            properties,
+            mock(BattleReplayRenderer::class.java),
+            ReplayVideoEncoder(properties),
+        )
+
+        assertThrows<ReplayRenderException> {
+            service.prepare(ReplayKind.PERSONAL, UUID.randomUUID(), 1, {}) { emptySequence() }
+        }
+    }
+
+    @Test
+    fun `expired personal cache is unavailable and rebuilt on the next preparation`() {
+        val properties = FrontlineProperties(
+            battleServerSalt = "replay-test-secret",
+            replay = FrontlineProperties.Replay(cacheDirectory = directory.toString(), retentionHours = 48),
+        )
+        val encoder = ReplayEncoder { _, destination ->
+            Files.createDirectories(destination.parent)
+            Files.write(destination, byteArrayOf(4, 3, 2, 1))
+            1
+        }
+        val service = ReplayService(
+            mock(JdbcClient::class.java),
+            jacksonObjectMapper(),
+            properties,
+            mock(BattleReplayRenderer::class.java),
+            encoder,
+        )
+        val id = UUID.randomUUID()
+        val token = service.token(ReplayKind.PERSONAL, id)
+        val now = Instant.now()
+        cachedFile("personal-$id-${ReplayService.PRESENTATION_VERSION}.mp4", now.minus(Duration.ofHours(49)))
+
+        service.cleanupExpired(now)
+        assertThat(service.open(ReplayKind.PERSONAL, id, token)).isNull()
+
+        val artifact = service.prepare(ReplayKind.PERSONAL, id, 1, {}) { emptySequence() }
+
+        assertThat(artifact.cacheHit).isFalse()
+        assertThat(service.open(ReplayKind.PERSONAL, id, token)?.contentLength).isEqualTo(4)
     }
 
     private fun cachedFile(name: String, modifiedAt: Instant): Path = directory.resolve(name).also {

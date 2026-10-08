@@ -23,6 +23,8 @@ class GameMetrics(
     private val playerGauges = PERIODS.associateWith { period -> gauge("frontline.players", "period", period) }
     private val countryPlayerGauges = ConcurrentHashMap<CountryGaugeKey, AtomicLong>()
     private val registrationGauges = ConcurrentHashMap<RegistrationGaugeKey, AtomicLong>()
+    private val journeyEventGauges = ConcurrentHashMap<JourneyGaugeKey, AtomicLong>()
+    private val journeyPlayerGauges = ConcurrentHashMap<JourneyGaugeKey, AtomicLong>()
     private val paymentGauges = PAYMENT_STATES.associateWith { status -> gauge("frontline.stars.payments", "status", status) }
     private val starAmountGauges = PAYMENT_STATES.associateWith { status -> gauge("frontline.stars.amount", "status", status, "unit", "stars") }
     private val creditAmountGauges = PAYMENT_STATES.associateWith { status -> gauge("frontline.stars.amount", "status", status, "unit", "credits") }
@@ -66,16 +68,20 @@ class GameMetrics(
     fun refreshDatabaseGauges() {
         runCatching {
             val now = Instant.now()
-            playerGauges.getValue("total").set(count("SELECT COUNT(*) FROM players"))
-            playerGauges.getValue("day").set(countSince("updated_at", now.minus(1, ChronoUnit.DAYS)))
-            playerGauges.getValue("week").set(countSince("updated_at", now.minus(7, ChronoUnit.DAYS)))
-            playerGauges.getValue("month").set(countSince("updated_at", now.minus(30, ChronoUnit.DAYS)))
+            playerGauges.getValue("total").set(countExternalPlayers())
+            playerGauges.getValue("day").set(countActivePlayersSince(now.minus(1, ChronoUnit.DAYS)))
+            playerGauges.getValue("week").set(countActivePlayersSince(now.minus(7, ChronoUnit.DAYS)))
+            playerGauges.getValue("month").set(countActivePlayersSince(now.minus(30, ChronoUnit.DAYS)))
             refreshCountryPlayerGauges()
 
             refreshRegistrationGauges("total", null)
             refreshRegistrationGauges("day", now.minus(1, ChronoUnit.DAYS))
             refreshRegistrationGauges("week", now.minus(7, ChronoUnit.DAYS))
             refreshRegistrationGauges("month", now.minus(30, ChronoUnit.DAYS))
+            refreshJourneyGauges("total", null)
+            refreshJourneyGauges("day", now.minus(1, ChronoUnit.DAYS))
+            refreshJourneyGauges("week", now.minus(7, ChronoUnit.DAYS))
+            refreshJourneyGauges("month", now.minus(30, ChronoUnit.DAYS))
 
             PAYMENT_STATES.forEach { status ->
                 val refunded = status == "refunded"
@@ -85,21 +91,42 @@ class GameMetrics(
             }
             EQUIPMENT_ACTIONS.forEach { action ->
                 equipmentGauges.getValue(action).set(
-                    jdbc.sql("SELECT COUNT(*) FROM equipment_transactions WHERE action = :action")
+                    jdbc.sql(
+                        """
+                        SELECT COUNT(*)
+                          FROM equipment_transactions et
+                          JOIN analytics_players ap ON ap.player_telegram_id = et.player_telegram_id
+                         WHERE et.action = :action AND NOT ap.is_internal
+                        """.trimIndent(),
+                    )
                         .param("action", action).query(Long::class.java).single(),
                 )
             }
-            battleGauges.getValue("victory").set(count("SELECT COUNT(*) FROM battles WHERE victory"))
-            battleGauges.getValue("defeat").set(count("SELECT COUNT(*) FROM battles WHERE NOT victory"))
+            battleGauges.getValue("victory").set(battleCount(victory = true))
+            battleGauges.getValue("defeat").set(battleCount(victory = false))
         }.onFailure { error ->
             logger.warn("Could not refresh observability gauges", error)
         }
     }
 
-    private fun count(sql: String): Long = jdbc.sql(sql).query(Long::class.java).single()
+    private fun countExternalPlayers(): Long = jdbc.sql(
+        """
+        SELECT COUNT(*)
+          FROM analytics_players
+         WHERE NOT is_internal
+        """.trimIndent(),
+    ).query(Long::class.java).single()
 
-    private fun countSince(column: String, cutoff: Instant): Long = jdbc
-        .sql("SELECT COUNT(*) FROM players WHERE $column >= :cutoff")
+    private fun countActivePlayersSince(cutoff: Instant): Long = jdbc
+        .sql(
+            """
+            SELECT COUNT(DISTINCT analytics_player_id)
+              FROM player_journey_events
+             WHERE NOT is_internal
+               AND event_name = 'user_action'
+               AND occurred_at >= :cutoff
+            """.trimIndent(),
+        )
         .param("cutoff", Timestamp.from(cutoff))
         .query(Long::class.java)
         .single()
@@ -107,10 +134,12 @@ class GameMetrics(
     private fun refreshCountryPlayerGauges() {
         val values = jdbc.sql(
             """
-            SELECT alliance_code, COUNT(*) AS players
-              FROM players
-             WHERE alliance_code IS NOT NULL
-             GROUP BY alliance_code
+            SELECT p.alliance_code, COUNT(*) AS players
+              FROM players p
+              JOIN analytics_players ap ON ap.player_telegram_id = p.telegram_id
+             WHERE p.alliance_code IS NOT NULL
+               AND NOT ap.is_internal
+             GROUP BY p.alliance_code
             """.trimIndent(),
         ).query { result, _ -> result.getString("alliance_code") to result.getLong("players") }
             .list()
@@ -143,12 +172,13 @@ class GameMetrics(
             SELECT registration_source,
                    COALESCE(registration_referral, 'unknown') AS registration_referral,
                    COUNT(*) AS registrations
-              FROM players
+              FROM players p
+              JOIN analytics_players ap ON ap.player_telegram_id = p.telegram_id
         """.trimIndent()
         val query = if (cutoff == null) {
-            jdbc.sql("$baseSql GROUP BY registration_source, registration_referral")
+            jdbc.sql("$baseSql WHERE NOT ap.is_internal GROUP BY registration_source, registration_referral")
         } else {
-            jdbc.sql("$baseSql WHERE created_at >= :cutoff GROUP BY registration_source, registration_referral")
+            jdbc.sql("$baseSql WHERE NOT ap.is_internal AND p.created_at >= :cutoff GROUP BY registration_source, registration_referral")
                 .param("cutoff", Timestamp.from(cutoff))
         }
         val rows = query.query { result, _ ->
@@ -191,10 +221,56 @@ class GameMetrics(
         }
     }
 
+    private fun refreshJourneyGauges(period: String, cutoff: Instant?) {
+        val baseSql = """
+            SELECT event_name, COUNT(*) AS events, COUNT(DISTINCT analytics_player_id) AS players
+              FROM player_journey_events
+             WHERE NOT is_internal
+        """.trimIndent()
+        val query = if (cutoff == null) {
+            jdbc.sql("$baseSql GROUP BY event_name")
+        } else {
+            jdbc.sql("$baseSql AND occurred_at >= :cutoff GROUP BY event_name")
+                .param("cutoff", Timestamp.from(cutoff))
+        }
+        val knownEvents = JourneyEventType.entries.map { it.value }.toSet()
+        val values = query.query { result, _ ->
+            JourneyCount(result.getString("event_name"), result.getLong("events"), result.getLong("players"))
+        }.list().filter { it.event in knownEvents }.associateBy { it.event }
+
+        JourneyEventType.entries.forEach { type ->
+            val key = JourneyGaugeKey(period, type.value)
+            val value = values[type.value]
+            journeyEventGauges.computeIfAbsent(key) {
+                gauge("frontline.journey.events", "period", period, "event", type.value)
+            }.set(value?.events ?: 0)
+            journeyPlayerGauges.computeIfAbsent(key) {
+                gauge("frontline.journey.players", "period", period, "event", type.value)
+            }.set(value?.players ?: 0)
+        }
+    }
+
     private fun starsAggregate(expression: String, refunded: Boolean): Long = jdbc
-        .sql("SELECT $expression FROM star_payments WHERE refunded_at IS ${if (refunded) "NOT " else ""}NULL")
+        .sql(
+            """
+            SELECT $expression
+              FROM star_payments sp
+              JOIN analytics_players ap ON ap.player_telegram_id = sp.player_telegram_id
+             WHERE NOT ap.is_internal
+               AND sp.refunded_at IS ${if (refunded) "NOT " else ""}NULL
+            """.trimIndent(),
+        )
         .query(Long::class.java)
         .single()
+
+    private fun battleCount(victory: Boolean): Long = jdbc.sql(
+        """
+        SELECT COUNT(*)
+          FROM battles b
+          JOIN analytics_players ap ON ap.player_telegram_id = b.player_telegram_id
+         WHERE NOT ap.is_internal AND b.victory = :victory
+        """.trimIndent(),
+    ).param("victory", victory).query(Long::class.java).single()
 
     private fun gauge(name: String, vararg tags: String): AtomicLong {
         val value = AtomicLong()
@@ -251,4 +327,6 @@ class GameMetrics(
     private data class RegistrationGaugeKey(val period: String, val source: String, val referral: String)
     private data class CountryGaugeKey(val code: String, val name: String)
     private data class RegistrationCount(val source: String, val referral: String, val count: Long)
+    private data class JourneyGaugeKey(val period: String, val event: String)
+    private data class JourneyCount(val event: String, val events: Long, val players: Long)
 }

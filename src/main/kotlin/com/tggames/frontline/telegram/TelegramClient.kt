@@ -27,7 +27,13 @@ class TelegramClient(
         deliver("sendMessage") {
             restClient.post()
                 .uri("/sendMessage")
-                .body(SendMessageRequest(chatId, text, keyboard))
+                .body(
+                    SendMessageRequest(
+                        chatId,
+                        TelegramTextDirection.prepare(text),
+                        TelegramTextDirection.prepare(keyboard),
+                    ),
+                )
                 .retrieve()
                 .toBodilessEntity()
         }
@@ -41,7 +47,14 @@ class TelegramClient(
         deliver("sendPhoto") {
             restClient.post()
                 .uri("/sendPhoto")
-                .body(SendPhotoRequest(chatId, photoUrl, caption, keyboard))
+                .body(
+                    SendPhotoRequest(
+                        chatId,
+                        photoUrl,
+                        TelegramTextDirection.prepare(caption),
+                        TelegramTextDirection.prepare(keyboard),
+                    ),
+                )
                 .retrieve()
                 .toBodilessEntity()
         }
@@ -63,7 +76,17 @@ class TelegramClient(
         deliver("sendAnimation") {
             restClient.post()
                 .uri("/sendAnimation")
-                .body(SendAnimationRequest(chatId, animationUrl, caption, width, height, duration, replyMarkup = keyboard))
+                .body(
+                    SendAnimationRequest(
+                        chatId,
+                        animationUrl,
+                        TelegramTextDirection.prepare(caption),
+                        width,
+                        height,
+                        duration,
+                        replyMarkup = TelegramTextDirection.prepare(keyboard),
+                    ),
+                )
                 .retrieve()
                 .toBodilessEntity()
         }
@@ -87,10 +110,10 @@ class TelegramClient(
                 .body(
                     SendInvoiceRequest(
                         chatId = chatId,
-                        title = title,
-                        description = description,
+                        title = TelegramTextDirection.prepare(title),
+                        description = TelegramTextDirection.prepare(description),
                         payload = payload,
-                        prices = listOf(LabeledPrice(label, stars)),
+                        prices = listOf(LabeledPrice(TelegramTextDirection.prepare(label), stars)),
                     ),
                 )
                 .retrieve()

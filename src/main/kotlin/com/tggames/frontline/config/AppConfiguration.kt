@@ -29,4 +29,15 @@ class AppConfiguration {
         setAwaitTerminationSeconds(30)
         initialize()
     }
+
+    @Bean("replayWorkerExecutor")
+    fun replayWorkerExecutor(): ThreadPoolTaskExecutor = ThreadPoolTaskExecutor().apply {
+        corePoolSize = 1
+        maxPoolSize = 1
+        queueCapacity = 1
+        setThreadNamePrefix("replay-worker-")
+        setWaitForTasksToCompleteOnShutdown(true)
+        setAwaitTerminationSeconds(30)
+        initialize()
+    }
 }

@@ -45,28 +45,41 @@ class GameMetricsTest {
         val dataSource = DriverManagerDataSource("jdbc:h2:mem:game_metrics;MODE=PostgreSQL;DB_CLOSE_DELAY=-1")
         val jdbc = JdbcClient.create(dataSource)
         listOf(
-            "CREATE TABLE players(id BIGINT PRIMARY KEY, alliance_code VARCHAR(8), registration_source VARCHAR(16), registration_referral VARCHAR(64), created_at TIMESTAMP WITH TIME ZONE, updated_at TIMESTAMP WITH TIME ZONE)",
-            "CREATE TABLE star_payments(id BIGINT PRIMARY KEY, price_stars BIGINT, credits BIGINT, refunded_at TIMESTAMP WITH TIME ZONE)",
-            "CREATE TABLE equipment_transactions(id BIGINT PRIMARY KEY, action VARCHAR(16))",
-            "CREATE TABLE battles(id BIGINT PRIMARY KEY, victory BOOLEAN)",
+            "CREATE TABLE players(telegram_id BIGINT PRIMARY KEY, alliance_code VARCHAR(8), registration_source VARCHAR(16), registration_referral VARCHAR(64), created_at TIMESTAMP WITH TIME ZONE, updated_at TIMESTAMP WITH TIME ZONE)",
+            "CREATE TABLE analytics_players(id BIGINT PRIMARY KEY, player_telegram_id BIGINT UNIQUE, is_internal BOOLEAN)",
+            "CREATE TABLE player_journey_events(id BIGINT PRIMARY KEY, analytics_player_id BIGINT, event_name VARCHAR(64), occurred_at TIMESTAMP WITH TIME ZONE, is_internal BOOLEAN)",
+            "CREATE TABLE star_payments(id BIGINT PRIMARY KEY, player_telegram_id BIGINT, price_stars BIGINT, credits BIGINT, refunded_at TIMESTAMP WITH TIME ZONE)",
+            "CREATE TABLE equipment_transactions(id BIGINT PRIMARY KEY, player_telegram_id BIGINT, action VARCHAR(16))",
+            "CREATE TABLE battles(id BIGINT PRIMARY KEY, player_telegram_id BIGINT, victory BOOLEAN)",
             "INSERT INTO players VALUES (1, 'RS', 'referral', 'riverking', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
             "INSERT INTO players VALUES (2, 'US', 'telegram', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
             "INSERT INTO players VALUES (3, 'RS', 'telegram', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-            "INSERT INTO star_payments VALUES (1, 20, 100, NULL)",
-            "INSERT INTO equipment_transactions VALUES (1, 'PURCHASE')",
-            "INSERT INTO battles VALUES (1, TRUE)",
+            "INSERT INTO analytics_players VALUES (11, 1, FALSE)",
+            "INSERT INTO analytics_players VALUES (12, 2, FALSE)",
+            "INSERT INTO analytics_players VALUES (13, 3, TRUE)",
+            "INSERT INTO player_journey_events VALUES (101, 11, 'user_action', CURRENT_TIMESTAMP, FALSE)",
+            "INSERT INTO player_journey_events VALUES (102, 12, 'user_action', CURRENT_TIMESTAMP, FALSE)",
+            "INSERT INTO player_journey_events VALUES (103, 13, 'user_action', CURRENT_TIMESTAMP, TRUE)",
+            "INSERT INTO player_journey_events VALUES (104, 11, 'battle_started', CURRENT_TIMESTAMP, FALSE)",
+            "INSERT INTO player_journey_events VALUES (105, 13, 'battle_started', CURRENT_TIMESTAMP, TRUE)",
+            "INSERT INTO star_payments VALUES (1, 1, 20, 100, NULL)",
+            "INSERT INTO star_payments VALUES (2, 3, 20, 100, NULL)",
+            "INSERT INTO equipment_transactions VALUES (1, 1, 'PURCHASE')",
+            "INSERT INTO equipment_transactions VALUES (2, 3, 'PURCHASE')",
+            "INSERT INTO battles VALUES (1, 1, TRUE)",
+            "INSERT INTO battles VALUES (2, 3, TRUE)",
         ).forEach { jdbc.sql(it).update() }
         val registry = SimpleMeterRegistry()
 
         GameMetrics(registry, jdbc).refreshDatabaseGauges()
 
-        assertThat(registry.get("frontline.players").tag("period", "day").gauge().value()).isEqualTo(3.0)
+        assertThat(registry.get("frontline.players").tag("period", "day").gauge().value()).isEqualTo(2.0)
         assertThat(
             registry.get("frontline.players.by.country")
                 .tags("country_code", "RS", "country", "Serbia")
                 .gauge().value(),
-        ).isEqualTo(2.0)
-        assertThat(registry.get("frontline.players.by.country").gauges().sumOf { it.value() }).isEqualTo(3.0)
+        ).isEqualTo(1.0)
+        assertThat(registry.get("frontline.players.by.country").gauges().sumOf { it.value() }).isEqualTo(2.0)
         assertThat(
             registry.get("frontline.registrations")
                 .tags("period", "day", "source", "referral", "referral", "riverking")
@@ -76,9 +89,14 @@ class GameMetricsTest {
             registry.get("frontline.registrations")
                 .tags("period", "day", "source", "telegram", "referral", "direct")
                 .gauge().value(),
-        ).isEqualTo(2.0)
+        ).isEqualTo(1.0)
         assertThat(registry.get("frontline.stars.payments").tag("status", "paid").gauge().value()).isEqualTo(1.0)
         assertThat(registry.get("frontline.equipment.transactions").tag("action", "purchase").gauge().value()).isEqualTo(1.0)
         assertThat(registry.get("frontline.battles").tag("result", "victory").gauge().value()).isEqualTo(1.0)
+        assertThat(
+            registry.get("frontline.journey.players")
+                .tags("period", "day", "event", "battle_started")
+                .gauge().value(),
+        ).isEqualTo(1.0)
     }
 }

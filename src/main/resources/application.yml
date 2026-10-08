@@ -42,6 +42,16 @@ frontline:
     fps: ${REPLAY_FPS:3}
     retention-hours: ${REPLAY_RETENTION_HOURS:48}
     weekly-retention-hours: ${REPLAY_WEEKLY_RETENTION_HOURS:168}
+    max-delivery-attempts: ${REPLAY_MAX_DELIVERY_ATTEMPTS:3}
+    delivery-retry-seconds: ${REPLAY_DELIVERY_RETRY_SECONDS:30}
+  analytics:
+    internal-telegram-ids: ${FRONTLINE_ANALYTICS_INTERNAL_TELEGRAM_IDS:}
+    session-timeout-minutes: ${FRONTLINE_ANALYTICS_SESSION_TIMEOUT_MINUTES:30}
+    event-retention-days: ${FRONTLINE_ANALYTICS_EVENT_RETENTION_DAYS:400}
+    cleanup-cron: ${FRONTLINE_ANALYTICS_CLEANUP_CRON:0 37 3 * * *}
+  onboarding:
+    first-mission-enabled: ${FRONTLINE_ONBOARDING_FIRST_MISSION_ENABLED:true}
+    first-mission-rollout-percent: ${FRONTLINE_ONBOARDING_FIRST_MISSION_ROLLOUT_PERCENT:100}
   campaign:
     resolve-cron: ${CAMPAIGN_RESOLVE_CRON:0 0 15 * * SUN}
     retry-cron: ${CAMPAIGN_RETRY_CRON:0 5/10 * * * *}
