@@ -55,6 +55,12 @@ class ProductAnalyticsMetrics(
     private val frontBridge = FRONT_BRIDGE_STATUSES.associateWith {
         gaugeLong("frontline.product.front.bridge.players", "status", it)
     }
+    private val feedback = FEEDBACK_STATUSES.associateWith {
+        gaugeLong("frontline.product.feedback.players", "status", it)
+    }
+    private val feedbackReasons = FEEDBACK_REASONS.associateWith {
+        gaugeLong("frontline.product.feedback.reason", "reason", it)
+    }
 
     @Scheduled(initialDelay = 15_000, fixedDelay = 60_000)
     fun refresh() {
@@ -67,6 +73,7 @@ class ProductAnalyticsMetrics(
             refreshArmyRecovery()
             refreshNavigationRecovery()
             refreshFrontBridge()
+            refreshFeedback()
         }.onFailure { logger.warn("Could not refresh product analytics metrics", it) }
     }
 
@@ -364,6 +371,31 @@ class ProductAnalyticsMetrics(
         )
     }
 
+    private fun refreshFeedback() {
+        val counts = jdbc.sql(
+            """
+            SELECT SUM(CASE WHEN inline_offered_at IS NOT NULL THEN 1 ELSE 0 END) AS inline_offered,
+                   SUM(CASE WHEN nudge_sent_at IS NOT NULL THEN 1 ELSE 0 END) AS nudge_sent,
+                   SUM(CASE WHEN opened_at IS NOT NULL THEN 1 ELSE 0 END) AS opened,
+                   SUM(CASE WHEN answered_at IS NOT NULL THEN 1 ELSE 0 END) AS answered,
+                   SUM(CASE WHEN skipped_at IS NOT NULL THEN 1 ELSE 0 END) AS skipped,
+                   SUM(CASE WHEN commented THEN 1 ELSE 0 END) AS commented
+              FROM analytics_feedback_responses
+            """.trimIndent(),
+        ).query { rs, _ -> FEEDBACK_STATUSES.associateWith(rs::getLong) }.single()
+        feedback.forEach { (status, gauge) -> gauge.set(counts.getValue(status)) }
+
+        val reasons = jdbc.sql(
+            """
+            SELECT response_reason, COUNT(*) AS players
+              FROM analytics_feedback_responses
+             WHERE response_reason IS NOT NULL
+             GROUP BY response_reason
+            """.trimIndent(),
+        ).query { rs, _ -> rs.getString("response_reason") to rs.getLong("players") }.list().toMap()
+        feedbackReasons.forEach { (reason, gauge) -> gauge.set(reasons[reason] ?: 0L) }
+    }
+
     private fun gaugeLong(name: String, vararg tags: String): AtomicLong = AtomicLong().also { value ->
         Gauge.builder(name, value) { it.get().toDouble() }.tags(*tags).register(registry)
     }
@@ -392,6 +424,10 @@ class ProductAnalyticsMetrics(
         private val NAVIGATION_STAGES = listOf("country", "nickname_confirmation", "first_operation", "next_battle", "army_recovery")
         private val NAVIGATION_RECOVERY_STATUSES = listOf("errored", "recovered_same_session", "repeat_error")
         private val FRONT_BRIDGE_STATUSES = listOf("shown", "clicked", "contributed", "withdrawn", "returned_session", "reservation_blocked")
+        private val FEEDBACK_STATUSES = listOf("inline_offered", "nudge_sent", "opened", "answered", "skipped", "commented")
+        private val FEEDBACK_REASONS = listOf(
+            "unclear_next", "unclear_result_losses", "too_long", "not_interesting", "no_time", "technical_problem", "other",
+        )
         private val KNOWN_DROPOFF_CONTEXTS = TechnicalFailure.entries.map { it.value }.toSet() + setOf("none", "incomplete_attempt")
 
         internal fun quantile(values: List<Double>, probability: Double): Double {

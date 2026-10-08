@@ -54,6 +54,12 @@ class ProductAnalyticsMetricsTest {
         assertGauge(registry, "frontline.product.front.bridge.players", 1.0, "status", "withdrawn")
         assertGauge(registry, "frontline.product.front.bridge.players", 1.0, "status", "returned_session")
         assertGauge(registry, "frontline.product.front.bridge.players", 1.0, "status", "reservation_blocked")
+        assertGauge(registry, "frontline.product.feedback.players", 2.0, "status", "inline_offered")
+        assertGauge(registry, "frontline.product.feedback.players", 1.0, "status", "nudge_sent")
+        assertGauge(registry, "frontline.product.feedback.players", 1.0, "status", "answered")
+        assertGauge(registry, "frontline.product.feedback.players", 1.0, "status", "commented")
+        assertGauge(registry, "frontline.product.feedback.reason", 1.0, "reason", "too_long")
+        assertGauge(registry, "frontline.product.feedback.reason", 0.0, "reason", "technical_problem")
     }
 
     @Test
@@ -119,6 +125,15 @@ class ProductAnalyticsMetricsTest {
             )
             """.trimIndent(),
         ).update()
+        jdbc.sql(
+            """
+            CREATE TABLE analytics_feedback_responses(
+                inline_offered_at TIMESTAMP WITH TIME ZONE, nudge_sent_at TIMESTAMP WITH TIME ZONE,
+                opened_at TIMESTAMP WITH TIME ZONE, answered_at TIMESTAMP WITH TIME ZONE,
+                skipped_at TIMESTAMP WITH TIME ZONE, commented BOOLEAN, response_reason VARCHAR(32)
+            )
+            """.trimIndent(),
+        ).update()
     }
 
     private fun insertArtificialCohort(jdbc: JdbcClient) {
@@ -158,6 +173,8 @@ class ProductAnalyticsMetricsTest {
             "INSERT INTO front_bridge_offers VALUES (101, TIMESTAMP WITH TIME ZONE '2026-10-07 13:00:00+00', TIMESTAMP WITH TIME ZONE '2026-10-07 13:01:00+00')",
             "INSERT INTO front_bridge_offers VALUES (102, TIMESTAMP WITH TIME ZONE '2026-10-07 14:00:00+00', NULL)",
             "INSERT INTO front_bridge_offers VALUES (103, TIMESTAMP WITH TIME ZONE '2026-10-07 15:00:00+00', TIMESTAMP WITH TIME ZONE '2026-10-07 15:01:00+00')",
+            "INSERT INTO analytics_feedback_responses VALUES (NOW(), NOW(), NOW(), NOW(), NULL, TRUE, 'too_long')",
+            "INSERT INTO analytics_feedback_responses VALUES (NOW(), NULL, NULL, NULL, NOW(), FALSE, NULL)",
             "INSERT INTO player_journey_events VALUES (101, '00000000-0000-0000-0000-000000000401', 'front_bridge_shown', 'battle_result', NULL, TIMESTAMP WITH TIME ZONE '2026-10-07 13:00:00+00', FALSE)",
             "INSERT INTO player_journey_events VALUES (101, '00000000-0000-0000-0000-000000000401', 'contribution_committed', 'front', NULL, TIMESTAMP WITH TIME ZONE '2026-10-07 13:02:00+00', FALSE)",
             "INSERT INTO player_journey_events VALUES (101, '00000000-0000-0000-0000-000000000401', 'contribution_withdrawn', 'front', NULL, TIMESTAMP WITH TIME ZONE '2026-10-07 13:03:00+00', FALSE)",

@@ -1702,6 +1702,125 @@
         "x": 0,
         "y": 108
       },
+      "id": 45,
+      "panels": [],
+      "title": "Player feedback",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Future-only feedback campaigns. Inline offered and nudge sent are delivery denominators; opened, answered, skipped, and commented are explicit player actions. Owner accounts are excluded.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 109
+      },
+      "id": 46,
+      "options": {
+        "displayMode": "gradient",
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "frontline_product_feedback_players{job=~\"$job\"}",
+          "instant": true,
+          "legendFormat": "{{status}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Feedback collection · external players",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "One fixed reason per external response. Optional free-text comments remain in the restricted PostgreSQL view and never become metric labels.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 109
+      },
+      "id": 47,
+      "options": {
+        "displayMode": "gradient",
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "frontline_product_feedback_reason{job=~\"$job\"}",
+          "instant": true,
+          "legendFormat": "{{reason}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Why players stopped · answered reasons",
+      "type": "bargauge"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 118
+      },
       "id": 22,
       "panels": [],
       "title": "Battle and replay delivery",
@@ -1756,7 +1875,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 109
+        "y": 119
       },
       "id": 23,
       "options": {
@@ -1851,7 +1970,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 109
+        "y": 119
       },
       "id": 24,
       "options": {
@@ -1901,7 +2020,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 118
+        "y": 128
       },
       "id": 25,
       "options": {
@@ -1974,7 +2093,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 118
+        "y": 128
       },
       "id": 26,
       "options": {
@@ -2025,7 +2144,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 126
+        "y": 136
       },
       "id": 42,
       "options": {
@@ -2113,7 +2232,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 126
+        "y": 136
       },
       "id": 43,
       "options": {
@@ -2149,7 +2268,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 134
+        "y": 144
       },
       "id": 17,
       "panels": [],
@@ -2205,7 +2324,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 135
+        "y": 145
       },
       "id": 18,
       "options": {
@@ -2267,7 +2386,7 @@
         "h": 8,
         "w": 6,
         "x": 12,
-        "y": 135
+        "y": 145
       },
       "id": 19,
       "options": {
@@ -2335,7 +2454,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 135
+        "y": 145
       },
       "id": 20,
       "options": {
@@ -2420,6 +2539,6 @@
   "timezone": "utc",
   "title": "Frontline Nations",
   "uid": "frontline-nations",
-  "version": 6,
+  "version": 7,
   "weekStart": "monday"
 }

@@ -52,6 +52,14 @@ frontline:
   onboarding:
     first-mission-enabled: ${FRONTLINE_ONBOARDING_FIRST_MISSION_ENABLED:true}
     first-mission-rollout-percent: ${FRONTLINE_ONBOARDING_FIRST_MISSION_ROLLOUT_PERCENT:100}
+  feedback:
+    enabled: ${FRONTLINE_FEEDBACK_ENABLED:true}
+    campaign-id: ${FRONTLINE_FEEDBACK_CAMPAIGN_ID:activation_v1}
+    inactivity-hours: ${FRONTLINE_FEEDBACK_INACTIVITY_HOURS:24}
+    batch-size: ${FRONTLINE_FEEDBACK_BATCH_SIZE:20}
+    comment-window-minutes: ${FRONTLINE_FEEDBACK_COMMENT_WINDOW_MINUTES:30}
+    comment-max-length: ${FRONTLINE_FEEDBACK_COMMENT_MAX_LENGTH:500}
+    retention-days: ${FRONTLINE_FEEDBACK_RETENTION_DAYS:180}
   campaign:
     resolve-cron: ${CAMPAIGN_RESOLVE_CRON:0 0 15 * * SUN}
     retry-cron: ${CAMPAIGN_RETRY_CRON:0 5/10 * * * *}

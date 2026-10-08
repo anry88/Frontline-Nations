@@ -52,6 +52,7 @@ If executable behavior intentionally departs from the specification, record the 
 - `src/main/resources/db/migration/V4__player_locale_and_nickname.sql`: player locale, Telegram locale hint, nickname, and pending confirmation.
 - `src/main/kotlin/com/tggames/frontline/campaign/`: weekly schedule, pairing, aggregate battle, reward, and notification logic.
 - `src/main/kotlin/com/tggames/frontline/observability/`: low-cardinality Micrometer events and database-backed gauges.
+- `src/main/kotlin/com/tggames/frontline/feedback/`: campaign-scoped first-result and inactivity feedback, fixed reasons, bounded comments, and one-shot Telegram delivery.
 - `docs/grafana/dashboard.json`: importable production operations dashboard.
 - `src/main/kotlin/com/tggames/frontline/catalog/`: data-driven personal equipment definitions and balance validation.
 - `src/main/kotlin/com/tggames/frontline/inventory/`: starter grants, owned units, presets, Credit purchases, and upgrades.

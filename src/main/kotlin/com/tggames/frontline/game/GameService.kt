@@ -17,6 +17,9 @@ import com.tggames.frontline.campaign.FrontBridgeWeekState
 import com.tggames.frontline.campaign.frontReservationBlockers
 import com.tggames.frontline.catalog.EquipmentCatalog
 import com.tggames.frontline.config.FrontlineProperties
+import com.tggames.frontline.feedback.FeedbackSurface
+import com.tggames.frontline.feedback.FeedbackCommentResult
+import com.tggames.frontline.feedback.PlayerFeedbackService
 import com.tggames.frontline.i18n.GameI18n
 import com.tggames.frontline.i18n.GameLanguage
 import com.tggames.frontline.inventory.Army
@@ -86,6 +89,7 @@ class GameService(
     private val metrics: GameMetrics,
     private val journey: PlayerJourney,
     private val technicalTelemetry: TechnicalOperationTelemetry,
+    private val feedback: PlayerFeedbackService,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -194,6 +198,17 @@ class GameService(
             return
         }
 
+        if (effectiveCommand.isEmpty()) {
+            when (feedback.captureComment(user.id, message.chat.id, rawText)) {
+                FeedbackCommentResult.STORED -> {
+                    journey.record(user.id, JourneyEventType.FEEDBACK_COMMENTED, JourneyEventDetails(surface = "feedback"))
+                    return
+                }
+                FeedbackCommentResult.EXPIRED -> return
+                FeedbackCommentResult.NONE -> Unit
+            }
+        }
+
         when (effectiveCommand) {
             "/start" -> start(user.id, user.firstName, message.chat.id)
             "/battle" -> battleMenu(user.id, user.firstName, message.chat.id)
@@ -264,6 +279,24 @@ class GameService(
             data.startsWith("fight:") -> resolveBattle(callback.from.id, callback.from.firstName, chatId, data)
             data.startsWith("result:details:") -> showBattleResultDetails(callback.from.id, chatId, data.removePrefix("result:details:"))
             data.startsWith("result:act:") -> handlePostBattleAction(callback.from.id, callback.from.firstName, chatId, data.removePrefix("result:act:"))
+            data.startsWith("feedback:open:") -> {
+                val surface = FeedbackSurface.from(data.removePrefix("feedback:open:")) ?: FeedbackSurface.INLINE
+                if (feedback.open(callback.from.id, chatId, surface)) {
+                    journey.record(callback.from.id, JourneyEventType.FEEDBACK_OPENED, JourneyEventDetails(surface = surface.value))
+                }
+            }
+            data.startsWith("feedback:reason:") -> {
+                val reason = data.removePrefix("feedback:reason:")
+                if (feedback.answerReason(callback.from.id, chatId, reason)) {
+                    journey.record(callback.from.id, JourneyEventType.FEEDBACK_ANSWERED, JourneyEventDetails(surface = "feedback", reason = reason))
+                }
+            }
+            data == "feedback:comment" -> feedback.requestComment(callback.from.id, chatId)
+            data == "feedback:skip" -> {
+                if (feedback.skip(callback.from.id, chatId)) {
+                    journey.record(callback.from.id, JourneyEventType.FEEDBACK_SKIPPED, JourneyEventDetails(surface = "feedback"))
+                }
+            }
             data.startsWith("replay:b:") -> sendPersonalReplay(callback.from.id, chatId, data.removePrefix("replay:b:"))
             data.startsWith("replay:w:") -> sendWeeklyReplay(callback.from.id, chatId, data.removePrefix("replay:w:"))
             data.startsWith("shop:view:") -> shopDetails(callback.from.id, chatId, data.substringAfterLast(':'))
@@ -1107,13 +1140,18 @@ class GameService(
                 battleId = battleId,
             ),
         )
-        val resultKeyboard = postBattleKeyboard(language, battleId, recommendation.action)
+        val firstBattleResult = fresh.victories + fresh.defeats == 1
+        val resultKeyboard = postBattleKeyboard(language, battleId, recommendation.action, firstBattleResult)
         val frontBridge = prepareFrontBridgeOffer(telegramId, battleId, fresh, freshArmy, language)
         runAfterCommit {
             technicalTelemetry.success(attempt, TechnicalStage.RESULT_COMMITTED)
             try {
                 telegram.sendMessage(chatId, summary, resultKeyboard)
                 markPostBattleSent(telegramId, battleId)
+                if (firstBattleResult) {
+                    runCatching { feedback.markInlineOffer(telegramId, battleId) }
+                        .onFailure { logger.warn("First-battle feedback offer could not be recorded", it) }
+                }
                 technicalTelemetry.success(attempt, TechnicalStage.RESULT_SENT, terminal = true)
                 frontBridge?.let { offer ->
                     runCatching {
@@ -2591,9 +2629,14 @@ class GameService(
         telegram.sendMessage(chatId, text, InlineKeyboardMarkup(rows))
     }
 
-    private fun postBattleKeyboard(language: GameLanguage, battleId: UUID, action: PostBattleAction): InlineKeyboardMarkup =
-        InlineKeyboardMarkup(
-            listOf(
+    private fun postBattleKeyboard(
+        language: GameLanguage,
+        battleId: UUID,
+        action: PostBattleAction,
+        includeFeedback: Boolean = false,
+    ): InlineKeyboardMarkup = InlineKeyboardMarkup(
+        buildList {
+            add(
                 listOf(
                     InlineKeyboardButton(
                         GameI18n.t(language, when (action) {
@@ -2604,12 +2647,16 @@ class GameService(
                         "result:act:$battleId",
                     ),
                 ),
+            )
+            add(
                 listOf(
                     InlineKeyboardButton(GameI18n.t(language, "result_details_button"), "result:details:$battleId"),
                     InlineKeyboardButton(GameI18n.t(language, "replay_button"), "replay:b:$battleId"),
                 ),
-            ),
-        )
+            )
+            if (includeFeedback) add(listOf(feedback.inlineButton(language)))
+        },
+    )
 
     private fun battleInsightText(language: GameLanguage, insight: BattleInsight): String = GameI18n.t(
         language,

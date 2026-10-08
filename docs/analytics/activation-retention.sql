@@ -114,3 +114,29 @@ SELECT *
   FROM analytics_external_event_sequences
  WHERE analytics_player_id = :analytics_player_id
  ORDER BY session_id, event_order;
+
+-- Feedback collection starts at the campaign row's started_at boundary. These
+-- aggregate views exclude internal accounts and never expose comment text.
+SELECT campaign_id,
+       COUNT(*) FILTER (WHERE inline_offered_at IS NOT NULL) AS inline_offered,
+       COUNT(*) FILTER (WHERE nudge_sent_at IS NOT NULL) AS nudge_sent,
+       COUNT(*) FILTER (WHERE opened_at IS NOT NULL) AS opened,
+       COUNT(*) FILTER (WHERE answered_at IS NOT NULL) AS answered,
+       COUNT(*) FILTER (WHERE skipped_at IS NOT NULL) AS skipped,
+       COUNT(*) FILTER (WHERE commented) AS commented,
+       COUNT(*) < 30 AS small_sample
+  FROM analytics_feedback_responses
+ GROUP BY campaign_id
+ ORDER BY campaign_id;
+
+SELECT campaign_id, response_surface, nudge_trigger, response_reason,
+       COUNT(*) AS players, COUNT(*) < 30 AS small_sample
+  FROM analytics_feedback_responses
+ WHERE response_reason IS NOT NULL
+ GROUP BY campaign_id, response_surface, nudge_trigger, response_reason
+ ORDER BY campaign_id, players DESC;
+
+-- Restricted qualitative review: surrogate identity only, no Telegram ID.
+SELECT *
+  FROM analytics_feedback_comments_restricted
+ ORDER BY updated_at DESC;

@@ -12,6 +12,7 @@ data class FrontlineProperties(
     val replay: Replay = Replay(),
     val analytics: Analytics = Analytics(),
     val onboarding: Onboarding = Onboarding(),
+    val feedback: Feedback = Feedback(),
 ) {
     data class Telegram(
         val botToken: String = "",
@@ -69,5 +70,15 @@ data class FrontlineProperties(
     data class Onboarding(
         val firstMissionEnabled: Boolean = true,
         val firstMissionRolloutPercent: Int = 100,
+    )
+
+    data class Feedback(
+        val enabled: Boolean = true,
+        val campaignId: String = "activation_v1",
+        val inactivityHours: Long = 24,
+        val batchSize: Int = 20,
+        val commentWindowMinutes: Long = 30,
+        val commentMaxLength: Int = 500,
+        val retentionDays: Long = 180,
     )
 }
