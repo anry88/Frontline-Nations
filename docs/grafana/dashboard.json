@@ -919,7 +919,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "External unique players captured after V20. Opening the bot before /start is not measurable. Registration is the sample size; n < 30 is descriptive only. Optional daily/shop/replay/front branches are excluded.",
+      "description": "External unique players captured after V20, split by onboarding variant (guided_v1, legacy, unassigned). The guided first-mission card bypasses the five-offer list, so offer_viewed is a regular-path-only step: guided players go from country selection straight to deployment. Opening the bot before /start is not measurable. Registration is the sample size; n < 30 is descriptive only. Optional daily/shop/replay/front branches are excluded.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -957,9 +957,9 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "max by (step) (frontline_product_activation_players{job=~\"$job\"})",
+          "expr": "max by (step, variant) (frontline_product_activation_players{job=~\"$job\"})",
           "instant": true,
-          "legendFormat": "{{step}}",
+          "legendFormat": "{{variant}} · {{step}}",
           "range": false,
           "refId": "A"
         }
@@ -972,7 +972,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Two explicit denominators: all captured external registrations and players who selected a country. Repeated callbacks for the same battle ID count once.",
+      "description": "Two explicit denominators per onboarding variant: all captured external registrations and players who selected a country. offer_viewed applies to the regular path only; compare guided_v1 on country_selected to deployment_completed instead. Repeated callbacks for the same battle ID count once.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1013,17 +1013,17 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "max by (step) (frontline_product_activation_players{job=~\"$job\"}) / scalar(max(frontline_product_activation_players{job=~\"$job\",step=\"registration\"}))",
+          "expr": "max by (step, variant) (frontline_product_activation_players{job=~\"$job\"}) / on(variant) group_left max by (variant) (frontline_product_activation_players{job=~\"$job\",step=\"registration\"})",
           "instant": true,
-          "legendFormat": "from registration · {{step}}",
+          "legendFormat": "{{variant}} · {{step}} from registration",
           "range": false,
           "refId": "A"
         },
         {
           "editorMode": "code",
-          "expr": "max by (step) (frontline_product_activation_players{job=~\"$job\",step=~\"country_selected|offer_viewed|deployment_completed|first_battle_started|first_battle_finished|result_sent|second_battle_started\"}) / scalar(max(frontline_product_activation_players{job=~\"$job\",step=\"country_selected\"}))",
+          "expr": "max by (step, variant) (frontline_product_activation_players{job=~\"$job\",step=~\"country_selected|offer_viewed|deployment_completed|first_battle_started|first_battle_finished|result_sent|second_battle_started\"}) / on(variant) group_left max by (variant) (frontline_product_activation_players{job=~\"$job\",step=\"country_selected\"})",
           "instant": true,
-          "legendFormat": "from country · {{step}}",
+          "legendFormat": "{{variant}} · {{step}} from country",
           "range": false,
           "refId": "B"
         }

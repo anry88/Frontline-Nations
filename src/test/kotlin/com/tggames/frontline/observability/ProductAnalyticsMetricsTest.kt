@@ -16,11 +16,20 @@ class ProductAnalyticsMetricsTest {
 
         ProductAnalyticsMetrics(registry, jdbc).refresh()
 
-        assertGauge(registry, "frontline.product.activation.players", 4.0, "step", "registration")
-        assertGauge(registry, "frontline.product.activation.players", 3.0, "step", "country_selected")
-        assertGauge(registry, "frontline.product.activation.players", 2.0, "step", "first_battle_started")
-        assertGauge(registry, "frontline.product.activation.players", 1.0, "step", "result_sent")
-        assertGauge(registry, "frontline.product.activation.players", 1.0, "step", "second_battle_started")
+        assertGauge(registry, "frontline.product.activation.players", 2.0, "step", "registration", "variant", "guided_v1")
+        assertGauge(registry, "frontline.product.activation.players", 1.0, "step", "registration", "variant", "legacy")
+        assertGauge(registry, "frontline.product.activation.players", 1.0, "step", "registration", "variant", "unassigned")
+        assertGauge(registry, "frontline.product.activation.players", 2.0, "step", "country_selected", "variant", "guided_v1")
+        assertGauge(registry, "frontline.product.activation.players", 1.0, "step", "country_selected", "variant", "legacy")
+        assertGauge(registry, "frontline.product.activation.players", 0.0, "step", "country_selected", "variant", "unassigned")
+        assertGauge(registry, "frontline.product.activation.players", 2.0, "step", "offer_viewed", "variant", "guided_v1")
+        assertGauge(registry, "frontline.product.activation.players", 0.0, "step", "offer_viewed", "variant", "legacy")
+        assertGauge(registry, "frontline.product.activation.players", 2.0, "step", "deployment_completed", "variant", "guided_v1")
+        assertGauge(registry, "frontline.product.activation.players", 0.0, "step", "deployment_completed", "variant", "legacy")
+        assertGauge(registry, "frontline.product.activation.players", 2.0, "step", "first_battle_started", "variant", "guided_v1")
+        assertGauge(registry, "frontline.product.activation.players", 1.0, "step", "first_battle_finished", "variant", "guided_v1")
+        assertGauge(registry, "frontline.product.activation.players", 1.0, "step", "result_sent", "variant", "guided_v1")
+        assertGauge(registry, "frontline.product.activation.players", 1.0, "step", "second_battle_started", "variant", "guided_v1")
         assertGauge(registry, "frontline.product.activation.second.battle", 2.0, "window", "never_started")
         assertGauge(registry, "frontline.product.activation.second.battle", 1.0, "window", "within_24h_after_first_finish")
         assertGauge(registry, "frontline.product.activation.second.battle", 1.0, "window", "within_24h_after_registration")
@@ -74,6 +83,7 @@ class ProductAnalyticsMetricsTest {
             """
             CREATE TABLE analytics_player_activation_all(
                 analytics_player_id BIGINT PRIMARY KEY, is_internal BOOLEAN NOT NULL,
+                onboarding_variant VARCHAR(32),
                 country_selected_at TIMESTAMP, offer_viewed_at TIMESTAMP, deployment_completed_at TIMESTAMP,
                 first_battle_started_at TIMESTAMP, first_battle_finished_at TIMESTAMP, first_result_sent_at TIMESTAMP,
                 second_battle_started_at TIMESTAMP, second_battle_within_24h_after_finish BOOLEAN NOT NULL,
@@ -138,11 +148,11 @@ class ProductAnalyticsMetricsTest {
 
     private fun insertArtificialCohort(jdbc: JdbcClient) {
         listOf(
-            "INSERT INTO analytics_player_activation_all VALUES (1, FALSE, NOW(), NOW(), NOW(), NOW(), NOW(), NOW(), NOW(), TRUE, TRUE, 60000)",
-            "INSERT INTO analytics_player_activation_all VALUES (2, FALSE, NOW(), NULL, NULL, NULL, NULL, NULL, NULL, FALSE, FALSE, NULL)",
-            "INSERT INTO analytics_player_activation_all VALUES (3, FALSE, NOW(), NOW(), NOW(), NOW(), NULL, NULL, NULL, FALSE, FALSE, 120000)",
-            "INSERT INTO analytics_player_activation_all VALUES (4, TRUE, NOW(), NOW(), NOW(), NOW(), NOW(), NOW(), NOW(), TRUE, TRUE, 1000)",
-            "INSERT INTO analytics_player_activation_all VALUES (5, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, FALSE, FALSE, NULL)",
+            "INSERT INTO analytics_player_activation_all VALUES (1, FALSE, 'guided_v1', NOW(), NOW(), NOW(), NOW(), NOW(), NOW(), NOW(), TRUE, TRUE, 60000)",
+            "INSERT INTO analytics_player_activation_all VALUES (2, FALSE, 'legacy', NOW(), NULL, NULL, NULL, NULL, NULL, NULL, FALSE, FALSE, NULL)",
+            "INSERT INTO analytics_player_activation_all VALUES (3, FALSE, 'guided_v1', NOW(), NOW(), NOW(), NOW(), NULL, NULL, NULL, FALSE, FALSE, 120000)",
+            "INSERT INTO analytics_player_activation_all VALUES (4, TRUE, 'guided_v1', NOW(), NOW(), NOW(), NOW(), NOW(), NOW(), NOW(), TRUE, TRUE, 1000)",
+            "INSERT INTO analytics_player_activation_all VALUES (5, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, FALSE, FALSE, NULL)",
             "INSERT INTO analytics_retention_cohorts_all VALUES (1, FALSE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE)",
             "INSERT INTO analytics_retention_cohorts_all VALUES (2, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE)",
             "INSERT INTO analytics_retention_cohorts_all VALUES (3, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE)",

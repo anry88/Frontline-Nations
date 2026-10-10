@@ -14,33 +14,45 @@ SELECT MIN(registered_at) AS registration_coverage_start,
        COUNT(*) < 30 AS small_sample
   FROM analytics_player_activation;
 
--- Activation funnel. Registration and country selection are both shown as
--- explicit denominators. Daily/shop/upgrade/replay/front/contribution are
+-- Activation funnel, split by onboarding variant. The guided first-mission card
+-- bypasses the five-offer list, so offer_viewed is a regular-path-only step:
+-- guided_v1 players go from country selection straight to deployment, while
+-- legacy players go through the offer list. Never read offer_viewed as a
+-- mandatory guided step. Registration and country selection are both shown as
+-- explicit denominators per variant. Daily/shop/upgrade/replay/front/contribution are
 -- separate branches and are deliberately absent from the mandatory sequence.
-WITH counts AS (
-    SELECT 1 AS step_order, 'registration' AS step, COUNT(*) AS players FROM analytics_player_activation
-    UNION ALL SELECT 2, 'country_selected', COUNT(*) FROM analytics_player_activation WHERE country_selected_at IS NOT NULL
-    UNION ALL SELECT 3, 'offer_viewed', COUNT(*) FROM analytics_player_activation WHERE offer_viewed_at IS NOT NULL
-    UNION ALL SELECT 4, 'deployment_completed', COUNT(*) FROM analytics_player_activation WHERE deployment_completed_at IS NOT NULL
-    UNION ALL SELECT 5, 'first_battle_started', COUNT(*) FROM analytics_player_activation WHERE first_battle_started_at IS NOT NULL
-    UNION ALL SELECT 6, 'first_battle_finished', COUNT(*) FROM analytics_player_activation WHERE first_battle_finished_at IS NOT NULL
-    UNION ALL SELECT 7, 'result_sent', COUNT(*) FROM analytics_player_activation WHERE first_result_sent_at IS NOT NULL
-    UNION ALL SELECT 8, 'second_battle_started', COUNT(*) FROM analytics_player_activation WHERE second_battle_started_at IS NOT NULL
+WITH variant AS (
+    SELECT *,
+           CASE WHEN onboarding_variant IN ('guided_v1', 'legacy')
+                THEN onboarding_variant ELSE 'unassigned' END AS funnel_variant
+      FROM analytics_player_activation
+), counts AS (
+    SELECT funnel_variant, 1 AS step_order, 'registration' AS step, COUNT(*) AS players FROM variant GROUP BY 1
+    UNION ALL SELECT funnel_variant, 2, 'country_selected', COUNT(*) FROM variant WHERE country_selected_at IS NOT NULL GROUP BY 1
+    UNION ALL SELECT funnel_variant, 3, 'offer_viewed', COUNT(*) FROM variant WHERE offer_viewed_at IS NOT NULL GROUP BY 1
+    UNION ALL SELECT funnel_variant, 4, 'deployment_completed', COUNT(*) FROM variant WHERE deployment_completed_at IS NOT NULL GROUP BY 1
+    UNION ALL SELECT funnel_variant, 5, 'first_battle_started', COUNT(*) FROM variant WHERE first_battle_started_at IS NOT NULL GROUP BY 1
+    UNION ALL SELECT funnel_variant, 6, 'first_battle_finished', COUNT(*) FROM variant WHERE first_battle_finished_at IS NOT NULL GROUP BY 1
+    UNION ALL SELECT funnel_variant, 7, 'result_sent', COUNT(*) FROM variant WHERE first_result_sent_at IS NOT NULL GROUP BY 1
+    UNION ALL SELECT funnel_variant, 8, 'second_battle_started', COUNT(*) FROM variant WHERE second_battle_started_at IS NOT NULL GROUP BY 1
 ), denominators AS (
-    SELECT MAX(players) FILTER (WHERE step = 'registration') AS registrations,
+    SELECT funnel_variant,
+           MAX(players) FILTER (WHERE step = 'registration') AS registrations,
            MAX(players) FILTER (WHERE step = 'country_selected') AS country_selected
       FROM counts
+     GROUP BY funnel_variant
 )
-SELECT step,
+SELECT counts.funnel_variant AS variant,
+       step,
        players,
-       LAG(players) OVER (ORDER BY step_order) - players AS dropoff_from_previous,
-       ROUND(players::numeric / NULLIF(LAG(players) OVER (ORDER BY step_order), 0), 4) AS conversion_from_previous,
+       LAG(players) OVER (PARTITION BY counts.funnel_variant ORDER BY step_order) - players AS dropoff_from_previous,
+       ROUND(players::numeric / NULLIF(LAG(players) OVER (PARTITION BY counts.funnel_variant ORDER BY step_order), 0), 4) AS conversion_from_previous,
        ROUND(players::numeric / NULLIF(denominators.registrations, 0), 4) AS conversion_from_registration,
        ROUND(players::numeric / NULLIF(denominators.country_selected, 0), 4) AS conversion_from_country_selected,
        players < 30 AS small_sample
   FROM counts
- CROSS JOIN denominators
- ORDER BY step_order;
+  JOIN denominators USING (funnel_variant)
+ ORDER BY variant, step_order;
 
 -- Time to first distinct battle and players who never started one.
 SELECT percentile_cont(0.50) WITHIN GROUP (ORDER BY ttfb_ms) / 1000.0 AS ttfb_p50_seconds,

@@ -16,7 +16,13 @@ class ProductAnalyticsMetrics(
     private val jdbc: JdbcClient,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val activation = ACTIVATION_STEPS.associateWith { gaugeLong("frontline.product.activation.players", "step", it) }
+    private val activation = buildMap {
+        ACTIVATION_STEPS.forEach { step ->
+            ACTIVATION_VARIANTS.forEach { variant ->
+                put(ActivationKey(step, variant), gaugeLong("frontline.product.activation.players", "step", step, "variant", variant))
+            }
+        }
+    }
     private val ttfb = listOf("p50", "p90").associateWith { gaugeDouble("frontline.product.activation.ttfb", "quantile", it, "unit", "seconds") }
     private val secondBattle = SECOND_BATTLE_WINDOWS.associateWith { gaugeLong("frontline.product.activation.second.battle", "window", it) }
     private val retention = buildMap {
@@ -78,17 +84,37 @@ class ProductAnalyticsMetrics(
     }
 
     private fun refreshActivation() {
-        val row = jdbc.sql(
+        // The funnel is split by onboarding variant because the guided first-mission
+        // card bypasses the five-offer list: offer_viewed is a regular-path-only step,
+        // while guided_v1 players go from country selection straight to deployment.
+        // Variants are normalized to a fixed set so the gauge cardinality stays bounded.
+        val rows = jdbc.sql(
             """
-            SELECT COUNT(*) AS registration,
+            SELECT CASE WHEN onboarding_variant IN ('guided_v1', 'legacy')
+                        THEN onboarding_variant ELSE 'unassigned' END AS variant,
+                   COUNT(*) AS registration,
                    SUM(CASE WHEN country_selected_at IS NOT NULL THEN 1 ELSE 0 END) AS country_selected,
                    SUM(CASE WHEN offer_viewed_at IS NOT NULL THEN 1 ELSE 0 END) AS offer_viewed,
                    SUM(CASE WHEN deployment_completed_at IS NOT NULL THEN 1 ELSE 0 END) AS deployment_completed,
                    SUM(CASE WHEN first_battle_started_at IS NOT NULL THEN 1 ELSE 0 END) AS first_battle_started,
                    SUM(CASE WHEN first_battle_finished_at IS NOT NULL THEN 1 ELSE 0 END) AS first_battle_finished,
                    SUM(CASE WHEN first_result_sent_at IS NOT NULL THEN 1 ELSE 0 END) AS result_sent,
-                   SUM(CASE WHEN second_battle_started_at IS NOT NULL THEN 1 ELSE 0 END) AS second_battle_started,
-                   SUM(CASE WHEN first_battle_started_at IS NULL THEN 1 ELSE 0 END) AS never_started,
+                   SUM(CASE WHEN second_battle_started_at IS NOT NULL THEN 1 ELSE 0 END) AS second_battle_started
+              FROM analytics_player_activation_all
+             WHERE NOT is_internal
+             GROUP BY 1
+            """.trimIndent(),
+        ).query { rs, _ ->
+            rs.getString("variant") to ACTIVATION_STEPS.associateWith { rs.getLong(it) }
+        }.list().toMap()
+        ACTIVATION_STEPS.forEach { step ->
+            ACTIVATION_VARIANTS.forEach { variant ->
+                activation.getValue(ActivationKey(step, variant)).set(rows[variant]?.getValue(step) ?: 0L)
+            }
+        }
+        val totals = jdbc.sql(
+            """
+            SELECT SUM(CASE WHEN first_battle_started_at IS NULL THEN 1 ELSE 0 END) AS never_started,
                    SUM(CASE WHEN second_battle_within_24h_after_finish THEN 1 ELSE 0 END) AS second_after_finish,
                    SUM(CASE WHEN second_battle_within_24h_after_registration THEN 1 ELSE 0 END) AS second_after_registration
               FROM analytics_player_activation_all
@@ -96,16 +122,14 @@ class ProductAnalyticsMetrics(
             """.trimIndent(),
         ).query { rs, _ ->
             ActivationCounts(
-                steps = ACTIVATION_STEPS.associateWith { rs.getLong(it) },
                 neverStarted = rs.getLong("never_started"),
                 secondAfterFinish = rs.getLong("second_after_finish"),
                 secondAfterRegistration = rs.getLong("second_after_registration"),
             )
         }.single()
-        row.steps.forEach { (step, count) -> activation.getValue(step).set(count) }
-        secondBattle.getValue("never_started").set(row.neverStarted)
-        secondBattle.getValue("within_24h_after_first_finish").set(row.secondAfterFinish)
-        secondBattle.getValue("within_24h_after_registration").set(row.secondAfterRegistration)
+        secondBattle.getValue("never_started").set(totals.neverStarted)
+        secondBattle.getValue("within_24h_after_first_finish").set(totals.secondAfterFinish)
+        secondBattle.getValue("within_24h_after_registration").set(totals.secondAfterRegistration)
 
         val values = jdbc.sql(
             "SELECT ttfb_ms FROM analytics_player_activation_all WHERE NOT is_internal AND ttfb_ms IS NOT NULL",
@@ -409,6 +433,7 @@ class ProductAnalyticsMetrics(
             "registration", "country_selected", "offer_viewed", "deployment_completed",
             "first_battle_started", "first_battle_finished", "result_sent", "second_battle_started",
         )
+        internal val ACTIVATION_VARIANTS = listOf("guided_v1", "legacy", "unassigned")
         private val ACTIVATION_STAGES_FOR_DROPOFF = setOf(
             "registration", "country_selected", "offer_viewed", "deployment_completed",
             "first_battle_started", "first_battle_finished", "result_sent",
@@ -445,11 +470,11 @@ class ProductAnalyticsMetrics(
     }
 
     private data class ActivationCounts(
-        val steps: Map<String, Long>,
         val neverStarted: Long,
         val secondAfterFinish: Long,
         val secondAfterRegistration: Long,
     )
+    private data class ActivationKey(val step: String, val variant: String)
     private data class RetentionKey(val day: String, val status: String)
     private data class DropoffKey(val stage: String, val context: String)
     private data class PostBattleKey(val action: String, val status: String)
