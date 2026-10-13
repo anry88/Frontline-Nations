@@ -54,6 +54,7 @@ import com.tggames.frontline.telegram.InlineKeyboardMarkup
 import com.tggames.frontline.telegram.TelegramCallbackQuery
 import com.tggames.frontline.telegram.TelegramClient
 import com.tggames.frontline.telegram.TelegramDeliveryException
+import com.tggames.frontline.telegram.TelegramStaleCallbackException
 import com.tggames.frontline.telegram.TelegramUpdate
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.jdbc.core.simple.JdbcClient
@@ -120,10 +121,20 @@ class GameService(
             ensurePlayer(callback.from.id, callback.from.firstName, callback.from.languageCode)
             journey.record(callback.from.id, JourneyEventType.USER_ACTION, JourneyEventDetails(surface = "callback"))
             metrics.callback(callback.data.orEmpty())
-            val replayCallback = callback.data.orEmpty().startsWith("replay:")
-            if (replayCallback) telegram.answerCallback(callback.id)
+            // Answer before game work: Telegram expires the query quickly, and a late answer
+            // must never roll back an already resolved battle. A stale query means the player
+            // tapped an outdated button, so refresh them instead of running the action.
+            try {
+                telegram.answerCallback(callback.id)
+            } catch (stale: TelegramStaleCallbackException) {
+                logger.warn("Stale Telegram callback; refreshing buttons without repeating the action")
+                val chatId = callback.message?.chat?.id ?: callback.from.id
+                recoverNavigation(callback.from.id, chatId, NavigationErrorCategory.STALE_CALLBACK)
+                return
+            } catch (delivery: TelegramDeliveryException) {
+                logger.warn("Telegram callback answer failed; continuing with the action")
+            }
             handleCallback(callback)
-            if (!replayCallback) telegram.answerCallback(callback.id)
             return
         }
 

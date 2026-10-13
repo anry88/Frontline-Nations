@@ -12,6 +12,11 @@ class TelegramDeliveryException(
     cause: Exception,
 ) : RuntimeException("Telegram $operation failed", cause)
 
+class TelegramStaleCallbackException(
+    callbackId: String,
+    cause: Exception,
+) : RuntimeException("Telegram callback $callbackId is stale", cause)
+
 @Component
 class TelegramClient(
     private val restClient: RestClient,
@@ -145,11 +150,24 @@ class TelegramClient(
 
     fun answerCallback(callbackId: String) {
         if (telegramDisabled()) return
-        restClient.post()
-            .uri("/answerCallbackQuery")
-            .body(AnswerCallbackRequest(callbackId))
-            .retrieve()
-            .toBodilessEntity()
+        try {
+            restClient.post()
+                .uri("/answerCallbackQuery")
+                .body(AnswerCallbackRequest(callbackId))
+                .retrieve()
+                .toBodilessEntity()
+        } catch (error: RestClientResponseException) {
+            if (isStaleCallbackError(error.statusCode.value(), error.responseBodyAsString)) {
+                logger.debug("Telegram callback {} is stale; the button needs a refresh", callbackId)
+                throw TelegramStaleCallbackException(callbackId, error)
+            }
+            val unavailable = playerUnavailable(error.statusCode.value(), error.responseBodyAsString)
+            throw TelegramDeliveryException(unavailable, "answerCallbackQuery", error)
+        } catch (error: TelegramStaleCallbackException) {
+            throw error
+        } catch (error: Exception) {
+            throw TelegramDeliveryException(false, "answerCallbackQuery", error)
+        }
     }
 
     private fun telegramDisabled() = properties.telegram.botToken.isBlank() || properties.telegram.botToken == "disabled"
@@ -173,9 +191,20 @@ class TelegramClient(
             "bot can't initiate conversation",
         )
 
+        private val STALE_CALLBACK_DESCRIPTIONS = listOf(
+            "query is too old",
+            "query id is invalid",
+        )
+
         internal fun playerUnavailable(status: Int, responseBody: String): Boolean {
             val description = responseBody.lowercase()
             return status == 403 || UNAVAILABLE_DESCRIPTIONS.any(description::contains)
+        }
+
+        internal fun isStaleCallbackError(status: Int, responseBody: String): Boolean {
+            if (status != 400) return false
+            val description = responseBody.lowercase()
+            return STALE_CALLBACK_DESCRIPTIONS.any(description::contains)
         }
     }
 }
