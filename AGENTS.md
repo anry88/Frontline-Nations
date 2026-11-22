@@ -81,7 +81,6 @@ If executable behavior intentionally departs from the specification, record the 
 - `compose.yml`: production-shaped application and PostgreSQL services.
 - `assets/brand/`: repository emblem and Telegram avatar.
 - `scripts/`: operational helpers, including Telegram webhook/profile configuration.
-- `docs/production/`: Home Data Center runbook.
 - The module paths below remain the target as the MVP grows:
 - `backend/src/main/kotlin/.../telegram/`: Telegram webhook, commands, callbacks, and Mini App authentication.
 - `backend/src/main/kotlin/.../player/`: account, profile, alliance, progression, and rating.

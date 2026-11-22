@@ -86,11 +86,6 @@ services:
     expose:
       - "8080"
       - "9090"
-    networks:
-      default:
-      tunnel:
-        aliases:
-          - ${TUNNEL_APP_ALIAS:-frontline-nations-prod-app}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null || exit 1"]
       interval: 10s
@@ -101,8 +96,3 @@ services:
       - type: bind
         source: ${REPLAY_DATA_DIR:?REPLAY_DATA_DIR is required}
         target: /var/cache/frontline-replays
-
-networks:
-  tunnel:
-    external: true
-    name: ${HDC_TUNNEL_NETWORK:-hdc-tunnel}

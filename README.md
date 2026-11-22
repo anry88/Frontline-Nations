@@ -106,7 +106,7 @@ See [DOCUMENTATION.md](DOCUMENTATION.md) for module boundaries and data flow.
 ```text
 src/           Spring Boot application, migration, and tests
 compose.yml    Application and PostgreSQL containers
-scripts/       Telegram and deployment helpers
+scripts/       Telegram helpers
 assets/        Brand assets and generated source atlases
 src/main/resources/static/assets/units/  Generated equipment-class icons
 src/main/resources/static/assets/maps/   Generated terrain/object blocks and immutable square battle-map PNGs
@@ -146,7 +146,7 @@ The current implementation proves localized registration and settings, a guided 
 
 Run tests with `GRADLE_USER_HOME="$PWD/.gradle-home" ./gradlew test`. For a local Docker run, copy `.env.example` to an ignored `.env`, replace every secret, create the PostgreSQL data directory, and run `docker compose up --build`.
 
-Production is published at [frontline-nations.tg-games.com](https://frontline-nations.tg-games.com). See [the Home Data Center runbook](docs/production/home-data-center.md).
+Production is published at [frontline-nations.tg-games.com](https://frontline-nations.tg-games.com).
 
 ## License
 

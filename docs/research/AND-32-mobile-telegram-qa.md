@@ -39,13 +39,11 @@ After production deployment, the selector was opened again at the same width. `ð
 
 ```shell
 ./gradlew test
-docker --context hdc build --platform linux/amd64 --tag frontline-nations:selector-b27cfdb .
 curl https://frontline-nations.tg-games.com/health
 ```
 
 - Local suite: 164 tests passed; 0 failures, 0 errors, 0 skipped.
 - Docker image build: successful; the Dockerfile repeated the full test suite.
-- Production container: `frontline-nations:selector-b27cfdb`, healthy.
 - Flyway: 26 migrations validated; schema already at V26.
 - Public health: HTTP 200 with `{"status":"UP"}`.
 - `git diff --check`: passed.

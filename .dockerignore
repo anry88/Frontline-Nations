@@ -11,3 +11,5 @@ Documents
 assets
 docs
 *.md
+
+.private/
